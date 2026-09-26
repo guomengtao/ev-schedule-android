@@ -78,7 +78,7 @@ rm -rf out
 mkdir -p out/gen out/classes out/dex out/sdkclasses dist
 
 # 把版本号注入到 launcher 名称，方便一眼看出装的是哪一版
-sed "s/android:label=\"EV Probe\"/android:label=\"EV Probe v$VERSION_NAME\"/" \
+sed "s/android:label=\"EV Sync\"/android:label=\"EV Sync v$VERSION_NAME\"/" \
   AndroidManifest.xml > out/AndroidManifest.xml
 
 echo "[1/7] aapt2 link（编译资源与清单，注入版本号）..."

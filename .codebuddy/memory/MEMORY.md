@@ -59,3 +59,29 @@
 - 版本号体现在 **① APK 文件名 ② `android:label`（桌面显示 `EV Probe v0.3.0`）③ versionName/versionCode**。
 - ⚠️ **包名（applicationId）永远固定为 `com.application.watch.classschedule`，绝不能带版本号** —— interconnect 要求与快应用 `package` 完全一致，改了连不上，而且会被系统当成另一个 App（桌面出现多个图标）。
 - XML 注释里不能出现连续两个短横线，否则 aapt2 报 `not well-formed`。
+
+## 仓库与推码约定
+- GitHub 仓库：**`guomengtao/ev-schedule-android`**，**private**，分支 `main`。用 `gh` CLI 管理。
+- ⚠️ **推送必须用 SSH**：HTTPS 推不动（443 连不上 / Empty reply from server）。remote = `git@github.com:guomengtao/ev-schedule-android.git`；必要时先 `gh auth setup-git`。
+- ⚠️ **绝不入库**：`*.jks`、`*.keystore`、`*.pk8`、`*.p12`、`private.pem`、`certificate.pem`、`/sign/`。`apk/rpk-signing-key.pk8` 是 rpk 私钥导出物，构建时只在 `out/` 里临时生成并删除。
+- `.gitignore` 还排除 `apk/out/`、`apk/dist/`、`*.apk`、`*.idsig`、`apk/tools/bcclasses/`、`apk/tools/bcprov.jar`（build.sh 自动从 Maven 下）、`tools/libs/xms_aar/`、`tools/libs/xms_classes/`、`tools/*.zip`、`.DS_Store`。
+
+## 已打通（真机实测基线）
+- 链路：`自研 APK ─官方 XMS Wearable SDK─▶ 小米运动健康 ─BLE─▶ 小米手环 10 Pro ─▶ EV 快应用`；`ping` / `export` 双向正常。
+- 基线数据：nodeId 2137618976、手环 EV 1.6.103(code 932)、昵称 123、课表 21 节、字号 48、模板 default、权限 data_manager+notify。
+- **三条硬前提**：包名一致 + 签名（rpk 同 key）+ **调用顺序 `2 查询设备+授权 → 4 注册监听 → 发消息`**（不注册监听就发，必然 0 回包）。
+- ⚠️ **数据转换坑**：EV 的 `export` 产出是**格式 A**（`{day, classes:[]}` 按天分组），`import` 只认「一条课一个对象」（顶层需 `name`+`time`）。**把 export 的 JSON 直接回灌会整批跳过**（`convert empty`）——导入前必须摊平。
+- ⚠️ `OnMessageReceivedListener` 在 **Binder 线程**，日志必须 `runOnUiThread`；回包先原样留痕（len+HEX+UTF-8）再解析。
+
+## App 结构（v0.5.0 起）
+- 4 个 Activity：`HomeActivity`（launcher/首页）、`DebugActivity`（多步骤调试）、`SettingsActivity`（昵称）、`TransferActivity`（导入/导出按 mode 复用）。`MainActivity.java` 已删除。
+- `Ui.java` 统一视觉（深空蓝，对齐 EV 默认主题）；`SyncEngine.java` 是单例，封装四步连接 + 单步动作 + 回包路由（单一 listener + 6s 超时）。
+- 清单 `android:label="EV Sync"`，build.sh 用 sed 注入版本号（**改 label 必须同步改 build.sh 的 sed 模式**）。
+- 设计文档：`apk/首页与多步骤调试页设计.md`；浏览器预览：`apk/preview.html`（4 个状态标签）。
+- 首页失败指引是核心设计：**每条错误都配一个用户能立刻执行的动作**（打开 EV / 检查小米运动健康 / 重试）。
+
+## ★ 用户明确要求的项目规则（每次会话都要遵守）
+1. **改动后自动提交 GitHub**：每完成一次实质改动（代码/文档/构建脚本），立即 commit + push 到 `guomengtao/ev-schedule-android`（private，main），**不用等用户再问**。
+2. **推送必须走 SSH**（`git@github.com:guomengtao/ev-schedule-android.git`），HTTPS 推不动。
+3. **版本号第三位（patch）每次改动 +1**：由 `bash apk/build.sh` 在构建成功后自动 bump；只改文档没重建时手动把 `version.env` 第三位 +1。
+4. 规则文件在 `.codebuddy/rules/auto-commit.md`。提交前必做密钥与大文件自检。

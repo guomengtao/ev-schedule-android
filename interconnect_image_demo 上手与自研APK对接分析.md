@@ -705,3 +705,77 @@ v0.3.1 修复：
 | 官方 demo 的 Android 源码 | 同目录 `android_program/XMS Wearable Demo.zip`（22.3 MB） |
 
 > 网络拉 GitHub raw 只有 ~30 KB/s，22 MB 的 zip 不现实。若要跑官方 demo 对照，`app-debug.apk` 建议用 GitHub 网页直连下载。
+
+---
+
+# 第五部分：通道打通 + 课表管理（2026-09-26 21:00）
+
+## 十九、真机实测：ping / export 双向全通
+
+```
+20:42:08  >> TX #3  {"action":"ping"}
+20:42:08  << RX #1  {"ok":true,"action":"ping","pong":true,"versionName":"1.6.103","versionCode":932}
+20:42:20  >> TX #5  {"action":"export"}
+20:42:21  << RX #3  {"ok":true,"action":"export","version":1,
+                     "scopes":["schedule","profile","homepage","appearance","version"],
+                     "data":{ "schedule":[...], "nickname":"123",
+                              "versionName":"1.6.103","versionCode":932,
+                              "baseFontSize":48,"homepageTemplate":"default","homepage":{...} }}
+```
+
+> **昵称 = `123`，版本号 = `1.6.103`（code 932）。**
+> 一开项目时定的"第一步：只读一下昵称 / 版本号"——**达成**。
+
+## 二十、为什么之前 0 回包、v0.3.1 就通了
+
+v0.3.0 的 `onMessageReceived` 是 **AIDL 回调，跑在 Binder 线程**。而它做的第一件事是 `logView.append(...)` —— 在非 UI 线程操作 `TextView` 会抛 `CalledFromWrongThreadException`。
+
+结果：**回包其实到了，但死在「打日志」那一行，界面上一条都不留，看起来就像"通道不通"**。
+
+| | 插件当年（Rust/wasm） | 我们 APK（Java） |
+|---|---|---|
+| 死法 | `push_log()` 内部重复加锁 → **死锁** | Binder 线程碰 UI → **抛异常** |
+| 共同点 | **都死在"把回包记下来"这一步之前** → 与"根本没收到"表象完全一致 | |
+
+v0.3.1 起：日志统一 `runOnUiThread`，且**先无条件留痕**（len + HEX + UTF-8）再谈解析。
+
+> 可复用教训（与插件复盘完全一致）：**不要让"处理成功与否"决定"有没有收到"的可见性。先留痕，再解释。**
+
+## 二十一、调用顺序确认（缺一不可）
+
+```
+2 查询设备+授权（拿 nodeId）  →  4 注册监听  →  发消息
+```
+
+日志里 20:41:41 与 20:41:49 两次 export 都是**在注册监听之前**发的 → 0 回包；20:42:02 注册完，20:42:08 立刻通。
+
+## 二十二、v0.4.0：从"探针"升级为课表管理工具
+
+| 功能 | 说明 |
+|---|---|
+| **结构化解析** | export 回包自动提取打印：昵称 / 版本 / 字号 / 首页模板 / 每天几节 / 总节数 |
+| **导出到文件** | 把 export 的完整 JSON 存到「下载/EVSync/ev-export-<时间>.json」 |
+| **从文件导入(覆盖)** | 系统文件选择器 → 解析 → **弹确认框** → 发 `import` |
+| **改昵称** | `{"action":"update_settings","payload":{"nickname":"…"}}` |
+| 拉起手环 EV | `launchWearApp`（uri 直接用包名，**实测可打开 EV**） |
+
+### ⚠️ 一个会让人白忙一场的数据转换坑（v0.4.0 已处理）
+
+**EV 的 `export` 产出是「格式 A」（按天分组 `{day, classes:[…]}`），但 `import` 只认「一条课一个对象」。**
+
+直接把 export 的 JSON 回灌给手环 → 每一项因为顶层没有 `name` / `time`，会被 `syncToFormatA()` **整批跳过** → 回包 `{"ok":false,"reason":"convert empty"}`，导入 0 条。
+
+所以 v0.4.0 在导入时加了 `flattenFormatA()`：把格式 A 摊平成扁平课程数组，再封装成
+`{"action":"import","payload":{"courses":[{name,day,time,teacher,location,notes}…]}}`。
+
+## 二十三、当前实测基线（可用于回归）
+
+| 项 | 值 |
+|---|---|
+| 手环 | 小米手环 10 Pro（nodeId `2137618976`） |
+| 手环上 EV 版本 | `1.6.103` / code `932` |
+| 昵称 | `123` |
+| 课表 | 5 天共 **21 节**（一~四各 4 节，周五 5 节） |
+| 字号 / 首页模板 | `48` / `default` |
+| 权限 | `data_manager` + `notify` 均已授权 |
+| 下行验证 | `sendNotify status=0 success=true` |

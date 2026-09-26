@@ -2,13 +2,13 @@
 <!--
   注意：versionCode / versionName 不写在这里，由 build.sh 从 version.env 读取后
   通过 aapt2 的版本参数注入，实现「每次打包自动 +1」。
-  android:label 同理，由 build.sh 用 sed 注入版本号（如 EV Probe v0.3.0）。
+  android:label 同理，由 build.sh 用 sed 注入版本号（如 EV Sync v0.5.0）。
   注意：XML 注释里不能出现两个连续的短横线。
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.application.watch.classschedule">
 
-    <!-- 官方 interconnect 要求：本 APK 的包名必须与快应用 manifest.json 的 package 完全一致。
+    <!-- 官方 interconnect 要求：包名必须与快应用 manifest.json 的 package 完全一致。
          也正因如此，包名不能带版本号，版本号只体现在文件名与 android:label 上。 -->
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
 
@@ -19,15 +19,20 @@
     </queries>
 
     <application
-        android:label="EV Probe"
+        android:label="EV Sync"
         android:allowBackup="false">
+
         <activity
-            android:name="com.application.watch.classschedule.MainActivity"
+            android:name="com.application.watch.classschedule.HomeActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity android:name="com.application.watch.classschedule.DebugActivity" />
+        <activity android:name="com.application.watch.classschedule.SettingsActivity" />
+        <activity android:name="com.application.watch.classschedule.TransferActivity" />
     </application>
 </manifest>
