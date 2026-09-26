@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EV Sync Probe — UI/流程预览（模拟）</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a21; --line:#262b36; --fg:#e6e9ef; --muted:#8b93a5;
+    --accent:#4CAF50; --accent2:#2f7d33; --warn:#ffb020; --rx:#7fd1ff; --tx:#ffd479;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    gap:28px; flex-wrap:wrap; padding:28px;
+    background:radial-gradient(1200px 600px at 20% 0%, #1b2030 0%, #0b0d12 60%);
+    color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+  }
+  .side{max-width:460px}
+  .side h1{font-size:20px;margin:0 0 6px}
+  .side .sub{color:var(--muted);font-size:13px;line-height:1.7}
+  .badge{
+    display:inline-block;margin:10px 0 14px;padding:4px 10px;border-radius:999px;
+    font-size:12px;background:rgba(255,176,32,.12);color:var(--warn);border:1px solid rgba(255,176,32,.35)
+  }
+  .steps{font-size:13px;line-height:1.9;color:var(--muted);padding-left:18px;margin:0}
+  .steps b{color:var(--fg);font-weight:600}
+  .k{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#1d2230;border:1px solid var(--line);
+     padding:1px 6px;border-radius:5px;font-size:12px;color:#cfd6e4}
+  /* 手机外壳 */
+  .phone{
+    width:390px;height:760px;background:#000;border-radius:38px;padding:10px;
+    box-shadow:0 30px 80px rgba(0,0,0,.6), inset 0 0 0 1px #2a2f3a;
+  }
+  .screen{
+    width:100%;height:100%;background:var(--bg);border-radius:30px;overflow:hidden;
+    display:flex;flex-direction:column;
+  }
+  .statusbar{
+    height:26px;flex:0 0 26px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 16px;font-size:11px;color:var(--muted);background:#0b0d12;
+  }
+  .app{flex:1;display:flex;flex-direction:column;padding:10px 10px 12px;gap:8px;min-height:0}
+  .apptitle{font-size:15px;font-weight:600;padding:2px 2px 0}
+  .log{
+    flex:1;min-height:0;overflow:auto;background:#0c0e13;border:1px solid var(--line);
+    border-radius:10px;padding:8px 10px;font-size:10.5px;line-height:1.55;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-all;
+  }
+  .log .t{color:#5d6577}
+  .log .tx{color:var(--tx)}
+  .log .rx{color:var(--rx)}
+  .log .fail{color:#ff7b72}
+  .log .ok{color:var(--accent)}
+  .input{
+    background:#0c0e13;border:1px solid var(--line);border-radius:10px;padding:8px 10px;
+    font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#cfd6e4;
+  }
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  button{
+    appearance:none;border:1px solid var(--line);background:#1c212b;color:var(--fg);
+    border-radius:10px;padding:11px 6px;font-size:12px;cursor:pointer;text-align:center;
+    transition:.15s;font-family:inherit;
+  }
+  button:hover{border-color:#3a4252;background:#222836}
+  button:active{transform:scale(.98)}
+  button.primary{background:var(--accent2);border-color:#3f9a45;font-weight:600}
+  button.ghost{color:var(--muted)}
+  .runall{grid-column:1 / -1;background:#243043;border-color:#3a4a63}
+  .hint{font-size:11px;color:#6b7385;text-align:center}
+  @media (max-width:900px){ .phone{width:100%;max-width:390px;height:700px} }
+</style>
+</head>
+<body>
+
+<div class="side">
+  <h1>EV Sync Probe · 预览</h1>
+  <div class="sub">
+    这是 <span class="k">apk/EVSyncProbe.apk</span> 的<strong>界面与交互流程模拟</strong>，
+    用于先看清「点哪个按钮、会看到什么日志」，不需要装任何东西。
+  </div>
+  <div class="badge">模拟数据，非真实设备回包</div>
+  <ol class="steps">
+    <li><b>2 查询已连接设备</b> → 拿到 nodeId（前提：小米运动健康已连手环）</li>
+    <li><b>4 注册消息监听</b> → 必须先注册，否则回包收不到</li>
+    <li><b>3 申请权限</b> → DEVICE_MANAGER</li>
+    <li><b>5 发送 PING</b> → 收到 <span class="k">pong:true</span> 即链路打通</li>
+    <li><b>6 读取昵称</b> → 拿到 <span class="k">data.nickname</span></li>
+  </ol>
+  <div class="sub" style="margin-top:14px">
+    右侧随便点：按钮会按真实调用顺序打印日志。点「一键跑完整流程」可直接看结局。
+  </div>
+</div>
+
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar"><span>17:42</span><span>EV Probe</span></div>
+    <div class="app">
+      <div class="apptitle">EV 课程表 · interconnect 通道探针</div>
+      <div class="log" id="log"></div>
+      <div class="input" id="input">{"action":"ping"}</div>
+      <div class="grid">
+        <button class="primary" onclick="ping()">5 发送 PING</button>
+        <button class="primary" onclick="readNick()">6 读取昵称</button>
+        <button onclick="checkService()">1 检测穿戴服务</button>
+        <button onclick="listNodes()">2 查询已连接设备</button>
+        <button onclick="reqPerm()">3 申请权限</button>
+        <button onclick="addListener()">4 注册消息监听</button>
+        <button onclick="sendCustom()">发送自定义 JSON</button>
+        <button class="ghost" onclick="clearLog()">清空日志</button>
+        <button class="runall" onclick="runAll()">一键跑完整流程</button>
+      </div>
+      <div class="hint">真实结果以真机为准</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const logEl = document.getElementById('log');
+const inputEl = document.getElementById('input');
+let nodeId = null, listenerBound = false, hasService = false;
+
+function ts(){
+  const d = new Date();
+  const p = (n,l=3)=>String(n).padStart(l,'0');
+  return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'.'+p(d.getMilliseconds());
+}
+function line(text, cls){
+  const div = document.createElement('div');
+  if(cls) div.className = cls;
+  div.innerHTML = '<span class="t">'+ts()+'</span>  '+ escapeHtml(text);
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+function clearLog(){ logEl.innerHTML=''; }
+
+function checkService(){
+  line('[1] 检测穿戴服务 ...');
+  setTimeout(()=>{ hasService = true; line('    ServiceApi 已连接 —— 小米穿戴/运动健康 App 可用'); }, 260);
+  setTimeout(()=>{ line('    ServiceApiLevel = 1（能返回即代表服务在）'); }, 520);
+}
+function listNodes(){
+  line('[2] 查询已连接设备 ...');
+  setTimeout(()=>{
+    nodeId = 'node_9f3c7a21';
+    line('    设备: id=' + nodeId + '  name=小米手环 10 Pro');
+    line('    已选定 nodeId = ' + nodeId);
+  }, 300);
+  setTimeout(()=>{ line('    手环上 EV 课程表已安装? true'); }, 640);
+}
+function reqPerm(){
+  if(!nodeId){ line('请先点「2 查询已连接设备」拿到 nodeId'); return; }
+  line('[3] 申请 DEVICE_MANAGER 权限 ...');
+  setTimeout(()=>{ line('    已授权: [DEVICE_MANAGER]', 'ok'); }, 380);
+}
+function addListener(){
+  if(!nodeId){ line('请先点「2 查询已连接设备」拿到 nodeId'); return; }
+  line('[4] 注册消息监听 ...');
+  setTimeout(()=>{ listenerBound = true; line('    监听已注册，可以发消息了', 'ok'); }, 300);
+}
+function tx(json){
+  if(!nodeId){ line('请先点「2 查询已连接设备」拿到 nodeId'); return false; }
+  if(!listenerBound){ line('提示：尚未注册监听（点「4」），回包可能收不到。仍继续发送 ...'); }
+  line('>> TX  len=' + new Blob([json]).size + '  ' + json, 'tx');
+  setTimeout(()=>{ line('   sendMessage 已受理（注意：受理 ≠ 送达，等 RX 才算通）'); }, 220);
+  return true;
+}
+function ping(){
+  if(!tx('{"action":"ping"}')) return;
+  setTimeout(()=>{
+    line('<< RX  from=' + nodeId + '  len=112', 'rx');
+    line('   {"ok":true,"action":"ping","pong":true,"versionName":"1.6.130","versionCode":959}', 'rx');
+    line('   链路双向打通', 'ok');
+  }, 900);
+}
+function readNick(){
+  if(!tx('{"action":"export"}')) return;
+  setTimeout(()=>{
+    line('<< RX  from=' + nodeId + '  len=1046', 'rx');
+    line('   {"ok":true,"action":"export","version":1,"scopes":["schedule","profile","homepage","appearance","version"],', 'rx');
+    line('    "data":{"nickname":"小明","versionName":"1.6.130","versionCode":959,"schedule":[...],"homepage":{...}}}', 'rx');
+    line('   昵称 = 小明', 'ok');
+  }, 1500);
+}
+function sendCustom(){
+  const json = inputEl.textContent.trim();
+  if(!json){ line('报文为空'); return; }
+  if(!tx(json)) return;
+  setTimeout(()=>{
+    line('<< RX  from=' + nodeId + '  len=96', 'rx');
+    line('   {"ok":true}', 'rx');
+  }, 900);
+}
+function runAll(){
+  clearLog();
+  line('EV Sync Probe v0.1.0');
+  line('本 APK 包名: com.application.watch.classschedule');
+  line('（必须 == 快应用 package: com.application.watch.classschedule）');
+  line('开始前请确认：已装「小米运动健康」并已连上手环。');
+  line('');
+  let d = 0;
+  const at = (ms, fn) => setTimeout(fn, d += ms);
+  at(300, checkService);
+  at(900, listNodes);
+  at(900, addListener);
+  at(900, reqPerm);
+  at(900, ping);
+  at(900, readNick);
+}
+</script>
+</body>
+</html>

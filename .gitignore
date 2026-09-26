@@ -1,0 +1,30 @@
+# ============ 构建产物 ============
+apk/out/
+apk/dist/
+apk/EVSyncProbe.apk
+apk/tools/bcclasses/
+*.idsig
+
+# ============ 密钥：绝不入库 ============
+# ⚠️ 这些是签名私钥，一旦推上去就等于把发布权交出去
+apk/keystore.jks
+apk/rpk-signing-key.pk8
+*.jks
+*.keystore
+*.pk8
+*.p12
+private.pem
+certificate.pem
+/sign/
+
+# ============ 体积大 / 可重新下载 ============
+# bcprov.jar 由 build.sh 自动从 Maven Central 下载（8 MB）
+apk/tools/bcprov.jar
+# AAR 解包产物（原始 AAR 在 tools/libs/ 里保留）
+tools/libs/xms_aar/
+tools/libs/xms_classes/
+tools/*.zip
+
+# ============ 系统 ============
+.DS_Store
+**/.DS_Store
