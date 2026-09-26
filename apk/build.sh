@@ -81,7 +81,9 @@ mkdir -p out/gen out/classes out/dex out/sdkclasses dist
 sed "s/android:label=\"EV Sync\"/android:label=\"EV Sync v$VERSION_NAME\"/" \
   AndroidManifest.xml > out/AndroidManifest.xml
 
-echo "[1/7] aapt2 link（编译资源与清单，注入版本号）..."
+echo "[1/7] aapt2 compile + link（编译资源与清单，注入版本号）..."
+# 资源目录（应用图标等）→ 编译成 .flat 压缩包
+"$BT/aapt2" compile --dir res -o out/res.zip
 "$BT/aapt2" link \
   -o out/base.apk \
   -I "$AJAR" \
@@ -90,7 +92,8 @@ echo "[1/7] aapt2 link（编译资源与清单，注入版本号）..."
   --min-sdk-version 24 \
   --target-sdk-version 34 \
   --version-code "$VERSION_CODE" \
-  --version-name "$VERSION_NAME"
+  --version-name "$VERSION_NAME" \
+  out/res.zip
 
 echo "[2/7] javac（必须用 JDK 8）..."
 find src out/gen -name '*.java' > out/sources.txt

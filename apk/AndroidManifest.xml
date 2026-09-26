@@ -20,7 +20,10 @@
 
     <application
         android:label="EV Sync"
-        android:allowBackup="false">
+        android:icon="@drawable/ic_launcher"
+        android:allowBackup="false"
+        android:roundIcon="@drawable/ic_launcher"
+        android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
             android:name="com.application.watch.classschedule.HomeActivity"

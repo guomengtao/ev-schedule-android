@@ -84,7 +84,8 @@ public class HomeActivity extends Activity {
         stepsView = new LinearLayout(this);
         stepsView.setOrientation(LinearLayout.VERTICAL);
         for (int i = 0; i < 4; i++) {
-            stepRows[i] = Ui.text(this, stepLine(i, SyncEngine.PENDING, ""), 12f, Ui.MUTED, false);
+            stepRows[i] = Ui.text(this, stepLine(i, SyncEngine.PENDING, ""),
+                    12f, stepColor(SyncEngine.PENDING), false);
             stepRows[i].setPadding(0, Ui.dp(this, 3), 0, Ui.dp(this, 3));
             stepsView.addView(stepRows[i]);
         }
@@ -148,20 +149,33 @@ public class HomeActivity extends Activity {
         }
     }
 
+    private static int stepColor(int state) {
+        switch (state) {
+            case SyncEngine.OK:      return Ui.OK;
+            case SyncEngine.RUNNING: return Ui.ACCENT;
+            case SyncEngine.FAIL:    return Ui.ERR;
+            default:                 return Ui.MUTED;
+        }
+    }
+
+    /**
+     * 只负责拼文案，【不许】在这里碰 stepRows[i]。
+     * 之前这里写了 stepRows[i].setTextColor(...)，而调用处是
+     *     stepRows[i] = Ui.text(..., stepLine(...), ...)
+     * —— 赋值发生在最后，stepLine 执行时 stepRows[i] 还是 null，直接 NPE 闪退。
+     */
     private String stepLine(int i, int state, String detail) {
         String mark;
-        int color;
         switch (state) {
-            case SyncEngine.OK:      mark = "✓"; color = Ui.OK; break;
-            case SyncEngine.RUNNING: mark = "◐"; color = Ui.ACCENT; break;
-            case SyncEngine.FAIL:    mark = "✕"; color = Ui.ERR; break;
-            default:                 mark = "○"; color = Ui.MUTED; break;
+            case SyncEngine.OK:      mark = "✓"; break;
+            case SyncEngine.RUNNING: mark = "◐"; break;
+            case SyncEngine.FAIL:    mark = "✕"; break;
+            default:                 mark = "○"; break;
         }
         String s = (i + 1) + ". " + mark + "  " + STEP_LABELS[i];
         if (detail != null && detail.length() > 0) {
             s += "   — " + detail;
         }
-        stepRows[i].setTextColor(color);
         return s;
     }
 
@@ -207,6 +221,7 @@ public class HomeActivity extends Activity {
         statusView.setText("正在连接手环…");
         for (int i = 0; i < 4; i++) {
             stepRows[i].setText(stepLine(i, SyncEngine.PENDING, ""));
+            stepRows[i].setTextColor(stepColor(SyncEngine.PENDING));
         }
         startTicking();
 
@@ -215,6 +230,7 @@ public class HomeActivity extends Activity {
                 for (int i = 0; i < 4; i++) {
                     states[i] = st[i];
                     stepRows[i].setText(stepLine(i, st[i], details[i]));
+                    stepRows[i].setTextColor(stepColor(st[i]));
                 }
             }
 
