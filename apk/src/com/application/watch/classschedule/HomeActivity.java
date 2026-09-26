@@ -136,6 +136,8 @@ public class HomeActivity extends Activity {
         root.addView(Ui.space(this, 8));
         root.addView(Ui.mono(this, "包名 " + getPackageName() + "  ·  v" + version()));
 
+        root.addView(Ui.bottomBar(this, 0));
+
         setContentView(root);
     }
 

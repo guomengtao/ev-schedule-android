@@ -53,6 +53,9 @@ public class SettingsActivity extends Activity {
         root.addView(Ui.mono(this, "手环 " + (e.connected()
                 ? e.deviceName + " · EV " + e.versionName : "未连接")));
 
+        root.addView(Ui.space(this, 6));
+        root.addView(Ui.bottomBar(this, 2));
+
         refresh();
         setContentView(root);
     }

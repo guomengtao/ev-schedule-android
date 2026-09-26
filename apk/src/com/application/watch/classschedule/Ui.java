@@ -2,6 +2,7 @@ package com.application.watch.classschedule;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
@@ -152,5 +153,42 @@ public final class Ui {
         TextView t = text(c, s, 19f, TEXT, true);
         t.setGravity(Gravity.CENTER_VERTICAL);
         return t;
+    }
+
+    /** 底部固定导航：首页 / 聊天 / 设置（对标官方 demo 的底部栏） */
+    public static LinearLayout bottomBar(final Activity a, int current) {
+        final String[] names = {"首页", "聊天", "设置"};
+        final Class[] targets = {HomeActivity.class, ChatActivity.class, SettingsActivity.class};
+
+        LinearLayout bar = new LinearLayout(a);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setBackgroundColor(CARD);
+        bar.setPadding(dp(a, 4), dp(a, 6), dp(a, 4), dp(a, 6));
+
+        for (int i = 0; i < 3; i++) {
+            final int idx = i;
+            Button b = new Button(a);
+            b.setText(names[i]);
+            b.setAllCaps(false);
+            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+            b.setTextColor(i == current ? ACCENT : MUTED);
+            b.setBackground(round(i == current ? CARD2 : 0x00000000, 12, 0, a));
+            b.setMinimumHeight(0);
+            b.setMinimumWidth(0);
+            b.setPadding(dp(a, 6), dp(a, 8), dp(a, 6), dp(a, 8));
+            b.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (idx == current) {
+                        return;
+                    }
+                    Intent it = new Intent(a, targets[idx]);
+                    it.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                    a.startActivity(it);
+                }
+            });
+            bar.addView(b, new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        }
+        return bar;
     }
 }
