@@ -54,7 +54,6 @@ export PATH="$JRE_HOME/bin:$PATH"
 RPK_SIGN_DIR="${RPK_SIGN_DIR:-}"
 if [ -z "$RPK_SIGN_DIR" ]; then
   for d in "$GUOMENGTAO/tom/class/class/sign" \
-           "$GUOMENGTAO/EvBox/reference/class-schedule/sign" \
            "$GUOMENGTAO/EvBox/evbox/sign"; do
     if [ -f "$d/private.pem" ] && [ -f "$d/certificate.pem" ]; then RPK_SIGN_DIR="$d"; break; fi
   done

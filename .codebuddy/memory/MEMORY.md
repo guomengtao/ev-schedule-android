@@ -2,7 +2,7 @@
 
 ## 本工作区
 - `/Users/Banner/Documents/guomengtao/ev-schedule-android/` = **安卓同步器 App 的独立新仓**（按 `app-auth/docs/安卓同步器App-仓库选型与开发方案.md` 的推荐：方案乙 独立仓）。目前无代码、无 git。
-- 相关本地目录：`app-auth`（`guomengtao/app-auth`，含 AstroBox 插件）、`EvBox/reference/class-schedule` 与 `tom/class/class`（均 `guomengtao/class-schedule` 的副本）、`xiaomi-shouhuan-10pro`、`EvBox/evbox`（手环快应用工具箱）。
+- 相关本地目录：`app-auth`（`guomengtao/app-auth`，含 AstroBox 插件）、`tom/class/class` 与 `tom/class/class`（均 `guomengtao/class-schedule` 的副本）、`xiaomi-shouhuan-10pro`、`EvBox/evbox`（手环快应用工具箱）。
 
 ## 项目三仓事实（重要）
 | 仓 | 内容 | 运行环境 / 产物 |
@@ -98,4 +98,4 @@
 - **每次跨项目工作后必须更新它**；单项目细节放各项目自己的 `.codebuddy/memory/`。
 - 用户已授权跨项目读写（2026-09-26），约定是"跨项目改动前先说明要改哪个文件、改什么"。
 - **记忆机制**：默认按项目隔离（`.codebuddy/memory/` 只在同一个项目开新会话时可见）；跨项目信息靠 `PROJECT-MAP.md` 这个全局文件衔接。
-- ⚠️ `tom/class/class` 与 `EvBox/reference/class-schedule` 是**同一仓库的两个克隆**：只改前者（活跃工作副本），后者只作对照，否则会漂移。
+- ⚠️ `tom/class/class` 与 `tom/class/class` 是**同一仓库的两个克隆**：只改前者（活跃工作副本），后者只作对照，否则会漂移。

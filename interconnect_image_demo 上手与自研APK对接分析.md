@@ -3,7 +3,7 @@
 > 目标：做一个**安卓 APK**，管理 `guomengtao/class-schedule`（EV 课程表快应用）的课表导入 / 导出。
 > 第一步只想验证：**通道能不能连、demo 能不能用**——比如只读一下手环里的「昵称」或「版本号」。
 > 分析对象：`open-vela/packages_apps` → `wearable/interconnect_image_demo`（官方文档附录里指向的「interconnect 开发测试 demo」）。
-> 核对时间：2026-09-26（源码取自仓库 `dev` 分支，本地 EV 代码取自 `EvBox/reference/class-schedule`，v1.6.130）
+> 核对时间：2026-09-26（源码取自仓库 `dev` 分支，本地 EV 代码取自 `tom/class/class`，v1.6.130）
 
 ---
 
@@ -401,7 +401,7 @@ auth       禁止读 + 禁止写
 | APK SHA-256 | `63150cadea430a364307c6f2373097f36f6f3e4f4c9e8112c92effc2e3869352` |
 
 > ⚠️ **签名必须与 rpk 一致**（官方 interconnect 硬要求，真机已实测证实）。
-> `build.sh` 会自动在 `tom/class/class/sign`、`EvBox/reference/class-schedule/sign`、`EvBox/evbox/sign` 里找 `private.pem` + `certificate.pem`；
+> `build.sh` 会自动在 `tom/class/class/sign`、`tom/class/class/sign`、`EvBox/evbox/sign` 里找 `private.pem` + `certificate.pem`；
 > 也可用 `RPK_SIGN_DIR=/path/to/sign bash build.sh` 指定。
 > 找不到时退回自建 `apk/keystore.jks`（仅用于跑通界面，**interconnect 一定会失败**）。
 
