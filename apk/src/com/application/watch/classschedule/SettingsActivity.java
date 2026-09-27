@@ -52,12 +52,24 @@ public class SettingsActivity extends Activity {
         SyncEngine e = SyncEngine.get(this);
         root.addView(Ui.mono(this, "手环 " + (e.connected()
                 ? e.deviceName + " · EV " + e.versionName : "未连接")));
+        root.addView(Ui.space(this, 4));
+        root.addView(Ui.mono(this, "本机 v" + version()));
 
         root.addView(Ui.space(this, 6));
         root.addView(Ui.bottomBar(this, 2));
 
         refresh();
         setContentView(Ui.wrapWithBottomBar(this, root, 2));
+    }
+
+    private String version() {
+        try {
+            android.content.pm.PackageInfo pi =
+                    getPackageManager().getPackageInfo(getPackageName(), 0);
+            return pi.versionName;
+        } catch (Throwable t) {
+            return "?";
+        }
     }
 
     private void refresh() {

@@ -63,7 +63,7 @@ public class HomeActivity extends Activity {
 
         root.addView(Ui.title(this, "EV 课程表"));
         root.addView(Ui.space(this, 4));
-        root.addView(Ui.text(this, "安卓同步器", 12f, Ui.MUTED, false));
+        root.addView(Ui.text(this, "安卓同步器 v" + version(), 12f, Ui.MUTED, false));
         root.addView(Ui.space(this, 14));
 
         // 欢迎卡

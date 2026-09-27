@@ -34,9 +34,11 @@
             </intent-filter>
         </activity>
 
-        <activity android:name="com.application.watch.classschedule.ChatActivity" />
+        <activity android:name="com.application.watch.classschedule.ChatActivity"
+            android:windowSoftInputMode="stateHidden" />
         <activity android:name="com.application.watch.classschedule.DebugActivity" />
-        <activity android:name="com.application.watch.classschedule.SettingsActivity" />
+        <activity android:name="com.application.watch.classschedule.SettingsActivity"
+            android:windowSoftInputMode="stateHidden" />
         <activity android:name="com.application.watch.classschedule.TransferActivity" />
     </application>
 </manifest>
