@@ -325,6 +325,8 @@ public class HomeActivity extends Activity {
     protected void onResume() {
         super.onResume();
         Analytics.pageView(this, "/apk/home");
+        // 首页也接管「手环主动消息」：只要 App 在前台，留言就能被提醒（按 id 去重）
+        MessageActivity.installObserver(this);
         SyncEngine e = SyncEngine.get(this);
         if (e.connected() && phase == PHASE_DONE && e.nickname.length() > 0) {
             welcomeView.setText("欢迎，" + e.nickname + "！");

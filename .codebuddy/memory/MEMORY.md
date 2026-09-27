@@ -98,6 +98,13 @@
 - 消息来源：Redis stream `auth:notifications:stream`（PUB/SUB）+ 后端补拉；幂等入口 `_claim_message()`；未读口径 `read`。
 - 本次新增：**启动自检通知** `startup_notify_selftest()`（打开工具即弹窗+语音验证链路，受 `startup_check` 控制，`force=True` 供测试按钮复用），在 `run()` 里 `runEventLoop()` 前调用。commit `fa47cda`。
 
+## 留言（chat）方向与去重（2026-09-27 核实）
+- **下行** 手机→手环：`{"action":"chat",id,text,ts}` → EV 存 `ev_chat_inbox`（**该表只存这个方向**）+ 长震动 + 回 `chat_ack`。
+- **上行** 手环→手机：**没有队列**，只有实时 push（`chatBridge.send`，用户在手表上操作 EV 时才有）；`ev_chat_inbox` 里**没有**手环侧消息。
+- ⚠️ 因此**不要轮询 `ev_chat_inbox`**（只会拉到自己发出去的）→ 想真后台提醒必须先做 EV 出站箱，或只依赖 push（并要求进程存活）。
+- **去重约定（硬要求：禁止重复提醒）**：`id` 每条必须唯一（EV 用 `时间戳-随机4位`，不能用裸 `Date.now()`，否则同毫秒撞 id 会**漏提醒**）；APK `MessageActivity.markSeen()` 按 id 全局去重（`SharedPreferences` `seen_ids`，上限 500），兼容老 EV 无 id 时用 `ts+文本哈希` 兜底；`HomeActivity`/`MessageActivity` 的 `onResume` 重装观察者。
+- ⚠️ `SyncEngine` 原先在 `pending == null` 时**静默丢弃**手环推来的消息 → 已加 `Observer`（`setObserver()`）承接无人认领的消息。
+
 ## 其他约定
 - 数据开放边界由手环侧守门人模型控制（interconnect 通道）；策略建议收敛成 `SYNC_ACCESS` 权限表。当前：schedule/profile/homepage/appearance 默认读+可写；pinned 需显式请求+只读（数据在 `src/data/pin-helper.js`）；auth 禁读写。
 - **evnotifier（`app-auth/tools/ev-notifier`）运行环境**：常驻由 LaunchAgent `com.evnotifier.agent` 拉起，解释器固定 **Homebrew python@3.14**（`/opt/homebrew/opt/python@3.14/bin/python3.14`，PEP 668 externally-managed → 装包要 `--break-system-packages`）；改完代码必须 `launchctl kickstart -k gui/$(id -u)/com.evnotifier.agent` 才生效（`git pull` 不生效）。语音播报自 2026-09-27 起用 **Edge TTS**（`zh-CN-XiaoxiaoNeural`，可用 `EV_TTS_VOICE`/`EV_TTS_RATE` 覆盖，缓存 `~/.ev_tts_cache/`），edge-tts 缺失/断网自动降级 macOS `say`。

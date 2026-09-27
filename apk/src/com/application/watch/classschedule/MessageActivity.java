@@ -2,6 +2,7 @@ package com.application.watch.classschedule;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.Ringtone;
@@ -22,8 +23,12 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
+import java.util.Collections;
 import java.util.Date;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -45,6 +50,9 @@ public class MessageActivity extends Activity {
 
     private static final String PREF = "ev_message_queue";
     private static final String KEY = "items";
+    /** 已提醒过的消息 id（去重的唯一依据） */
+    private static final String SEEN_KEY = "seen_ids";
+    private static final int SEEN_MAX = 500;
 
     private TextView listView, stateView;
     private EditText inputView;
@@ -112,6 +120,7 @@ public class MessageActivity extends Activity {
                 })));
 
         setContentView(Ui.fixedWithBottomBar(this, root, 1));
+        installObserver(this);
         load();
         render();
         refreshState();
@@ -121,7 +130,11 @@ public class MessageActivity extends Activity {
     protected void onResume() {
         super.onResume();
         Analytics.pageView(this, "/apk/message");
-        // 每次回到本页：刷新状态并尝试补发（断线期间写的留言在此刻发出）
+        // 回到本页：重装观察者（弹窗落到当前可见页面）+ 重新载入（其它页面可能已收过留言）
+        installObserver(this);
+        load();
+        render();
+        // 刷新状态并尝试补发（断线期间写的留言在此刻发出）
         refreshState();
         flush();
     }
@@ -314,33 +327,137 @@ public class MessageActivity extends Activity {
         refreshState();
     }
 
-    // ======================= 接收 =======================
+    // ======================= 接收（去重是硬要求：同一条只提醒一次） =======================
 
-    /** 收到手环发来的留言（前台场景）：入库 + 响铃 + 震动 */
-    private void incoming(String text) {
-        JSONObject item = new JSONObject();
+    /** 当前页面安装「手环主动消息」观察者（每次 onResume 重装，保证弹窗落在可见页面上） */
+    static void installObserver(final Activity host) {
+        SyncEngine.get(host).setObserver(new SyncEngine.Observer() {
+            @Override public void onMessage(String json) {
+                handleUnsolicited(host, json);
+            }
+        });
+    }
+
+    /**
+     * 处理手环主动发来的留言。
+     * ⚠️ 按 id 去重：同一条只入库 + 提醒一次，重复到达直接丢弃 —— **禁止重复提醒**。
+     */
+    static void handleUnsolicited(final Context ctx, String json) {
         try {
-            item.put("id", "in-" + System.currentTimeMillis());
+            JSONObject o = new JSONObject(json);
+            if (!"chat".equals(o.optString("action"))) {
+                return;
+            }
+            final String text = o.optString("text");
+            String id = o.optString("id");
+            if (id.length() == 0) {
+                // 兼容老 EV（无 id）：用 ts + 文本哈希兜底，仍能挡住绝大多数重复
+                id = "in-" + o.optLong("ts", System.currentTimeMillis()) + "-" + text.hashCode();
+            }
+            if (!markSeen(ctx, id)) {
+                return; // 已提醒过 → 丢弃
+            }
+            appendIncoming(ctx, id, text, o.optLong("ts", System.currentTimeMillis()));
+            alert(ctx, text);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 记录已提醒过的 id；返回 true = 首次见到（应提醒），false = 重复（应丢弃） */
+    private static synchronized boolean markSeen(Context ctx, String id) {
+        try {
+            SharedPreferences sp = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+            String raw = sp.getString(SEEN_KEY, "");
+            Set<String> seen = new LinkedHashSet<>();
+            if (raw.length() > 0) {
+                Collections.addAll(seen, raw.split("\n"));
+            }
+            if (seen.contains(id)) {
+                return false;
+            }
+            seen.add(id);
+            while (seen.size() > SEEN_MAX) {
+                Iterator<String> it = seen.iterator();
+                it.next();
+                it.remove();
+            }
+            StringBuilder sb = new StringBuilder();
+            for (String s : seen) {
+                if (sb.length() > 0) {
+                    sb.append('\n');
+                }
+                sb.append(s);
+            }
+            sp.edit().putString(SEEN_KEY, sb.toString()).apply();
+            return true;
+        } catch (Throwable t) {
+            return true; // 存储异常时宁可提醒一次，也不要静默吞掉
+        }
+    }
+
+    /** 把收到的留言写入本地记录（与留言列表共用同一份存储） */
+    private static synchronized void appendIncoming(Context ctx, String id, String text, long ts) {
+        try {
+            SharedPreferences sp = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+            JSONArray arr;
+            try {
+                arr = new JSONArray(sp.getString(KEY, "[]"));
+            } catch (Throwable t) {
+                arr = new JSONArray();
+            }
+            JSONObject item = new JSONObject();
+            item.put("id", id);
             item.put("dir", "in");
             item.put("text", text);
-            item.put("ts", System.currentTimeMillis());
+            item.put("ts", ts > 0 ? ts : System.currentTimeMillis());
             item.put("status", "sent");
+            arr.put(item);
+            sp.edit().putString(KEY, arr.toString()).apply();
         } catch (Throwable ignored) {
+        }
+    }
+
+    /** 提醒：响铃 + 震动 +（前台时）弹窗 */
+    private static void alert(final Context ctx, final String text) {
+        try {
+            Uri u = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+            Ringtone r = RingtoneManager.getRingtone(ctx, u);
+            if (r != null) {
+                r.play();
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            Vibrator v = (Vibrator) ctx.getSystemService(VIBRATOR_SERVICE);
+            if (v != null && v.hasVibrator()) {
+                if (Build.VERSION.SDK_INT >= 26) {
+                    v.vibrate(android.os.VibrationEffect.createOneShot(
+                            400, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+                } else {
+                    v.vibrate(400);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (!(ctx instanceof Activity)) {
             return;
         }
-        items.put(item);
-        save();
-        render();
-        playTone();
-        vibrate();
-        try {
-            new AlertDialog.Builder(this)
-                    .setTitle("来自手环的留言")
-                    .setMessage(text)
-                    .setPositiveButton("知道了", null)
-                    .show();
-        } catch (Throwable ignored) {
-        }
+        final Activity a = (Activity) ctx;
+        a.runOnUiThread(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (a.isFinishing()) {
+                        return;
+                    }
+                    new AlertDialog.Builder(a)
+                            .setTitle("来自手环的留言")
+                            .setMessage(text)
+                            .setPositiveButton("知道了", null)
+                            .show();
+                } catch (Throwable ignored) {
+                }
+            }
+        });
     }
 
     private void ping() {
@@ -355,32 +472,6 @@ public class MessageActivity extends Activity {
                 }
             }
         });
-    }
-
-    private void playTone() {
-        try {
-            Uri u = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-            Ringtone r = RingtoneManager.getRingtone(this, u);
-            if (r != null) {
-                r.play();
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
-    private void vibrate() {
-        try {
-            Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-            if (v != null && v.hasVibrator()) {
-                if (Build.VERSION.SDK_INT >= 26) {
-                    v.vibrate(android.os.VibrationEffect.createOneShot(
-                            400, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
-                } else {
-                    v.vibrate(400);
-                }
-            }
-        } catch (Throwable ignored) {
-        }
     }
 
     // ======================= 持久化 =======================

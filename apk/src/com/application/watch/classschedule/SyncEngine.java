@@ -42,6 +42,14 @@ public final class SyncEngine {
         void on(boolean ok, String msg);
     }
 
+    /**
+     * 无人认领的消息（手环主动 push）：当没有正在等待回包的请求时，
+     * 不再直接丢弃，而是交给观察者处理（例如留言提醒）。
+     */
+    public interface Observer {
+        void onMessage(String json);
+    }
+
     private static SyncEngine inst;
 
     public static synchronized SyncEngine get(Context c) {
@@ -94,11 +102,26 @@ public final class SyncEngine {
                     pending = null;
                     if (r != null) {
                         r.onReply(text);
+                        return;
+                    }
+                    // 没有待回包的请求 → 这是手环主动 push，交观察者处理（不再静默丢弃）
+                    if (observer != null) {
+                        try {
+                            observer.onMessage(text);
+                        } catch (Throwable ignored) {
+                        }
                     }
                 }
             });
         }
     };
+
+    private Observer observer;
+
+    /** 注册/清除「手环主动消息」观察者（传 null 清除） */
+    public void setObserver(Observer o) {
+        observer = o;
+    }
 
     private void ensureListener() {
         if (api == null || nodeId == null || listening) {

@@ -139,7 +139,38 @@ MIUI/HyperOS 等 ROM 的省电策略会杀前台服务；被杀期间**没有任
 
 ---
 
-## 八、本文核对过的路径
+## 八、补充核实：手环侧其实没有「给手机的留言箱」
+
+核查 `tom/class/class/src`：`ev_chat_inbox` **只被 `syncHandleChatIncoming`（手机 → 手环）写入**，没有任何"手环 → 手机"的写入方。
+
+结论：
+
+- **手机去轮询 `ev_chat_inbox`，只会拉到"手机自己发出去的话"** —— 既无用，又会造成重复提醒；
+- "手环 → 手机"目前**只有实时 push 一条路**（用户在手表上操作时 `chatBridge.send`）；
+- 所以 **不要启用轮询**。真要做"后台提醒"，正确顺序是先让 EV 有"出站箱"，或者干脆只依赖 push。
+
+---
+
+## 九、已落地的「禁止重复提醒」改动（2026-09-27）
+
+### 手环端 EV（`tom/class/class`，commit `9a0c4cf`，rpk 1.6.141）
+
+1. `src/data/chat-bridge.js`：消息 `id` 从 `String(Date.now())` 改为 **`时间戳-随机4位`**。
+   原因：只用毫秒时间戳时，同一毫秒连发两条会**撞 id** → 手机端会把第二条当成重复而**漏提醒**（比重复更糟）。
+2. `src/app.ux` `syncHandleChatIncoming`：写入 `ev_chat_inbox` 的条目**补上 `id`**（缺失时自动生成），为将来拉取/去重留依据。
+
+### APK（本仓 v0.5.16）
+
+1. **修复"push 被静默丢弃"**：`SyncEngine` 原先在 `pending == null`（没有正在等待回包的请求）时**直接丢掉**手环推来的消息 —— 也就是手环主动发消息基本收不到。现在新增 `Observer`，无人认领的消息交给它处理。
+2. **按 id 去重（核心）**：`MessageActivity.handleUnsolicited()` → `markSeen(id)`；已提醒过的 id 直接丢弃，**同一条只响铃/震动/弹窗一次**。已提醒集合存 `SharedPreferences`（保留最近 500 条）。
+3. 兼容老 EV（无 `id`）：用 `ts + 文本哈希` 兜底去重。
+4. 首页与留言页都在 `onResume` 重装观察者 → **只要 App 在前台，任何页面收到留言都会提醒**（去重是全局的）。
+
+> 仍未做：进程被杀后的提醒（无解，需要前台服务 + 用户加省电白名单）；EV 侧的"出站箱"。
+
+---
+
+## 十、本文核对过的路径
 
 - 本仓：`apk/src/.../SyncEngine.java`（`OnMessageReceivedListener`、`send`）、`MessageActivity.java`（本地队列）、`apk/AndroidManifest.xml`（权限现状）、`docs/ui-message-import-export-improvements.md` §3.5。
 - 跨仓**只读**：`tom/class/class/src/app.ux`（`syncHandleChatIncoming`、`vibrateLong`、`startResident`、`chatBridge.register`）、`src/data/chat-bridge.js`、`src/data/storage-tables.js`（`ev_chat_inbox`）。
