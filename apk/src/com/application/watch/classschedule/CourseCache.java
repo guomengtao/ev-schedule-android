@@ -115,6 +115,9 @@ public final class CourseCache {
                     .putLong(KEY_AT, System.currentTimeMillis())
                     .putString(KEY_NAME, scheduleName == null ? "" : scheduleName)
                     .apply();
+            // 桌面上的插件跟着刷新（未添加插件时这两句是 no-op）
+            TodayWidgetProvider.refreshAll(c);
+            NextWidgetProvider.refreshAll(c);
             return flat.length();
         } catch (Throwable t) {
             return 0;
@@ -310,6 +313,68 @@ public final class CourseCache {
         } catch (Throwable t) {
             return "很久以前";
         }
+    }
+
+    // ======================= 时间工具（供插件 / 提醒用） =======================
+
+    /** "08:00 - 08:45" → {480, 525}（当日分钟数）；解析不出返回 null */
+    public static int[] minutes(String t) {
+        if (t == null || t.length() < 4) {
+            return null;
+        }
+        try {
+            java.util.regex.Matcher m =
+                    java.util.regex.Pattern.compile("(\\d{1,2}):(\\d{2})").matcher(t);
+            int[] out = new int[]{-1, -1};
+            while (m.find()) {
+                int v = Integer.parseInt(m.group(1)) * 60 + Integer.parseInt(m.group(2));
+                if (out[0] < 0) {
+                    out[0] = v;
+                } else {
+                    out[1] = v;
+                    break;
+                }
+            }
+            if (out[0] < 0) {
+                return null;
+            }
+            if (out[1] <= out[0]) {
+                out[1] = out[0] + 45; // 只有一个时间点（或区间非法）时按 45 分钟一节课算
+            }
+            return out;
+        } catch (Throwable t2) {
+            return null;
+        }
+    }
+
+    /** 当前时刻的"当日分钟数" */
+    public static int nowMinutes() {
+        Calendar c = Calendar.getInstance();
+        return c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE);
+    }
+
+    /** "08:00" 风格的时分文本 → 当日分钟数；解析不出返回 -1 */
+    public static int parseHm(String s) {
+        int[] m = minutes(s);
+        return m == null ? -1 : m[0];
+    }
+
+    /** 当日分钟数 → "08:45" */
+    public static String hm(int minutes) {
+        if (minutes < 0) {
+            return "";
+        }
+        return String.format(Locale.US, "%02d:%02d", minutes / 60, minutes % 60);
+    }
+
+    /** "08:00 - 08:45" → "08:00"（窄列 / 插件里放不下完整区间） */
+    public static String shortTime(String t) {
+        if (t == null) {
+            return "";
+        }
+        int i = t.indexOf('-');
+        String s = (i > 0 ? t.substring(0, i) : t).trim();
+        return s.length() > 5 ? s.substring(0, 5) : s;
     }
 
     // ======================= JSON 转换 =======================

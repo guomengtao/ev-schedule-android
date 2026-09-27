@@ -94,5 +94,31 @@
             android:name="com.application.watch.classschedule.SyncService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- 桌面插件：今日课程（4×2） / 下一节课（4×1）。
+             数据来自本地课表缓存（CourseCache），App 更新课表时主动刷新，
+             另有系统级 30 分钟周期刷新（updatePeriodMillis）。 -->
+        <receiver
+            android:name="com.application.watch.classschedule.TodayWidgetProvider"
+            android:exported="false"
+            android:label="今日课程">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_today_info" />
+        </receiver>
+        <receiver
+            android:name="com.application.watch.classschedule.NextWidgetProvider"
+            android:exported="false"
+            android:label="下一节课">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_next_info" />
+        </receiver>
     </application>
 </manifest>

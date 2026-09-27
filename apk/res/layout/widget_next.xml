@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4×1「下一节课」：单行显示下一节（或正在上的）课。
+     文字颜色由 NextWidgetProvider 按当前主题动态覆盖。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/next_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/widget_bg_light"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp">
+
+    <TextView
+        android:id="@+id/next_bar"
+        android:layout_width="3dp"
+        android:layout_height="34dp"
+        android:background="#3B82F6"/>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="9dp">
+
+        <TextView
+            android:id="@+id/next_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="下一节"
+            android:textSize="9sp"
+            android:textColor="#64748B"/>
+
+        <TextView
+            android:id="@+id/next_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#0F172A"
+            android:maxLines="1"
+            android:ellipsize="end"/>
+
+        <TextView
+            android:id="@+id/next_room"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="10sp"
+            android:textColor="#64748B"
+            android:maxLines="1"
+            android:ellipsize="end"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="end"
+        android:layout_marginStart="8dp">
+
+        <TextView
+            android:id="@+id/next_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#2F6BFF"/>
+
+        <TextView
+            android:id="@+id/next_sub"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="9sp"
+            android:textColor="#64748B"/>
+    </LinearLayout>
+</LinearLayout>

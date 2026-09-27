@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4×2「今日课程」：今天最多 4 门课，当前/下一节高亮，已结束灰显。
+     文字颜色由 ScheduleWidgetProvider 按当前主题（浅/深）动态覆盖。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg_light"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="今日课程"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#0F172A"/>
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:id="@+id/widget_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="10sp"
+            android:textColor="#64748B"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginTop="2dp">
+
+        <LinearLayout
+            android:id="@+id/row1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="5dp"
+            android:visibility="gone">
+            <TextView android:id="@+id/bar1" android:layout_width="3dp" android:layout_height="20dp" android:background="#3B82F6"/>
+            <TextView android:id="@+id/time1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="7dp" android:textSize="10sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/name1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end"/>
+            <TextView android:id="@+id/room1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="5dp" android:textSize="10sp" android:textColor="#64748B" android:maxLines="1" android:ellipsize="end"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/row2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="5dp"
+            android:visibility="gone">
+            <TextView android:id="@+id/bar2" android:layout_width="3dp" android:layout_height="20dp" android:background="#3B82F6"/>
+            <TextView android:id="@+id/time2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="7dp" android:textSize="10sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/name2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end"/>
+            <TextView android:id="@+id/room2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="5dp" android:textSize="10sp" android:textColor="#64748B" android:maxLines="1" android:ellipsize="end"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/row3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="5dp"
+            android:visibility="gone">
+            <TextView android:id="@+id/bar3" android:layout_width="3dp" android:layout_height="20dp" android:background="#3B82F6"/>
+            <TextView android:id="@+id/time3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="7dp" android:textSize="10sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/name3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end"/>
+            <TextView android:id="@+id/room3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="5dp" android:textSize="10sp" android:textColor="#64748B" android:maxLines="1" android:ellipsize="end"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/row4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="5dp"
+            android:visibility="gone">
+            <TextView android:id="@+id/bar4" android:layout_width="3dp" android:layout_height="20dp" android:background="#3B82F6"/>
+            <TextView android:id="@+id/time4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="7dp" android:textSize="10sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/name4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end"/>
+            <TextView android:id="@+id/room4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="5dp" android:textSize="10sp" android:textColor="#64748B" android:maxLines="1" android:ellipsize="end"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_foot"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="9sp"
+        android:textColor="#64748B"
+        android:maxLines="1"
+        android:ellipsize="end"/>
+</LinearLayout>

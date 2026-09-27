@@ -15,19 +15,107 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-/** 统一视觉：深空蓝风格（对齐 EV 课程表默认主题） */
+/**
+ * 统一视觉 —— Token + Theme（2026-09-28 起）。
+ *
+ * ★ 设计令牌（Design Token）：所有颜色从这里的 token 取，**任何页面不许写死颜色**。
+ *   两套主题：
+ *     - 浅色「晴空蓝」（默认）：白天教室/户外高频扫一眼的课表场景，浅色可读性最好
+ *     - 深色「夜幕蓝」（夜间）：跟随系统夜间模式自动切换
+ *
+ * ★ 兼容性：token 由 final 常量改为可变字段 + applyTheme() 刷新，
+ *   全部 9 个 Activity 已经只走 Ui.text/card/button 等 API，**无需任何改动**。
+ *
+ * ★ 课程区分色：12 色调色板，按课程名 hash 稳定分配（同一门课永远同色）。
+ */
 public final class Ui {
 
-    public static final int BG     = 0xFF0B1020;
-    public static final int CARD   = 0xFF151C30;
-    public static final int CARD2  = 0xFF1C2542;
-    public static final int LINE   = 0xFF27314C;
-    public static final int TEXT   = 0xFFE9EEF9;
-    public static final int MUTED  = 0xFF8695B4;
-    public static final int ACCENT = 0xFF4C8DFF;
-    public static final int OK     = 0xFF34C759;
-    public static final int WARN   = 0xFFFFB020;
-    public static final int ERR    = 0xFFFF6B6B;
+    // ============ Token（由 applyTheme 按当前主题刷新；不要在别处写死颜色） ============
+    public static int BG;
+    public static int CARD;
+    public static int CARD2;
+    public static int LINE;
+    public static int TEXT;
+    public static int MUTED;
+    public static int ACCENT;
+    public static int OK;
+    public static int WARN;
+    public static int ERR;
+    private static boolean dark = true;
+
+    // ============ 浅色「晴空蓝」 ============
+    private static final int[] L = {
+            0xFFF4F7FB, // BG
+            0xFFFFFFFF, // CARD
+            0xFFEAF0F8, // CARD2（次级表面 / 非主按钮）
+            0xFFE3EAF3, // LINE
+            0xFF0F172A, // TEXT
+            0xFF64748B, // MUTED
+            0xFF2F6BFF, // ACCENT
+            0xFF16A34A, // OK
+            0xFFF59E0B, // WARN
+            0xFFDC2626, // ERR
+    };
+
+    // ============ 深色「夜幕蓝」（ACCENT 提亮一档保证对比度） ============
+    private static final int[] D = {
+            0xFF0B1020, // BG
+            0xFF151C30, // CARD
+            0xFF1C2542, // CARD2
+            0xFF27314C, // LINE
+            0xFFE9EEF9, // TEXT
+            0xFF8695B4, // MUTED
+            0xFF5B9BFF, // ACCENT
+            0xFF34C759, // OK
+            0xFFFFB020, // WARN
+            0xFFFF6B6B, // ERR
+    };
+
+    /** 12 色课程区分色（浅/深两套主题共用；同一门课永远同色） */
+    public static final int[] COURSE_COLORS = {
+            0xFF3B82F6, 0xFFEF4444, 0xFF10B981, 0xFFF59E0B,
+            0xFF8B5CF6, 0xFF06B6D4, 0xFFEC4899, 0xFF84CC16,
+            0xFFF97316, 0xFF6366F1, 0xFF14B8A6, 0xFFA855F7,
+    };
+
+    public static boolean isDark() {
+        return dark;
+    }
+
+    /** 按系统夜间模式套用主题。每个页面入口（screen / wrapWithBottomBar / fixedWithBottomBar）都会调它 */
+    public static void applyTheme(Context c) {
+        try {
+            int mode = c.getResources().getConfiguration().uiMode
+                    & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+            dark = (mode == android.content.res.Configuration.UI_MODE_NIGHT_YES);
+        } catch (Throwable t) {
+            dark = true;
+        }
+        int[] p = dark ? D : L;
+        BG = p[0];
+        CARD = p[1];
+        CARD2 = p[2];
+        LINE = p[3];
+        TEXT = p[4];
+        MUTED = p[5];
+        ACCENT = p[6];
+        OK = p[7];
+        WARN = p[8];
+        ERR = p[9];
+        // 系统控件（Switch / AlertDialog / EditText 光标等）也要跟着换：
+        // 必须在 setContentView 之前 setTheme —— 每个页面都是先走 Ui.screen()，恰好满足
+        if (c instanceof Activity) {
+            ((Activity) c).setTheme(dark
+                    ? android.R.style.Theme_Material_NoActionBar
+                    : android.R.style.Theme_Material_Light_NoActionBar);
+        }
+    }
+
+    /** 课程 → 区分色（稳定：同一门课在任何页面/任何手机上都是同一个颜色） */
+    public static int courseColor(String courseName) {
+        int h = (courseName == null) ? 0 : courseName.hashCode();
+        return COURSE_COLORS[(h & 0x7fffffff) % COURSE_COLORS.length];
+    }
 
     public static int dp(Context c, int v) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v,
@@ -35,6 +123,7 @@ public final class Ui {
     }
 
     public static LinearLayout screen(Activity a) {
+        applyTheme(a);
         LinearLayout root = new LinearLayout(a);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
@@ -217,6 +306,7 @@ public final class Ui {
      * 底栏由本方法唯一创建；调用方【不要】再往 contentRoot 里加 bottomBar。
      */
     public static ViewGroup wrapWithBottomBar(Activity a, LinearLayout contentRoot, int currentTab) {
+        applyTheme(a);
         final LinearLayout bar = bottomBar(a, currentTab);
         reserveBottomSpace(a, contentRoot);
 
@@ -246,6 +336,7 @@ public final class Ui {
      * 给内容区预留底部留白，让内部 weight=1 的滚动区自然收在底栏之上。
      */
     public static ViewGroup fixedWithBottomBar(Activity a, LinearLayout contentRoot, int currentTab) {
+        applyTheme(a);
         final LinearLayout bar = bottomBar(a, currentTab);
         reserveBottomSpace(a, contentRoot);
 

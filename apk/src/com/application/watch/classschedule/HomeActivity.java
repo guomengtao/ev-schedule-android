@@ -415,15 +415,13 @@ public class HomeActivity extends Activity {
         timetableCard.removeAllViews();
 
         List<CourseCache.Course> all = CourseCache.load(this);
-        List<CourseCache.Course> shown;
         String head;
+        List<CourseCache.Course> todayList = null;
         if (showWeek) {
-            CourseCache.sortForWeek(all);
-            shown = all;
             head = "本周课表";
         } else {
             int today = CourseCache.todayIndex();
-            shown = CourseCache.coursesOfDay(all, today);
+            todayList = CourseCache.coursesOfDay(all, today);
             head = "今日课程　" + CourseCache.WEEK[today];
         }
 
@@ -446,14 +444,16 @@ public class HomeActivity extends Activity {
         if (all.isEmpty()) {
             timetableCard.addView(Ui.text(this, "还没有课表数据，连接手环后会自动显示",
                     12.5f, Ui.MUTED, false));
-        } else if (shown.isEmpty()) {
+        } else if (showWeek) {
+            timetableCard.addView(weekGrid(all));
+        } else if (todayList.isEmpty()) {
             timetableCard.addView(Ui.text(this, "今天没有课", 13f, Ui.MUTED, false));
         } else {
-            for (int i = 0; i < shown.size(); i++) {
+            for (int i = 0; i < todayList.size(); i++) {
                 if (i > 0) {
                     timetableCard.addView(Ui.space(this, 6));
                 }
-                timetableCard.addView(courseRow(shown.get(i), showWeek));
+                timetableCard.addView(courseRow(todayList.get(i), false));
             }
         }
 
@@ -505,6 +505,67 @@ public class HomeActivity extends Activity {
             row.addView(t);
         }
         return row;
+    }
+
+    /**
+     * 周视图：7 列（一~日），每列纵向堆当天的课。
+     * 色块底色 = 课程区分色（按课程名 hash 稳定分配），今天列标题高亮。
+     */
+    private View weekGrid(List<CourseCache.Course> all) {
+        int today = CourseCache.todayIndex();
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.HORIZONTAL);
+        String[] heads = {"一", "二", "三", "四", "五", "六", "日"};
+        for (int d = 0; d < 7; d++) {
+            LinearLayout col = new LinearLayout(this);
+            col.setOrientation(LinearLayout.VERTICAL);
+            TextView h = Ui.text(this, heads[d], 10f,
+                    d == today ? Ui.ACCENT : Ui.MUTED, d == today);
+            h.setGravity(android.view.Gravity.CENTER);
+            col.addView(h);
+            col.addView(Ui.space(this, 4));
+            List<CourseCache.Course> day = CourseCache.coursesOfDay(all, d);
+            if (day.isEmpty()) {
+                TextView empty = Ui.text(this, "—", 10f, Ui.MUTED, false);
+                empty.setGravity(android.view.Gravity.CENTER);
+                empty.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 8));
+                col.addView(empty);
+            } else {
+                for (int i = 0; i < day.size(); i++) {
+                    if (i > 0) {
+                        col.addView(Ui.space(this, 3));
+                    }
+                    col.addView(courseBlock(day.get(i)));
+                }
+            }
+            grid.addView(col, new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        }
+        return grid;
+    }
+
+    /** 单门课的小色块（周视图用） */
+    private View courseBlock(CourseCache.Course c) {
+        LinearLayout b = new LinearLayout(this);
+        b.setOrientation(LinearLayout.VERTICAL);
+        b.setBackground(Ui.round(Ui.courseColor(c.name), 7, 0, this));
+        b.setPadding(Ui.dp(this, 4), Ui.dp(this, 3), Ui.dp(this, 4), Ui.dp(this, 3));
+        b.addView(Ui.text(this, shortTime(c.time), 8f, 0xB3FFFFFF, false));
+        b.addView(Ui.text(this, c.name, 10f, 0xFFFFFFFF, true));
+        if (c.location.length() > 0) {
+            b.addView(Ui.text(this, c.location, 8f, 0xB3FFFFFF, false));
+        }
+        return b;
+    }
+
+    /** "08:00 - 08:45" → "08:00"（窄列里放不下完整区间） */
+    private static String shortTime(String t) {
+        if (t == null) {
+            return "";
+        }
+        int i = t.indexOf('-');
+        String s = (i > 0 ? t.substring(0, i) : t).trim();
+        return s.length() > 5 ? s.substring(0, 5) : s;
     }
 
     private void launchEv() {
