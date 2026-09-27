@@ -17,6 +17,7 @@
 - 硬依赖手机侧「小米运动健康」（AAR manifest queries `com.xiaomi.wearable` / `com.mi.health`）；SDK 无连接能力，连接由运动健康维护。
 - AstroBox 插件不受此约束（走宿主 WIT 旁路：`transport::request/send` 等）。
 - EV 接口：`{"action":"ping"}` → `{ok,pong,versionName,versionCode}`；`{"action":"export"}` → 格式 A（`{day,classes:[]}` 按天分组）；`import` 只认「一条课一个对象」（需 `name`+`time`），export 回灌前必须摊平。
+- **多课程表导出（2026-09-27 已实现）**：EV 支持 `{"action":"list_schedules"}` → `{ok,action:"list_schedules",names:[...],current:N}`（读 `scheduleNames`+`currentScheduleIndex`）；`{"action":"export","scheduleIndex":N}` 导第 N 套（`getAllCoursesWithIndex`），缺省导当前激活套（`getAllCourses`）。APK 侧 `SyncEngine.listSchedules()/exportSchedule(index)` + `TransferActivity` 下拉选套。数据层多套 = `allCourses_<index>` + `scheduleNames` 列表。
 - 签名不一致报 `SignatureVerifyFailedException: fingerprint verify failed`，设备侧接口全挂；`getServiceApiLevel`/`getConnectedNodes` 不受影响（本地查询）。
 
 ## 已打通基线（真机实测）
