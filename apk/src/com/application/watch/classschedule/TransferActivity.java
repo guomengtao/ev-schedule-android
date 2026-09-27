@@ -115,7 +115,8 @@ public class TransferActivity extends Activity {
         root.addView(Ui.space(this, 8));
         resultView.setTextIsSelectable(true);
 
-        setContentView(Ui.wrapWithBottomBar(this, root, 0));
+        // tab=-1：导入/导出不是底栏三页之一，不高亮任何 tab —— 否则点「首页」会被当成当前页而失效
+        setContentView(Ui.wrapWithBottomBar(this, root, -1));
 
         // 进页面不自动弹出输入法（把焦点交给根布局，EditText 不抢焦点）
         root.setFocusableInTouchMode(true);

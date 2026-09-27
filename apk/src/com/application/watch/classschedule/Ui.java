@@ -11,6 +11,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -279,9 +280,12 @@ public final class Ui {
     public static final int BAR_HEIGHT_DP = 62;
 
     /** 底部固定导航：首页 / 留言 / 设置（任何时候都常驻）。
-     *  每个 tab = 图标 + 文字 的竖向布局（图标用 emoji，零资源依赖）。 */
+     *  每个 tab = 图标 + 文字 的竖向布局。
+     *  图标：Lucide 规范单色线性图标（res/drawable/ic_tab_*.xml，24×24 描边 2），
+     *  运行时按选中态染色（选中 = 主色，未选中 = 次要色）。 */
     public static LinearLayout bottomBar(final Activity a, int current) {
-        final String[] icons = {"🏠", "💬", "⚙"};   // 首页 / 留言 / 设置
+        final int[] icons = {R.drawable.ic_tab_home, R.drawable.ic_tab_message,
+                R.drawable.ic_tab_settings};
         final String[] labels = {"首页", "留言", "设置"};
         final Class[] targets = {HomeActivity.class, MessageActivity.class, SettingsActivity.class};
 
@@ -298,11 +302,12 @@ public final class Ui {
             tab.setGravity(Gravity.CENTER);
             tab.setClickable(true);
             tab.setBackground(round(i == current ? CARD2 : 0x00000000, 12, 0, a));
-            TextView ic = text(a, icons[i], 19f, color, false);
-            ic.setGravity(Gravity.CENTER);
+            ImageView ic = new ImageView(a);
+            ic.setImageResource(icons[i]);
+            ic.setColorFilter(color); // 单色染色：SRC_IN，透明底描边图标整体变色
+            tab.addView(ic, new LinearLayout.LayoutParams(dp(a, 22), dp(a, 22)));
             TextView lb = text(a, labels[i], 10.5f, color, false);
             lb.setGravity(Gravity.CENTER);
-            tab.addView(ic);
             tab.addView(lb);
             tab.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
