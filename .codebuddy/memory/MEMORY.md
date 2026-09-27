@@ -87,6 +87,17 @@
 - `pickModel(model,product)`：`m=model` 常是垃圾值，`p=product` 才是真机型（如 "REDMI Watch 6"），≥3 字符才算有效、取更长的。
 - ⚠️ APK 当前 Manifest **无 INTERNET 权限**，做埋点/快速激活都要加。
 
+## EvNotifier（app-auth/tools/ev-notifier，macOS 通知工具）
+- 单文件 Python 菜单栏应用 `ev_notifier.py`（约 7200 行，rumps + PyObjC + AppKit），版本在 `version.json`（当前 2.3.38）。
+- **运行方式（关键）**：LaunchAgent `com.evnotifier.agent` 直接跑 **`tools/ev-notifier/ev_notifier.py`**（不是 `EvNotifier.app` 里的副本）。
+  - 改完生效：`launchctl kickstart -k gui/$(id -u)/com.evnotifier.agent`
+  - 查看：`launchctl list | grep -i evnotifier`
+  - 规范另有 `cp tools/ev-notifier/ev_notifier.py ~/Desktop/EvNotifier.app/ev_notifier.py`（桌面版同步），本机当前无桌面副本。
+- 通知实现：`notify_macos()`（terminal-notifier 优先，回落 `osascript display notification`）+ `enqueue_voice()`（Edge TTS `zh-CN-XiaoxiaoNeural`，回落 macOS `say`；队列 `_voice_queue`，worker 在 import 时启动）。
+- 通知设置：`~/.ev_notify_settings.json`，键 `popup/sound/voice/visitor_voice/auto_start/startup_check`；面板「设置」页有开关+测试（`ev://setting=<key>` / `ev://test-notify=<key>`）。
+- 消息来源：Redis stream `auth:notifications:stream`（PUB/SUB）+ 后端补拉；幂等入口 `_claim_message()`；未读口径 `read`。
+- 本次新增：**启动自检通知** `startup_notify_selftest()`（打开工具即弹窗+语音验证链路，受 `startup_check` 控制，`force=True` 供测试按钮复用），在 `run()` 里 `runEventLoop()` 前调用。commit `fa47cda`。
+
 ## 其他约定
 - 数据开放边界由手环侧守门人模型控制（interconnect 通道）；策略建议收敛成 `SYNC_ACCESS` 权限表。当前：schedule/profile/homepage/appearance 默认读+可写；pinned 需显式请求+只读（数据在 `src/data/pin-helper.js`）；auth 禁读写。
 - **evnotifier（`app-auth/tools/ev-notifier`）运行环境**：常驻由 LaunchAgent `com.evnotifier.agent` 拉起，解释器固定 **Homebrew python@3.14**（`/opt/homebrew/opt/python@3.14/bin/python3.14`，PEP 668 externally-managed → 装包要 `--break-system-packages`）；改完代码必须 `launchctl kickstart -k gui/$(id -u)/com.evnotifier.agent` 才生效（`git pull` 不生效）。语音播报自 2026-09-27 起用 **Edge TTS**（`zh-CN-XiaoxiaoNeural`，可用 `EV_TTS_VOICE`/`EV_TTS_RATE` 覆盖，缓存 `~/.ev_tts_cache/`），edge-tts 缺失/断网自动降级 macOS `say`。
