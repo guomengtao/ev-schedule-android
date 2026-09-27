@@ -75,6 +75,99 @@ public final class SyncEngine {
     public int courseCount = 0;
     public String lastExportJson;
 
+    // ======================= 多设备（多手环）支持 =======================
+    // 一个账号下可能同时连着多台手环（如手环 + 手表），getConnectedNodes() 会返回多台。
+    // 老代码直接取 nodes.get(0) → 多设备用户会连错机器。这里改成：记住上次选择；没记住就问用户。
+
+    /** 设置项存储（与 SyncService 共用同一个文件） */
+    public static final String PREFS = "ev_settings";
+    /** 记住的手环 nodeId */
+    public static final String KEY_PREFERRED_NODE = "preferred_node";
+
+    public static final class DeviceInfo {
+        public final String id;
+        public final String name;
+
+        DeviceInfo(String id, String name) {
+            this.id = id;
+            this.name = name;
+        }
+    }
+
+    /** 发现多台设备时交给 UI 选择；未注册则退回"取第一台"的旧行为 */
+    public interface NodeChooser {
+        void onNeedChoose(List<DeviceInfo> devices, String preferredId);
+    }
+
+    private NodeChooser chooser;
+    private List<DeviceInfo> pendingDevices;
+    private Steps pendingSteps;
+    private String[] pendingLabels, pendingDetails;
+    private int[] pendingStates;
+
+    public void setNodeChooser(NodeChooser c) {
+        chooser = c;
+    }
+
+    public List<DeviceInfo> pendingDevices() {
+        return pendingDevices;
+    }
+
+    public String preferredNodeId() {
+        try {
+            return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .getString(KEY_PREFERRED_NODE, "");
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    public void setPreferredNodeId(String id) {
+        try {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                    .putString(KEY_PREFERRED_NODE, id == null ? "" : id).apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 用户在 UI 里选好了设备：记住它并继续连接流程 */
+    public void chooseNode(String id) {
+        if (pendingDevices == null || id == null) {
+            return;
+        }
+        DeviceInfo hit = null;
+        for (int i = 0; i < pendingDevices.size(); i++) {
+            if (id.equals(pendingDevices.get(i).id)) {
+                hit = pendingDevices.get(i);
+                break;
+            }
+        }
+        if (hit == null) {
+            return;
+        }
+        Steps s = pendingSteps;
+        String[] labels = pendingLabels, details = pendingDetails;
+        int[] states = pendingStates;
+        pendingDevices = null;
+        pendingSteps = null;
+        if (s == null || labels == null || states == null || details == null) {
+            return;
+        }
+        setPreferredNodeId(hit.id);
+        useNode(hit, "(已记住)", s, labels, states, details);
+    }
+
+    /** 落定一台设备，进入第 3 步（授权） */
+    private void useNode(DeviceInfo d, String note, Steps s,
+                         String[] labels, int[] states, String[] details) {
+        nodeId = d.id;
+        deviceName = d.name;
+        states[1] = OK;
+        details[1] = d.name + (note == null ? "" : "  " + note);
+        emit(s, labels, states, details);
+        stepPerm(s, labels, states, details);
+    }
+
     private SyncEngine(Context c) {
         ctx = c;
         try {
@@ -225,6 +318,9 @@ public final class SyncEngine {
     // ======================= 四步连接 =======================
 
     public void connect(final Steps s) {
+        // 重新连接：清掉上一次"等待用户选设备"的残留状态
+        pendingDevices = null;
+        pendingSteps = null;
         final String[] labels = {"初始化穿戴服务", "查找已连接设备", "申请设备权限", "连接 EV 课程表"};
         final int[] states = {RUNNING, PENDING, PENDING, PENDING};
         final String[] details = {"", "", "", ""};
@@ -303,13 +399,44 @@ public final class SyncEngine {
                                 finish(s, false, "请在「小米运动健康」里确认手环已连接，并保持连接");
                                 return;
                             }
-                            Node n = nodes.get(0);
-                            nodeId = n.id;
-                            deviceName = n.name;
-                            states[1] = OK;
-                            details[1] = n.name;
+                            java.util.List<DeviceInfo> list = new java.util.ArrayList<>();
+                            for (int i = 0; i < nodes.size(); i++) {
+                                Node n = nodes.get(i);
+                                list.add(new DeviceInfo(n.id, n.name));
+                            }
+                            if (list.size() == 1) {
+                                useNode(list.get(0), "(唯一设备)", s, labels, states, details);
+                                return;
+                            }
+                            // 多台手环：优先用上次记住的那台；没记住就交给 UI 让用户选
+                            final String pref = preferredNodeId();
+                            for (int i = 0; i < list.size(); i++) {
+                                if (list.get(i).id.equals(pref)) {
+                                    useNode(list.get(i), "(已记住)", s, labels, states, details);
+                                    return;
+                                }
+                            }
+                            if (chooser == null) {
+                                // 没有 UI 兜底：保持老行为（取第一台），但把提示写清楚
+                                useNode(list.get(0), "(默认第一台)", s, labels, states, details);
+                                return;
+                            }
+                            pendingDevices = list;
+                            pendingSteps = s;
+                            pendingLabels = labels;
+                            pendingStates = states;
+                            pendingDetails = details;
+                            states[1] = RUNNING;
+                            details[1] = "发现 " + list.size() + " 台设备，等待选择…";
                             emit(s, labels, states, details);
-                            stepPerm(s, labels, states, details);
+                            final List<DeviceInfo> forUi = list;
+                            main.post(new Runnable() {
+                                @Override public void run() {
+                                    if (chooser != null) {
+                                        chooser.onNeedChoose(forUi, pref);
+                                    }
+                                }
+                            });
                         }
                     })
                     .addOnFailureListener(new OnFailureListener() {
@@ -439,9 +566,19 @@ public final class SyncEngine {
                                 cb.on(false, "没有已连接设备");
                                 return;
                             }
-                            nodeId = nodes.get(0).id;
-                            deviceName = nodes.get(0).name;
-                            cb.on(true, deviceName + "  nodeId=" + nodeId);
+                            Node pick = nodes.get(0);
+                            String pref = preferredNodeId();
+                            for (int i = 0; i < nodes.size(); i++) {
+                                if (nodes.get(i).id.equals(pref)) {
+                                    pick = nodes.get(i);
+                                    break;
+                                }
+                            }
+                            nodeId = pick.id;
+                            deviceName = pick.name;
+                            cb.on(true, deviceName + "  nodeId=" + nodeId
+                                    + (nodes.size() > 1
+                                        ? ("（共 " + nodes.size() + " 台，可在首页切换）") : ""));
                         }
                     })
                     .addOnFailureListener(new OnFailureListener() {

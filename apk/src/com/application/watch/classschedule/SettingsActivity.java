@@ -12,7 +12,7 @@ import android.widget.TextView;
 /** 设置页：显示当前昵称，并允许写回手环 */
 public class SettingsActivity extends Activity {
 
-    private TextView currentView, resultView, bgStatusView;
+    private TextView currentView, resultView, bgStatusView, devStatusView;
     private EditText nickView;
 
     @Override
@@ -91,6 +91,22 @@ public class SettingsActivity extends Activity {
                 })));
         root.addView(bgCard);
 
+        root.addView(Ui.space(this, 10));
+        LinearLayout devCard = Ui.card(this);
+        devCard.addView(Ui.text(this, "手环设备", 12.5f, Ui.TEXT, true));
+        devStatusView = Ui.text(this, devText(), 11.5f, Ui.MUTED, false);
+        devStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
+        devCard.addView(devStatusView);
+        devCard.addView(Ui.button(this, "重新选择设备", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                SyncEngine.get(SettingsActivity.this).setPreferredNodeId("");
+                devStatusView.setText(devText());
+                resultView.setText("已清除记忆，下次连接会重新询问");
+                resultView.setTextColor(Ui.OK);
+            }
+        }));
+        root.addView(devCard);
+
         root.addView(Ui.space(this, 8));
         SyncEngine e = SyncEngine.get(this);
         root.addView(Ui.mono(this, "手环 " + (e.connected()
@@ -116,6 +132,17 @@ public class SettingsActivity extends Activity {
     }
 
     // ======================= 后台常驻提醒 =======================
+
+    /** 当前记住的手环设备（多设备时连接不再随机挑） */
+    private String devText() {
+        SyncEngine e = SyncEngine.get(this);
+        String id = e.preferredNodeId();
+        if (id == null || id.length() == 0) {
+            return "未指定：多台手环时会在连接时询问选哪台";
+        }
+        String name = (e.deviceName == null) ? "" : e.deviceName;
+        return "已记住：" + (name.length() > 0 ? name + "  " : "") + id;
+    }
 
     private String bgText() {
         return SyncService.enabled(this)

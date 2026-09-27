@@ -39,6 +39,7 @@
 - 工具类：`Net`（POST JSON，子线程）、`Analytics`（页面访问上报，复用后台 `?section=visitor-track`）。
 - **快速激活（v0.5.14）**：APK「高级版」页 → `get_device_id` 取设备ID → 用户输 4 位兑换码 → POST `https://app-auth.gudq.com/api/activate` 换 18 位激活码 → `activate` 写回手环。APK Manifest 已加 `INTERNET`/`ACCESS_NETWORK_STATE`。
 - `SyncEngine.java` 单例：4 步 = 初始化穿戴服务(`getServiceApiLevel`) → 查找设备(`getConnectedNodes`) → 申请权限 → ping EV；单一 listener + 6s 超时。
+- **多手环设备选择（v0.5.21 起）**：`getConnectedNodes()` 返回多台时不再盲取 `nodes.get(0)` —— `SyncEngine` 新增 `DeviceInfo`/`NodeChooser`/`setNodeChooser()`/`chooseNode(id)`/`preferredNodeId()`；优先用记住的 `preferred_node`（存 `ev_settings`），没记住则弹选择框（`HomeActivity.showDeviceChooser`，单选，选中后记住）；未注册 chooser 时退回取第一台。设置页「手环设备」可查看/清除记忆。`Observer`（手环主动消息）与 `NodeChooser` 是两个独立的回调，别混淆。
 - `Ui.java` 统一深空蓝视觉；设计文档 `apk/首页与多步骤调试页设计.md`。
 - **底部导航（v0.5.12 起）**：三个常驻 tab = 首页 / 留言 / 设置（`Ui.bottomBar`，目标 `HomeActivity/MessageActivity/SettingsActivity`），所有页面（含 `TransferActivity`/`DebugActivity`）都挂。
 - **布局容器（v0.5.12 起，两个 helper，底栏由 helper 唯一创建，调用方别再 addView(bottomBar)）**：

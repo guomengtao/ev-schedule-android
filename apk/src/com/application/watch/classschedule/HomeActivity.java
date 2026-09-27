@@ -59,6 +59,7 @@ public class HomeActivity extends Activity {
         // 常驻前台服务：进程活着才能在后台收到手环推来的留言（可在设置页关闭）
         SyncService.startIfEnabled(this);
         requestNotifPermission();
+        installNodeChooser();
         startConnect();
     }
 
@@ -72,6 +73,50 @@ public class HomeActivity extends Activity {
                         new String[]{"android.permission.POST_NOTIFICATIONS"}, REQ_NOTIF);
             }
         } catch (Throwable ignored) {
+        }
+    }
+
+    // ======================= 多手环：让用户选连哪一台 =======================
+
+    /** 发现多台已连接设备时弹选择框（只选一次，之后记住） */
+    private void installNodeChooser() {
+        SyncEngine.get(this).setNodeChooser(new SyncEngine.NodeChooser() {
+            @Override public void onNeedChoose(java.util.List<SyncEngine.DeviceInfo> devices,
+                                               String preferredId) {
+                showDeviceChooser(devices, preferredId);
+            }
+        });
+    }
+
+    private void showDeviceChooser(final java.util.List<SyncEngine.DeviceInfo> devices,
+                                   String preferredId) {
+        if (isFinishing() || devices == null || devices.isEmpty()) {
+            return;
+        }
+        final String[] names = new String[devices.size()];
+        int checked = -1;
+        for (int i = 0; i < devices.size(); i++) {
+            names[i] = devices.get(i).name + "   (" + devices.get(i).id + ")";
+            if (devices.get(i).id.equals(preferredId)) {
+                checked = i;
+            }
+        }
+        try {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("发现 " + devices.size() + " 台已连接设备，请选择")
+                    .setSingleChoiceItems(names, checked,
+                            new android.content.DialogInterface.OnClickListener() {
+                                @Override public void onClick(android.content.DialogInterface d, int which) {
+                                    d.dismiss();
+                                    SyncEngine.get(HomeActivity.this)
+                                            .chooseNode(devices.get(which).id);
+                                }
+                            })
+                    .setCancelable(false)
+                    .show();
+        } catch (Throwable ignored) {
+            // 极端情况下弹不出来：退回默认（第一台），保证连接流程不卡死
+            SyncEngine.get(this).chooseNode(devices.get(0).id);
         }
     }
 
@@ -357,6 +402,7 @@ public class HomeActivity extends Activity {
         Analytics.pageView(this, "/apk/home");
         // 首页也接管「手环主动消息」：只要 App 在前台，留言就能被提醒（按 id 去重）
         MessageActivity.installObserver(this);
+        installNodeChooser();
         SyncEngine e = SyncEngine.get(this);
         if (e.connected() && phase == PHASE_DONE && e.nickname.length() > 0) {
             welcomeView.setText("欢迎，" + e.nickname + "！");

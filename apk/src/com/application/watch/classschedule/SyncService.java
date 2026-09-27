@@ -18,7 +18,8 @@ import android.os.IBinder;
  */
 public class SyncService extends Service {
 
-    public static final String PREFS = "ev_settings";
+    /** 与 SyncEngine 共用同一个设置文件 */
+    public static final String PREFS = SyncEngine.PREFS;
     public static final String KEY_BG = "bg_service";
 
     // ======================= 开关 =======================
