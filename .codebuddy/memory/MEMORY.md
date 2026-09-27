@@ -1,13 +1,16 @@
 # 项目长期记忆：EV 课程表 / 安卓同步器
 
-## 项目三仓
+## 项目四仓
 | 仓 | 内容 | 运行环境 |
 |---|---|---|
 | `guomengtao/class-schedule` | 手环端 EV 课程表快应用 | Vela，`.rpk`，包名 `com.application.watch.classschedule` |
 | `guomengtao/app-auth` | 网站后台 + 桌面工具 + AstroBox 插件 ev-schedule-sync | Vercel / macOS；插件 Rust→wasm32-wasip2，产物 `.abp` |
 | `guomengtao/ev-schedule-android`（本仓） | 安卓同步器 APK | Kotlin/Java + 无 Gradle 构建脚本 |
+| `guomengtao/EvBox/evbox`（本地） | 手环端 **EvBox 工具箱**快应用（倒数日/农历/计算器/二维码/震动/备份/留言…） | Vela，包名 **`com.application.watch.evbox`**，**与 EV 课程表同一把签名** |
 
 - 本地相关目录：`app-auth`、`tom/class/class`（EV 主项目活跃副本）、`xiaomi-shouhuan-10pro`、`EvBox/evbox`。
+- ★ **interconnect 一个包名只能对一个快应用**（配对键 = APK applicationId == 快应用 manifest.package；SDK `sendMessage` 不带目标包名）。EV 课程表与 EvBox 包名不同 → **必须两个 APK**；"一套源码 + 两个包名变体"的可行性分析见 `docs/evbox-shared-apk-analysis.md`。
+- EvBox 已有 `src/data/sync-channel.js`（默认关闭；动作 `ping/export/update_settings/chat_pull/chat_push`+无 action→import；域 profile/countdown/homepage/chat/version/auth(never)，**无 schedule**），留言存 `sync_chat_list` = `[{id,from,text,ts,read}]`（**已有 id + read + chat_pull**）。
 - 全局项目地图：`/Users/Banner/Documents/guomengtao/PROJECT-MAP.md`（跨项目工作后必须更新）。
 - ⚠️ `tom/class/class` 是活跃副本，另一个克隆只作对照，别改错。
 
