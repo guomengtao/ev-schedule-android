@@ -6,7 +6,6 @@ import android.content.DialogInterface;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -53,26 +52,9 @@ public class HomepageSettingsActivity extends Activity {
             {"minimal-char", "极简·单字"}, {"minimal-en", "极简·英文缩写"},
             {"standard-block", "标准块"}, {"compact-grid", "紧凑网格"},
             {"color-pastel", "柔和色彩"}};
-    /** 主题色（手环 store.js THEMES，共 10 套） */
-    private static final String[][] THEME_LIST = {
-            {"blue", "深空蓝"}, {"green", "翡翠绿"}, {"red", "珊瑚红"}, {"dark", "暗夜黑"},
-            {"gray", "深空灰"}, {"purple", "暗紫魅影"}, {"light", "晨光白"},
-            {"warm", "暖阳米"}, {"forest", "墨绿护眼"}, {"amber", "琥珀金"}};
-    /** 主题选择项 = 「默认」+ 静态内置 10 套（选择即本机生效，无需手环） */
-    private static final String[][] THEME_OPTS;
-    static {
-        THEME_OPTS = new String[THEME_LIST.length + 1][2];
-        THEME_OPTS[0][0] = "";
-        THEME_OPTS[0][1] = "默认（跟随系统深浅色）";
-        for (int i = 0; i < THEME_LIST.length; i++) {
-            THEME_OPTS[i + 1][0] = THEME_LIST[i][0];
-            THEME_OPTS[i + 1][1] = THEME_LIST[i][1];
-        }
-    }
-
     /** 当前值；null = 手环未上报（EV 版本较旧），此时不写该字段以免误改 */
     private String homeTpl, weekTpl, appTheme;
-    private Button homeBtn, weekBtn, themeBtn;
+    private Button homeBtn, weekBtn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -105,9 +87,10 @@ public class HomepageSettingsActivity extends Activity {
         root.addView(toggleCard);
         root.addView(Ui.space(this, 10));
 
-        // ======================= 模板与主题（读手环回显，保存时写回） =======================
+        // ======================= 模板（读手环回显，保存时写回） =======================
+        // 主题色已独立为「主题外观」页（设置 → 主题外观）
         LinearLayout apCard = Ui.card(this);
-        apCard.addView(Ui.text(this, "模板与主题（保存时写回手环）", 12.5f, Ui.TEXT, true));
+        apCard.addView(Ui.text(this, "模板（保存时写回手环）", 12.5f, Ui.TEXT, true));
         apCard.addView(Ui.space(this, 8));
         homeBtn = Ui.button(this, "", false, new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -133,40 +116,8 @@ public class HomepageSettingsActivity extends Activity {
         });
         apCard.addView(weekBtn);
         apCard.addView(Ui.space(this, 6));
-        themeBtn = Ui.button(this, "", false, new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                pick("主题色", THEME_OPTS, appTheme, new Picker() {
-                    @Override public void onPick(String id, String label) {
-                        appTheme = id;
-                        // 静态主题：本机立即生效（静态内置，不连手环也能换）
-                        // 手动选择 = 独立模式 → 自动关闭「跟随手环」（可再手动打开）
-                        WatchAppearance.setLocalTheme(HomepageSettingsActivity.this, id);
-                        if (WatchAppearance.followEnabled(HomepageSettingsActivity.this)) {
-                            WatchAppearance.setFollow(HomepageSettingsActivity.this, false);
-                        }
-                        recreate(); // 整页立刻换装
-                    }
-                });
-            }
-        });
-        apCard.addView(themeBtn);
-        apCard.addView(Ui.space(this, 6));
         homeBtn.setText("首页模板：（读取中）");
         weekBtn.setText("周视图模板：（读取中）");
-        themeBtn.setText("主题色：（读取中）");
-        apCard.addView(Ui.space(this, 4));
-        Switch followSw = new Switch(this);
-        followSw.setText("跟随手环（手机主题自动跟手环走）");
-        followSw.setTextSize(12.5f);
-        followSw.setTextColor(Ui.TEXT);
-        followSw.setChecked(WatchAppearance.followEnabled(this));
-        followSw.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override public void onCheckedChanged(CompoundButton b, boolean isChecked) {
-                WatchAppearance.setFollow(HomepageSettingsActivity.this, isChecked);
-                recreate(); // 整页按新模式立即重新着色
-            }
-        });
-        apCard.addView(followSw);
         apCard.addView(Ui.space(this, 6));
         apCard.addView(Ui.button(this, "立即同步手环设置", true, new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -176,8 +127,7 @@ public class HomepageSettingsActivity extends Activity {
             }
         }));
         apCard.addView(Ui.mono(this,
-                "主题色：选择后本机立即生效（静态内置，无需手环）；已连接时「保存到手环」一并写回\n"
-                        + "首页/周视图模板写回手环后生效；跟随手环开启时手机主题跟手环走，手动选主题会自动关闭跟随\n"
+                "模板写回手环后生效；手机端主题在「设置 → 主题外观」\n"
                         + "若显示「手环未上报」表示手环 EV 版本较旧，升级手环端后可用"));
         root.addView(apCard);
         root.addView(Ui.space(this, 10));
@@ -260,14 +210,8 @@ public class HomepageSettingsActivity extends Activity {
                     setEnabled(true);
                     resultView.setText("已读取当前设置");
                     resultView.setTextColor(Ui.OK);
-                    // 更新「跟随手环」镜像；主题变了且跟随开启 → 整页重新着色
-                    String prevTheme = WatchAppearance.themeId(HomepageSettingsActivity.this);
+                    // 更新手环外观镜像（跟随手环模式的数据源；主题页展示也用它）
                     WatchAppearance.save(HomepageSettingsActivity.this, appTheme, homeTpl, weekTpl);
-                    if (WatchAppearance.followEnabled(HomepageSettingsActivity.this)
-                            && appTheme != null && appTheme.length() > 0
-                            && !appTheme.equals(prevTheme)) {
-                        recreate();
-                    }
                 } catch (Throwable t) {
                     resultView.setText("读取失败：回包无法解析");
                     resultView.setTextColor(Ui.ERR);
@@ -422,7 +366,6 @@ public class HomepageSettingsActivity extends Activity {
     private void updateAppearanceButtons() {
         homeBtn.setText("首页模板：" + labelOf(HOME_TPLS, homeTpl));
         weekBtn.setText("周视图模板：" + labelOf(WEEK_TPLS, weekTpl));
-        themeBtn.setText("主题色：" + labelOf(THEME_OPTS, appTheme));
     }
 
     private static String emptyToNull(String s) {

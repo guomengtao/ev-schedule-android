@@ -22,19 +22,35 @@ public final class WatchAppearance {
     public static final String KEY_LOCAL_THEME = "local_theme";
     public static final String KEY_AT = "saved_at";
 
-    /** 手环主题色 id → {bg, accent}（与手环 store.js THEMES 同源） */
-    private static final String[][] THEME_COLORS = {
-            {"blue",   "#1a1a2e", "#7ec8e3"},
-            {"green",  "#1a2e1a", "#7ec8a0"},
-            {"red",    "#2e1a1a", "#e37e7e"},
-            {"dark",   "#000000", "#666666"},
-            {"gray",   "#1a1a1a", "#888899"},
-            {"purple", "#1a0a2e", "#b07ec8"},
-            {"light",  "#f0f0f0", "#4a90d9"},
-            {"warm",   "#f5f0e8", "#c4a882"},
-            {"forest", "#1a2a1a", "#6a9a6a"},
-            {"amber",  "#2a1a0a", "#d4a060"},
+    /**
+     * 手环主题色清单（与手环 store.js THEMES 同源，10 套）。
+     * 列：{id, 中文名, bg, accent} —— 全 App 主题相关功能的唯一数据源。
+     */
+    public static final String[][] THEMES = {
+            {"blue",   "深空蓝",   "#1a1a2e", "#7ec8e3"},
+            {"green",  "翡翠绿",   "#1a2e1a", "#7ec8a0"},
+            {"red",    "珊瑚红",   "#2e1a1a", "#e37e7e"},
+            {"dark",   "暗夜黑",   "#000000", "#666666"},
+            {"gray",   "深空灰",   "#1a1a1a", "#888899"},
+            {"purple", "暗紫魅影", "#1a0a2e", "#b07ec8"},
+            {"light",  "晨光白",   "#f0f0f0", "#4a90d9"},
+            {"warm",   "暖阳米",   "#f5f0e8", "#c4a882"},
+            {"forest", "墨绿护眼", "#1a2a1a", "#6a9a6a"},
+            {"amber",  "琥珀金",   "#2a1a0a", "#d4a060"},
     };
+
+    /** 主题中文名；未知 id 原样返回 */
+    public static String themeName(String themeId) {
+        if (themeId == null) {
+            return "";
+        }
+        for (String[] t : THEMES) {
+            if (t[0].equals(themeId)) {
+                return t[1];
+            }
+        }
+        return themeId;
+    }
 
     private WatchAppearance() {
     }
@@ -138,12 +154,12 @@ public final class WatchAppearance {
         if (themeId == null) {
             return null;
         }
-        for (String[] t : THEME_COLORS) {
+        for (String[] t : THEMES) {
             if (t[0].equals(themeId)) {
                 try {
                     return new int[]{
-                            (int) (Long.parseLong(t[1].substring(1), 16) | 0xFF000000L),
-                            (int) (Long.parseLong(t[2].substring(1), 16) | 0xFF000000L)};
+                            (int) (Long.parseLong(t[2].substring(1), 16) | 0xFF000000L),
+                            (int) (Long.parseLong(t[3].substring(1), 16) | 0xFF000000L)};
                 } catch (Throwable ignored) {
                     return null;
                 }
@@ -190,7 +206,7 @@ public final class WatchAppearance {
     }
 
     /** 颜色线性插值：t=0 → base，t=1 → target */
-    private static int mix(int base, int target, float t) {
+    public static int mix(int base, int target, float t) {
         int r = (int) (((base >> 16) & 0xFF) + (((target >> 16) & 0xFF) - ((base >> 16) & 0xFF)) * t);
         int g = (int) (((base >> 8) & 0xFF) + (((target >> 8) & 0xFF) - ((base >> 8) & 0xFF)) * t);
         int b = (int) ((base & 0xFF) + ((target & 0xFF) - (base & 0xFF)) * t);

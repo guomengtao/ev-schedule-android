@@ -52,7 +52,14 @@ public class SettingsActivity extends Activity {
         root.addView(resultView);
 
         root.addView(Ui.space(this, 12));
-        root.addView(Ui.row(this, "首页设置", "显示开关 / 栏目时间 / 字号", Ui.TEXT,
+        root.addView(Ui.row(this, "主题外观", "10 套主题即点即换 · 也可跟随手环", Ui.TEXT,
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        startActivity(new Intent(SettingsActivity.this, ThemePickerActivity.class));
+                    }
+                }));
+        root.addView(Ui.space(this, 6));
+        root.addView(Ui.row(this, "首页设置", "显示开关 / 模板 / 字号", Ui.TEXT,
                 new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         startActivity(new Intent(SettingsActivity.this, HomepageSettingsActivity.class));
