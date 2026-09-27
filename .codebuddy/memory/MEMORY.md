@@ -52,6 +52,11 @@
 
 ## 构建方式（不要轻易改）
 - `apk/`，无 Gradle：`aapt2 link → javac → d8 → zip dex → zipalign → apksigner`；SDK 在 `$HOME/android-sdk`。
+- ★ **多变体构建（v0.5.20 起）**：`bash build.sh` = EV 变体（包名 `com.application.watch.classschedule`，`version.env`，产物 `dist/EVSyncProbe-v*.apk`）；`APP_VARIANT=evbox bash build.sh` = EvBox 变体（包名 `com.application.watch.evbox`，`version-evbox.env`，产物 `dist/EvBoxSyncProbe-v*.apk`）。差异点：包名/label/对端包名（清单 `<meta-data ev.variant|ev.peer_pkg>`）/版本线/产物名。**两头签名都用同一把**（build.sh 先找 `tom/class/class/sign`）。
+  - ⚠️ aapt2 必须带 `--custom-package com.application.watch.classschedule`，否则变体包名一改 `R.java` 包名也跟着变 → `R.drawable.*` 编译不过。
+  - ⚠️ 清单 sed 注入后有**自检**（包名/占位符没替换干净就报错退出），别删。
+  - `Variant.java` 运行期读 meta-data（`Variant.isEv(ctx)`），**不要在代码里硬编码对端快应用包名**；EV 专属入口（导入导出课表/高级版激活）已按变体隐藏。
+  - 物理分层（`src/common`+`src/ev`+`src/evbox`）**尚未做**，等出现 EvBox 专属页面再拆。
 - ⚠️ javac 用 JDK 8（zulu-8，JDK22 产出的 class 让 d8 NPE）；d8/apksigner 用 JDK 11+。
 - ⚠️ d8 的 `--classpath` 不打进 dex：AAR 的 classes.jar 必须作为输入传给 d8，否则运行时闪退。
 - 排闪退：`adb logcat -s EVProbe AndroidRuntime`；崩溃写 `last_crash.txt`。

@@ -37,6 +37,10 @@
         android:roundIcon="@drawable/ic_launcher"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
+        <!-- 构建变体：由 build.sh 在打包时替换占位符（一套源码 → 两个包名的 APK） -->
+        <meta-data android:name="ev.variant" android:value="__VARIANT__" />
+        <meta-data android:name="ev.peer_pkg" android:value="__PEER_PKG__" />
+
         <activity
             android:name="com.application.watch.classschedule.HomeActivity"
             android:exported="true">

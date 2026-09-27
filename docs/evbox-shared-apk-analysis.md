@@ -116,12 +116,40 @@ sed "s/android:label=\"EV Sync\"/android:label=\"EV Sync v$VERSION_NAME\"/" \
 
 ### 4.3 落地步骤（渐进，每步可验收）
 
-| 阶段 | 做什么 | 验收 |
+| 阶段 | 做什么 | 状态 |
 |---|---|---|
-| P0 | `apk/src` 分层：`common/`（包名无关）+ `ev/`（业务页）；`build.sh` 加 `APP_VARIANT=ev\|evbox` 与 `APP_ID/LABEL/PEER_PKG` 注入 | 两个变体都能编译出 APK |
-| P1 | 先做 EvBox 变体**最小三件**：连接(ping) + 留言(已有 `chat_pull`/`chat_push`) + 设置 | 两个 APK 可同时安装，各自 ping 通 |
-| P2 | 按域补页面：EvBox 做倒数日导入导出；EV 保持课表导入导出 | 各自功能闭环 |
-| P3 | 激活体系复用（`productId` 区分产品线） | 两边都能一键激活 |
+| **P0** | 变体机制：`build.sh` 支持 `APP_VARIANT=ev\|evbox`，注入包名 / label / 对端包名（manifest meta-data）；两个变体各自独立版本文件 | ✅ **已完成**（见 §4.4） |
+| P1 | 源码**物理分层**：`src/common/`（共用基础设施）+ `src/ev/` + `src/evbox/`（专属页面）；EvBox 侧把「留言」接到它自己的 `chat_pull`/`chat_push`，「设置」按它的域（`profile`/`countdown`/`homepage`）重做 | 待做 |
+| P2 | 各自治业务页：EvBox 做倒数日导入导出；EV 保持课表导入导出 | 待做 |
+| P3 | 激活体系复用（`productId` 区分产品线） | 待做 |
+
+### 4.4 已实现的变体机制（P0）
+
+```
+# EV 课程表（包名 com.application.watch.classschedule）
+cd apk && bash build.sh
+
+# EvBox 工具箱（包名 com.application.watch.evbox）
+cd apk && APP_VARIANT=evbox bash build.sh
+```
+
+| 机制 | 实现 |
+|---|---|
+| **包名注入** | `build.sh` 用 sed 把清单 `package=` 替换为变体包名，并**自检**（替换失败即报错退出）—— 防止"两个变体其实是同一个包名"的静默错误 |
+| **对端包名** | 写进清单 `<meta-data ev.peer_pkg>`；`Variant.java` 运行期读取 → `SyncEngine.launchEv()` 不再硬编码 |
+| **R 资源** | aapt2 加 `--custom-package com.application.watch.classschedule`，R.java 固定生成在同一 Java 包 → 两个变体的 `R.drawable.*` 都能编译（否则变体包名一变 R 就找不到） |
+| **版本线** | `version.env`（ev）/ `version-evbox.env`（evbox），互不顶版本 |
+| **产物** | `dist/EVSyncProbe-v<v>.apk` / `dist/EvBoxSyncProbe-v<v>.apk` + 根目录同名副本（已加 `.gitignore`） |
+| **变体感知** | `Variant.isEv()`：EV 专属入口（导入/导出课程表、高级版一键激活）在 EvBox 变体里**自动隐藏** |
+
+实测产物（2026-09-27）：
+
+| 变体 | 包名 | label | 产物 |
+|---|---|---|---|
+| ev | `com.application.watch.classschedule` | EV Sync v0.5.20 | `dist/EVSyncProbe-v0.5.20.apk` |
+| evbox | `com.application.watch.evbox` | EvBox Sync v0.1.0 | `dist/EvBoxSyncProbe-v0.1.0.apk` |
+
+> **为什么 P0 没有立刻做"物理分层"**：目前还没有任何 EvBox 专属页面 —— 现在拆目录只是无意义的文件搬动。等 P1 出现专属页面时再拆，才是有信息量的分层。
 
 ### 4.4 风险与注意
 

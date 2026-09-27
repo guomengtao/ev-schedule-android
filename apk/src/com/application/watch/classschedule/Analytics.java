@@ -44,7 +44,8 @@ public final class Analytics {
         JSONObject body = new JSONObject();
         try {
             body.put("path", path);
-            body.put("query", "from=apk&v=" + version(ctx) + "&connected=" + (connected ? 1 : 0));
+            body.put("query", "from=apk&v=" + version(ctx) + "&connected=" + (connected ? 1 : 0)
+                    + "&variant=" + Variant.name(ctx));
         } catch (Throwable ignored) {
         }
         Net.postJson(Net.BASE + "/api/activate?section=visitor-track", body.toString(), null);

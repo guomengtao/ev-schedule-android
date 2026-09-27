@@ -131,13 +131,16 @@ public class HomeActivity extends Activity {
         // 功能入口
         actionsView = new LinearLayout(this);
         actionsView.setOrientation(LinearLayout.VERTICAL);
-        actionsView.addView(Ui.grid(this,
-                Ui.button(this, "导入课程表", true, new View.OnClickListener() {
-                    @Override public void onClick(View v) { open(TransferActivity.MODE_IMPORT); }
-                }),
-                Ui.button(this, "导出课程表", true, new View.OnClickListener() {
-                    @Override public void onClick(View v) { open(TransferActivity.MODE_EXPORT); }
-                })));
+        // 「导入/导出课程表」是 EV 课程表专属（EvBox 工具箱没有 schedule 域）
+        if (Variant.isEv(this)) {
+            actionsView.addView(Ui.grid(this,
+                    Ui.button(this, "导入课程表", true, new View.OnClickListener() {
+                        @Override public void onClick(View v) { open(TransferActivity.MODE_IMPORT); }
+                    }),
+                    Ui.button(this, "导出课程表", true, new View.OnClickListener() {
+                        @Override public void onClick(View v) { open(TransferActivity.MODE_EXPORT); }
+                    })));
+        }
         actionsView.addView(Ui.grid(this,
                 Ui.button(this, "设置（昵称）", false, new View.OnClickListener() {
                     @Override public void onClick(View v) {
@@ -304,8 +307,9 @@ public class HomeActivity extends Activity {
         stopTicking();
         SyncEngine e = SyncEngine.get(this);
         welcomeView.setText("欢迎，" + (e.nickname.length() > 0 ? e.nickname : "同学") + "！");
-        statusView.setText("已连接 " + e.deviceName + "  ·  EV " + e.versionName
-                + " (code " + e.versionCode + ")  ·  课表 " + e.courseCount + " 节");
+        statusView.setText("已连接 " + e.deviceName + "  ·  " + e.versionName
+                + " (code " + e.versionCode + ")"
+                + (Variant.isEv(this) ? ("  ·  课表 " + e.courseCount + " 节") : ""));
         statusView.setTextColor(Ui.OK);
         estimateView.setText("连接完成");
         estimateView.setTextColor(Ui.OK);

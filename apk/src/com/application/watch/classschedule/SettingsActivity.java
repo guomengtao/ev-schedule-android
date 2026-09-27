@@ -56,13 +56,16 @@ public class SettingsActivity extends Activity {
                         startActivity(new Intent(SettingsActivity.this, HomepageSettingsActivity.class));
                     }
                 }));
-        root.addView(Ui.space(this, 6));
-        root.addView(Ui.row(this, "高级版", "4 位兑换码一键激活", Ui.TEXT,
-                new View.OnClickListener() {
-                    @Override public void onClick(View v) {
-                        startActivity(new Intent(SettingsActivity.this, FastActivateActivity.class));
-                    }
-                }));
+        // 「高级版一键激活」依赖 EV 的 activate 动作（EvBox 工具箱暂无此动作）
+        if (Variant.isEv(this)) {
+            root.addView(Ui.space(this, 6));
+            root.addView(Ui.row(this, "高级版", "4 位兑换码一键激活", Ui.TEXT,
+                    new View.OnClickListener() {
+                        @Override public void onClick(View v) {
+                            startActivity(new Intent(SettingsActivity.this, FastActivateActivity.class));
+                        }
+                    }));
+        }
         root.addView(Ui.space(this, 6));
         root.addView(Ui.row(this, "打赏支持", "爱发电 / 微信 / 支付宝", Ui.TEXT,
                 new View.OnClickListener() {

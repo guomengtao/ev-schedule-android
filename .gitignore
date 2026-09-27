@@ -1,7 +1,8 @@
 # ============ 构建产物 ============
 apk/out/
 apk/dist/
-apk/EVSyncProbe.apk
+# 固定路径的最新包（apk/dist/ 已整目录忽略；这里覆盖多变体的根目录副本）
+apk/*Probe.apk
 apk/tools/bcclasses/
 *.idsig
 

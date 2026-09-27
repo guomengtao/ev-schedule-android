@@ -28,8 +28,30 @@ cd "$(dirname "$0")"
 HERE="$(pwd)"
 GUOMENGTAO="$(cd "$HERE/../.." && pwd)"
 
-# --- 读版本号 ---
-VFILE="$HERE/version.env"
+# --- 构建变体（一套源码 → 多个包名的 APK）---
+#   interconnect 要求 APK 包名 == 手环快应用包名，而「EV 课程表」与「EvBox 工具箱」
+#   包名不同 → 必须分别打包。用法：APP_VARIANT=evbox bash build.sh
+VARIANT="${APP_VARIANT:-ev}"
+case "$VARIANT" in
+  ev)
+    APP_ID="com.application.watch.classschedule"
+    LABEL_BASE="EV Sync"
+    PEER_PKG="com.application.watch.classschedule"
+    VFILE="$HERE/version.env"
+    OUT_NAME="EVSyncProbe"
+    ;;
+  evbox)
+    APP_ID="com.application.watch.evbox"
+    LABEL_BASE="EvBox Sync"
+    PEER_PKG="com.application.watch.evbox"
+    VFILE="$HERE/version-evbox.env"
+    OUT_NAME="EvBoxSyncProbe"
+    ;;
+  *)
+    echo "未知 APP_VARIANT: $VARIANT（可选：ev | evbox）"; exit 1;;
+esac
+
+# --- 读版本号（每个变体一条独立版本线）---
 if [ ! -f "$VFILE" ]; then
   printf 'VERSION_CODE=1\nVERSION_NAME=0.1.0\n' > "$VFILE"
 fi
@@ -60,10 +82,12 @@ if [ -z "$RPK_SIGN_DIR" ]; then
 fi
 
 echo "=============================================="
-echo " EV Sync Probe 构建"
+echo " 同步器 APK 构建"
+echo "   variant     : $VARIANT"
 echo "   versionCode : $VERSION_CODE"
 echo "   versionName : $VERSION_NAME"
-echo "   包名        : com.application.watch.classschedule（固定，不带版本号）"
+echo "   包名        : ${APP_ID}（= 对端快应用包名，配对键，不带版本号）"
+echo "   label       : $LABEL_BASE v$VERSION_NAME"
 echo "   build-tools : $BT"
 echo "   javac       : $JAVA8_HOME/bin/javac"
 echo "   d8/apksigner: $JRE_HOME"
@@ -76,9 +100,19 @@ echo "=============================================="
 rm -rf out
 mkdir -p out/gen out/classes out/dex out/sdkclasses dist
 
-# 把版本号注入到 launcher 名称，方便一眼看出装的是哪一版
-sed "s/android:label=\"EV Sync\"/android:label=\"EV Sync v$VERSION_NAME\"/" \
+# 注入：包名（配对键）/ launcher 名称 / 变体信息（对端包名给 Variant.java 运行期读）
+sed -e "s|package=\"com.application.watch.classschedule\"|package=\"$APP_ID\"|" \
+    -e "s/android:label=\"EV Sync\"/android:label=\"$LABEL_BASE v$VERSION_NAME\"/" \
+    -e "s|__VARIANT__|$VARIANT|" \
+    -e "s|__PEER_PKG__|$PEER_PKG|" \
   AndroidManifest.xml > out/AndroidManifest.xml
+
+# 自检：包名/占位符没替换干净就直接失败 —— 防止"两个变体其实是同一个包名"的静默错误
+grep -q "package=\"$APP_ID\"" out/AndroidManifest.xml \
+  || { echo "清单包名注入失败：期望 $APP_ID"; exit 1; }
+if grep -q "__PEER_PKG__\|__VARIANT__" out/AndroidManifest.xml; then
+  echo "变体占位符未替换干净（__PEER_PKG__ / __VARIANT__）"; exit 1
+fi
 
 echo "[1/7] aapt2 compile + link（编译资源与清单，注入版本号）..."
 # 资源目录（应用图标等）→ 编译成 .flat 压缩包
@@ -88,6 +122,7 @@ echo "[1/7] aapt2 compile + link（编译资源与清单，注入版本号）...
   -I "$AJAR" \
   --manifest out/AndroidManifest.xml \
   --java out/gen \
+  --custom-package "com.application.watch.classschedule" \
   --min-sdk-version 24 \
   --target-sdk-version 34 \
   --version-code "$VERSION_CODE" \
@@ -128,7 +163,7 @@ javac -nowarn -cp "$BT/lib/apksigner.jar:tools/bcprov.jar" -d tools/bcclasses to
 SIGNER=(-cp "tools/bcclasses:$BT/lib/apksigner.jar:tools/bcprov.jar" BCSign)
 
 echo "[7/7] 签名 ..."
-OUT="dist/EVSyncProbe-v${VERSION_NAME}.apk"
+OUT="dist/${OUT_NAME}-v${VERSION_NAME}.apk"
 if [ -n "$RPK_SIGN_DIR" ]; then
   openssl pkcs8 -topk8 -nocrypt -in "$RPK_SIGN_DIR/private.pem" -outform DER -out out/rpk-key.pk8
   "$JRE_HOME/bin/java" "${SIGNER[@]}" sign \
@@ -148,11 +183,11 @@ fi
 rm -f "$OUT.idsig"
 
 # 便于固定路径安装（可覆盖安装的前提是签名没变）
-cp "$OUT" EVSyncProbe.apk
+cp "$OUT" "$OUT_NAME.apk"
 
 echo
 echo "产物: $HERE/$OUT"
-ls -la "$OUT" EVSyncProbe.apk
+ls -la "$OUT" "$OUT_NAME.apk"
 "$JRE_HOME/bin/java" "${SIGNER[@]}" verify --print-certs "$OUT" | head -4
 echo
 "$BT/aapt2" dump badging "$OUT" 2>/dev/null | head -4

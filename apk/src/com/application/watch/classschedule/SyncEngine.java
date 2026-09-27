@@ -498,7 +498,7 @@ public final class SyncEngine {
             return;
         }
         try {
-            Wearable.getNodeApi(ctx).launchWearApp(nodeId, "com.application.watch.classschedule")
+            Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx))
                     .addOnSuccessListener(new OnSuccessListener<Void>() {
                         @Override public void onSuccess(Void v) { cb.on(true, "已请求拉起，请看手环"); }
                     })
