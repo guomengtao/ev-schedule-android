@@ -74,14 +74,22 @@ adb -s BTF4C17222009588 shell dumpsys package com.application.watch.classschedul
 #   versionName=0.5.25   ← 与刚构建产物一致，"同步安装"验证通过
 ```
 
-真机截图暴露的两个问题（待办，非本次范围）：
+真机截图暴露出两个问题，**已在 v0.5.27 修复**（同一套"构建→安装→截图→dump"流程验证）：
 
-1. **异常直接糊到 UI 上**：首页第 1 步显示
-   `初始化穿戴服务 — java.lang.IllegalStateException: not bond`（这台机没有小米运动健康/未配对）
-   —— 原始异常串被当作用户文案展示，建议在 `SyncEngine` 里把这类异常映射成「请确认已安装小米运动健康并配对」。
-2. **底栏遮挡仍在**：1080x1920 上「导入/导出课程表」下方那排按钮被底栏压掉一半
-   （截图底部可见被截断的半行按钮），说明 `docs/底部导航栏高度适配问题分析.md` 里的问题
-   在长列表页依然存在，`BAR_HEIGHT_DP` 预留没覆盖到所有页面。
+1. **异常直接糊到 UI 上**（已修）：首页第 1 步原本显示
+   `初始化穿戴服务 — java.lang.IllegalStateException: not bond`。
+   修法：在 `SyncEngine` 加 `humanize(Throwable)` / `hintFor(Throwable)`，
+   把 SDK 的英文异常翻译成短中文短语（`not bond` → `手环未在本机配对`、
+   `signature` → `签名校验未通过`、`SecurityException` → `权限被拒绝`…），
+   并给对应的可执行建议；`String.valueOf(e/t)` 在 **所有** 面向 UI 的路径上都被替换掉，
+   避免将来某个新页面又把 raw exception 露出来。
+2. **底栏遮挡**（已修）：根因是 `Ui.BAR_HEIGHT_DP` 写死 62dp，而实际底栏
+   （emoji 19sp + 文字 + padding）在这台机上实测 **86dp**，少预留 24dp。
+   修法：`Ui.syncPaddingToBar()` 在布局完成后按 **实测** `bar.getHeight()` 设 paddingBottom，
+   常量退化为首帧前的估计值 —— 以后改底栏样式不会再静默漏出一截内容。
+
+   验证方式（比目测可靠）：`adb shell uiautomator dump` 后比对最后一个内容元素的
+   `bounds` bottom 与底栏 top —— 修之前 `1713 > 1662`（重叠 17dp），修之后 `1608 < 1662`。
 
 ---
 
