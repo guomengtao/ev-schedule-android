@@ -19,6 +19,7 @@ public final class WatchAppearance {
     public static final String KEY_THEME = "app_theme";
     public static final String KEY_HOME_TPL = "home_tpl";
     public static final String KEY_WEEK_TPL = "week_tpl";
+    public static final String KEY_LOCAL_THEME = "local_theme";
     public static final String KEY_AT = "saved_at";
 
     /** 手环主题色 id → {bg, accent}（与手环 store.js THEMES 同源） */
@@ -53,6 +54,25 @@ public final class WatchAppearance {
         try {
             c.getSharedPreferences(PREF, Context.MODE_PRIVATE)
                     .edit().putBoolean(KEY_FOLLOW, v).apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    // ======================= 本地主题（静态内置，不连手环也能换） =======================
+
+    /** 本地选择的主题 id；"" = 默认（跟随系统深浅色，用本端标准色板） */
+    public static String localTheme(Context c) {
+        try {
+            return c.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString(KEY_LOCAL_THEME, "");
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    public static void setLocalTheme(Context c, String id) {
+        try {
+            c.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+                    .edit().putString(KEY_LOCAL_THEME, id == null ? "" : id).apply();
         } catch (Throwable ignored) {
         }
     }
@@ -138,5 +158,42 @@ public final class WatchAppearance {
         int g = (bgColor >> 8) & 0xFF;
         int b = bgColor & 0xFF;
         return (0.299 * r + 0.587 * g + 0.114 * b) < 128;
+    }
+
+    /**
+     * 主题 id → 完整手机端色板 {BG, CARD, CARD2, LINE, TEXT, MUTED, ACCENT}。
+     * 由手环同源的 (bg, accent) 推导：背景直接用主题 bg，卡片/边线/文字按深浅自适应派生，
+     * 语义色（OK/WARN/ERR）由 Ui 用本端标准值补齐。未知 id 返回 null。
+     */
+    public static int[] palette(String themeId) {
+        int[] wa = watchColors(themeId);
+        if (wa == null) {
+            return null;
+        }
+        int bg = wa[0];
+        int accent = wa[1];
+        int card, card2, line, text, muted;
+        if (isDarkBg(bg)) {
+            card = mix(bg, 0xFFFFFFFF, 0.06f);
+            card2 = mix(bg, 0xFFFFFFFF, 0.12f);
+            line = mix(bg, 0xFFFFFFFF, 0.20f);
+            text = 0xFFE9EEF9;
+            muted = mix(bg, 0xFFFFFFFF, 0.52f);
+        } else {
+            card = 0xFFFFFFFF;
+            card2 = mix(bg, 0xFF000000, 0.04f);
+            line = mix(bg, 0xFF000000, 0.10f);
+            text = 0xFF0F172A;
+            muted = mix(bg, 0xFF000000, 0.45f);
+        }
+        return new int[]{bg, card, card2, line, text, muted, accent};
+    }
+
+    /** 颜色线性插值：t=0 → base，t=1 → target */
+    private static int mix(int base, int target, float t) {
+        int r = (int) (((base >> 16) & 0xFF) + (((target >> 16) & 0xFF) - ((base >> 16) & 0xFF)) * t);
+        int g = (int) (((base >> 8) & 0xFF) + (((target >> 8) & 0xFF) - ((base >> 8) & 0xFF)) * t);
+        int b = (int) ((base & 0xFF) + ((target & 0xFF) - (base & 0xFF)) * t);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 }

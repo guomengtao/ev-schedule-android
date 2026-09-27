@@ -85,9 +85,10 @@ public final class Ui {
     /**
      * 套用主题。每个页面入口（screen / wrapWithBottomBar / fixedWithBottomBar）都会调它。
      *
-     * 优先级：**「跟随手环」开启且已同步到手环主题色** → 明暗与主色跟手环走；
-     * 否则按系统夜间模式（浅色默认 / 深色夜间）。
-     * 中性色（背景/卡片/文字）始终用本端色板，保证可读性不失控。
+     * 主题源优先级：
+     *   1. 「跟随手环」开启且已同步到手环主题色 → 用手环主题的整套色板
+     *   2. 本地选过主题（静态内置 10 套，**不连手环也能用**）→ 用本地主题色板
+     *   3. 都没有 → 系统夜间模式（浅色「晴空蓝」默认 / 深色「夜幕蓝」）
      */
     public static void applyTheme(Context c) {
         boolean night;
@@ -98,32 +99,35 @@ public final class Ui {
         } catch (Throwable t) {
             night = true;
         }
-        int accentOverride = 0;
+        int[] custom = null;
         try {
-            if (WatchAppearance.followEnabled(c)) {
-                int[] wa = WatchAppearance.watchColors(WatchAppearance.themeId(c));
-                if (wa != null) {
-                    night = WatchAppearance.isDarkBg(wa[0]);
-                    accentOverride = wa[1];
+            String tid = null;
+            if (WatchAppearance.followEnabled(c) && WatchAppearance.themeId(c).length() > 0) {
+                tid = WatchAppearance.themeId(c);           // 跟随手环：手环主题优先
+            }
+            if (tid == null && WatchAppearance.localTheme(c).length() > 0) {
+                tid = WatchAppearance.localTheme(c);        // 本地静态主题（离线可用）
+            }
+            if (tid != null) {
+                custom = WatchAppearance.palette(tid);
+                if (custom != null) {
+                    night = WatchAppearance.isDarkBg(custom[0]);
                 }
             }
         } catch (Throwable ignored) {
         }
         dark = night;
         int[] p = dark ? D : L;
-        BG = p[0];
-        CARD = p[1];
-        CARD2 = p[2];
-        LINE = p[3];
-        TEXT = p[4];
-        MUTED = p[5];
-        ACCENT = p[6];
+        BG = custom != null ? custom[0] : p[0];
+        CARD = custom != null ? custom[1] : p[1];
+        CARD2 = custom != null ? custom[2] : p[2];
+        LINE = custom != null ? custom[3] : p[3];
+        TEXT = custom != null ? custom[4] : p[4];
+        MUTED = custom != null ? custom[5] : p[5];
+        ACCENT = custom != null ? custom[6] : p[6];
         OK = p[7];
         WARN = p[8];
         ERR = p[9];
-        if (accentOverride != 0) {
-            ACCENT = accentOverride;
-        }
         // 系统控件（Switch / AlertDialog / EditText 光标等）也要跟着换：
         // 必须在 setContentView 之前 setTheme —— 每个页面都是先走 Ui.screen()，恰好满足
         if (c instanceof Activity) {
