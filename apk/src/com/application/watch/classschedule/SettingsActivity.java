@@ -56,7 +56,6 @@ public class SettingsActivity extends Activity {
         root.addView(Ui.mono(this, "本机 v" + version()));
 
         root.addView(Ui.space(this, 6));
-        root.addView(Ui.bottomBar(this, 2));
 
         refresh();
         setContentView(Ui.wrapWithBottomBar(this, root, 2));

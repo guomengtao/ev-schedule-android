@@ -27,9 +27,14 @@
 - `OnMessageReceivedListener` 在 Binder 线程，UI 更新须 `runOnUiThread`。
 
 ## App 结构（v0.5.0 起）
-- Activity：`HomeActivity`（首页，4 步连接进度卡+失败指引）、`DebugActivity`（单步调试）、`SettingsActivity`（昵称）、`TransferActivity`（导入/导出复用）。
+- Activity：`HomeActivity`（首页，4 步连接进度卡+失败指引）、`DebugActivity`（单步调试）、`SettingsActivity`（昵称）、`TransferActivity`（导入/导出复用）、`MessageActivity`（留言，v0.5.12 由 `ChatActivity` 改名重构）。
 - `SyncEngine.java` 单例：4 步 = 初始化穿戴服务(`getServiceApiLevel`) → 查找设备(`getConnectedNodes`) → 申请权限 → ping EV；单一 listener + 6s 超时。
 - `Ui.java` 统一深空蓝视觉；设计文档 `apk/首页与多步骤调试页设计.md`。
+- **底部导航（v0.5.12 起）**：三个常驻 tab = 首页 / 留言 / 设置（`Ui.bottomBar`，目标 `HomeActivity/MessageActivity/SettingsActivity`），所有页面（含 `TransferActivity`/`DebugActivity`）都挂。
+- **布局容器（v0.5.12 起，两个 helper，底栏由 helper 唯一创建，调用方别再 addView(bottomBar)）**：
+  - `Ui.wrapWithBottomBar(a, content, tab)`：内容可滚动页（首页/设置/导入导出）。关键：ScrollView 子 View 必须显式 `FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)`，否则默认 MATCH_PARENT → 内容被裁、滚不动（这是"首页滚不动"的根因）。
+  - `Ui.fixedWithBottomBar(a, content, tab)`：页内已有自己的滚动区（留言列表/调试日志）时用，避免两层纵向 ScrollView 嵌套。
+  - 两者都会给内容区预留 `Ui.BAR_HEIGHT_DP`(62dp) 底部留白，避免被悬浮底栏盖住。tab 传 -1 = 不高亮任何项（调试页）。
 
 ## ⚠️ 仓库文件命名雷区（2026-09-27 踩坑）
 - **git 跟踪的文件不要用中文名**（尤其 root 下的 .md）。macOS 的 NFC/NFD Unicode 规范化会让 git 索引与磁盘文件名错配，表现为：① `git add 中文名` 静默失效（staged 为空）；② `git status` 反复出现物理不存在的 `?? apk/<中文名>` 幽灵 untracked 条目（find 确认无此文件，无害但刷屏）。

@@ -157,10 +157,16 @@ public final class Ui {
         return t;
     }
 
-    /** 底部固定导航：首页 / 聊天 / 设置（对标官方 demo 的底部栏） */
+    /**
+     * 底栏高度（dp）。内容区必须预留这么多底部留白，
+     * 否则最后一段内容会被悬浮在底部的导航栏盖住（"底部的东西看不到"）。
+     */
+    public static final int BAR_HEIGHT_DP = 62;
+
+    /** 底部固定导航：首页 / 留言 / 设置（任何时候都常驻） */
     public static LinearLayout bottomBar(final Activity a, int current) {
-        final String[] names = {"首页", "聊天", "设置"};
-        final Class[] targets = {HomeActivity.class, ChatActivity.class, SettingsActivity.class};
+        final String[] names = {"首页", "留言", "设置"};
+        final Class[] targets = {HomeActivity.class, MessageActivity.class, SettingsActivity.class};
 
         LinearLayout bar = new LinearLayout(a);
         bar.setOrientation(LinearLayout.HORIZONTAL);
@@ -195,15 +201,18 @@ public final class Ui {
     }
 
     /**
-     * Wrap content + bottom bar into a FrameLayout.
-     * Content sits in a ScrollView (fills screen), bottom bar pinned at bottom.
-     * Caller must have added Ui.bottomBar() as the LAST child of contentRoot.
+     * 内容可滚动的页面：内容放进 ScrollView，底栏固定在屏幕底部。
+     *
+     * ⚠️ 两个关键点（都是之前"首页滚不动 / 底部看不到"的根因）：
+     *   1) 给 ScrollView 的子 View 显式传 WRAP_CONTENT 高度。
+     *      ScrollView 继承 FrameLayout，不传 LayoutParams 时默认是 MATCH_PARENT，
+     *      子 View 会被强制成"一屏高"→ 超出部分被裁掉，滚动失效。
+     *   2) 内容区预留 BAR_HEIGHT_DP 的底部留白，避免被悬浮底栏盖住。
+     *
+     * 底栏由本方法唯一创建；调用方【不要】再往 contentRoot 里加 bottomBar。
      */
     public static ViewGroup wrapWithBottomBar(Activity a, LinearLayout contentRoot, int currentTab) {
-        int count = contentRoot.getChildCount();
-        if (count > 0) {
-            contentRoot.removeViewAt(count - 1);
-        }
+        reserveBottomSpace(a, contentRoot);
 
         FrameLayout root = new FrameLayout(a);
         root.setLayoutParams(new FrameLayout.LayoutParams(
@@ -212,19 +221,47 @@ public final class Ui {
 
         ScrollView scroll = new ScrollView(a);
         scroll.setFillViewport(true);
-        scroll.addView(contentRoot);
+        scroll.addView(contentRoot, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT));
 
         root.addView(scroll, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        LinearLayout bar = bottomBar(a, currentTab);
-        FrameLayout.LayoutParams barLp = new FrameLayout.LayoutParams(
+        root.addView(bottomBar(a, currentTab), barParams());
+        return root;
+    }
+
+    /**
+     * 页面内部已有自己的滚动区（如留言列表、调试日志）时用这个：
+     * 不套外层 ScrollView（避免两层纵向滚动嵌套），只把底栏钉在底部 +
+     * 给内容区预留底部留白，让内部 weight=1 的滚动区自然收在底栏之上。
+     */
+    public static ViewGroup fixedWithBottomBar(Activity a, LinearLayout contentRoot, int currentTab) {
+        reserveBottomSpace(a, contentRoot);
+
+        FrameLayout root = new FrameLayout(a);
+        root.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        root.addView(contentRoot, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        root.addView(bottomBar(a, currentTab), barParams());
+        return root;
+    }
+
+    private static void reserveBottomSpace(Activity a, LinearLayout contentRoot) {
+        contentRoot.setPadding(contentRoot.getPaddingLeft(), contentRoot.getPaddingTop(),
+                contentRoot.getPaddingRight(), dp(a, BAR_HEIGHT_DP));
+    }
+
+    private static FrameLayout.LayoutParams barParams() {
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
-        barLp.gravity = Gravity.BOTTOM;
-        root.addView(bar, barLp);
-
-        return root;
+        lp.gravity = Gravity.BOTTOM;
+        return lp;
     }
 }

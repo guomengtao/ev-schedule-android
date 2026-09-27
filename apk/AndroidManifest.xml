@@ -18,6 +18,10 @@
         <package android:name="com.mi.health" />
     </queries>
 
+    <!-- 留言提醒：震动；Android 13+ 通知（后续做后台提醒时需要） -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:label="EV Sync"
         android:icon="@drawable/ic_launcher"
@@ -34,8 +38,8 @@
             </intent-filter>
         </activity>
 
-        <activity android:name="com.application.watch.classschedule.ChatActivity"
-            android:windowSoftInputMode="stateHidden" />
+        <activity android:name="com.application.watch.classschedule.MessageActivity"
+            android:windowSoftInputMode="stateHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.DebugActivity" />
         <activity android:name="com.application.watch.classschedule.SettingsActivity"
             android:windowSoftInputMode="stateHidden" />

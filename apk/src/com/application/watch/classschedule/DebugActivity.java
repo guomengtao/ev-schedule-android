@@ -99,7 +99,8 @@ public class DebugActivity extends Activity {
         root.addView(scroll, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        setContentView(root);
+        // 调试页也保留常驻底栏（不属于三个 tab，故不高亮任何一项）
+        setContentView(Ui.fixedWithBottomBar(this, root, -1));
     }
 
     // ======================= 步骤 =======================

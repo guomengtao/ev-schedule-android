@@ -2,7 +2,10 @@ package com.application.watch.classschedule;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
@@ -10,11 +13,15 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.text.TextUtils;
 import android.view.View;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.Spinner;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 
 import org.json.JSONArray;
@@ -27,8 +34,11 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 
 /** 导入 / 导出（按 mode 区分） */
 public class TransferActivity extends Activity {
@@ -41,17 +51,34 @@ public class TransferActivity extends Activity {
     private static final Charset UTF8 = Charset.forName("UTF-8");
     private static final SimpleDateFormat FN =
             new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US);
+    private static final String[] WEEK = {
+            "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"};
+    private static final String[] PERIODS = {
+            "08:00 - 08:45", "08:55 - 09:40", "10:00 - 10:45", "10:55 - 11:40",
+            "14:00 - 14:45", "14:55 - 15:40", "16:00 - 16:45", "16:55 - 17:40"};
+    private static final String[] SAMPLE_NAMES = {
+            "高等数学", "大学英语", "线性代数", "概率论与数理统计", "大学物理",
+            "数据结构", "操作系统", "数据库系统", "计算机网络", "体育", "大学语文"};
+    private static final String[] SAMPLE_TEACHERS = {
+            "张教授", "李教授", "王教授", "陈教授", "刘教授", "赵教授"};
+    private static final String[] SAMPLE_ROOMS = {
+            "A楼101", "B楼205", "数学楼301", "计算机楼201", "物理实验室102", "体育馆"};
 
     private String mode = MODE_EXPORT;
-    private TextView titleView, infoView, resultView;
-    private String pendingImportPayload;
+    private TextView titleView, infoView, resultView, scheduleStatus, previewInfo;
     private String lastExportJson;
 
-    // 多课程表选择器
-    private Spinner scheduleSpinner;
+    // ---- 导出：课程表清单 ----
+    private LinearLayout scheduleBox;
     private String[] scheduleNames;
     private int selectedIndex = -1;
     private String selectedName = "";
+
+    // ---- 导入：粘贴 / 预览 ----
+    private EditText pasteBox;
+    private LinearLayout previewBox, previewCard;
+    private final List<CheckBox> courseChecks = new ArrayList<>();
+    private JSONArray parsedCourses;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,55 +93,234 @@ public class TransferActivity extends Activity {
         root.addView(titleView);
         root.addView(Ui.space(this, 12));
 
-        if (!MODE_IMPORT.equals(mode)) {
-            scheduleSpinner = new Spinner(this);
-            scheduleSpinner.setEnabled(false);
-            root.addView(scheduleSpinner);
-            root.addView(Ui.space(this, 8));
+        if (MODE_IMPORT.equals(mode)) {
+            buildImport(root);
+        } else {
+            buildExport(root);
         }
-
-        LinearLayout card = Ui.card(this);
-        infoView = Ui.text(this, "准备就绪", 13f, Ui.TEXT, false);
-        card.addView(infoView);
-        card.addView(Ui.space(this, 10));
-        card.addView(Ui.button(this,
-                MODE_IMPORT.equals(mode) ? "选择 JSON 文件" : "读取手环数据",
-                true,
-                new View.OnClickListener() {
-                    @Override public void onClick(View v) { primary(); }
-                }));
-        root.addView(card);
-        root.addView(Ui.space(this, 10));
-
-        resultView = Ui.text(this, "", 12f, Ui.MUTED, false);
-        resultView.setTextIsSelectable(true);
-        root.addView(resultView);
 
         root.addView(Ui.space(this, 8));
-        if (MODE_IMPORT.equals(mode)) {
-            root.addView(Ui.mono(this,
-                    "支持：[] / {courses} / {schedule} / {schedules} / {payload} / 格式 A / EV 导出包\n"
-                            + "注意：导入会【覆盖】手环当前课表，EV 侧会自动备份到 astrobox_sync_backup"));
-        } else {
-            root.addView(Ui.mono(this, "先选课程表，再点读取；导出结果保存到「下载 / EVSync」"));
-        }
+        resultView.setTextIsSelectable(true);
 
-        setContentView(root);
+        setContentView(Ui.wrapWithBottomBar(this, root, 0));
 
         if (!MODE_IMPORT.equals(mode)) {
             loadSchedules();
         }
     }
 
-    private void primary() {
-        if (MODE_IMPORT.equals(mode)) {
-            pickFile();
-        } else {
-            readFromBand();
-        }
+    // ======================= 布局：导出 =======================
+
+    private void buildExport(LinearLayout root) {
+        LinearLayout pick = Ui.card(this);
+        pick.addView(Ui.text(this, "手环上的课程表（选择要导出的那一套）", 12.5f, Ui.TEXT, true));
+        pick.addView(Ui.space(this, 8));
+
+        scheduleBox = new LinearLayout(this);
+        scheduleBox.setOrientation(LinearLayout.VERTICAL);
+        scheduleBox.addView(Ui.text(this, "正在读取课程表清单…", 12f, Ui.MUTED, false));
+        pick.addView(scheduleBox);
+
+        scheduleStatus = Ui.text(this, "", 11.5f, Ui.MUTED, false);
+        scheduleStatus.setPadding(0, Ui.dp(this, 6), 0, 0);
+        pick.addView(scheduleStatus);
+
+        pick.addView(Ui.space(this, 8));
+        pick.addView(Ui.grid(this,
+                Ui.button(this, "重新读取清单", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { loadSchedules(); }
+                }),
+                Ui.button(this, "读取当前课表", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        selectedIndex = -1;
+                        selectedName = "";
+                        readFromBand();
+                    }
+                })));
+        root.addView(pick);
+        root.addView(Ui.space(this, 10));
+
+        LinearLayout read = Ui.card(this);
+        infoView = Ui.text(this, "选好课程表后，点下面读取", 13f, Ui.TEXT, false);
+        read.addView(infoView);
+        read.addView(Ui.space(this, 10));
+        read.addView(Ui.button(this, "读取该课程表数据", true, new View.OnClickListener() {
+            @Override public void onClick(View v) { readFromBand(); }
+        }));
+        root.addView(read);
+        root.addView(Ui.space(this, 10));
+
+        resultView = Ui.text(this, "", 12f, Ui.MUTED, false);
+        root.addView(resultView);
+        root.addView(Ui.space(this, 8));
+        root.addView(Ui.mono(this, "导出结果保存到「下载 / EVSync」"));
     }
 
-    // ======================= 导出 =======================
+    // ======================= 布局：导入 =======================
+
+    private void buildImport(LinearLayout root) {
+        LinearLayout paste = Ui.card(this);
+        paste.addView(Ui.text(this, "粘贴 JSON（可直接编辑 / 复制）", 12.5f, Ui.TEXT, true));
+        paste.addView(Ui.space(this, 8));
+        pasteBox = new EditText(this);
+        pasteBox.setTextSize(12f);
+        pasteBox.setTextColor(Ui.TEXT);
+        pasteBox.setHintTextColor(Ui.MUTED);
+        pasteBox.setHint("{\"courses\":[{\"name\":\"高等数学\",\"day\":1,\"time\":\"08:00 - 09:40\"}]}");
+        pasteBox.setMinLines(4);
+        pasteBox.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+        paste.addView(pasteBox);
+        paste.addView(Ui.space(this, 8));
+        paste.addView(Ui.grid(this,
+                Ui.button(this, "解析并预览", true, new View.OnClickListener() {
+                    @Override public void onClick(View v) { parseFromText(pasteBox.getText().toString(), "粘贴内容"); }
+                }),
+                Ui.button(this, "生成示例课表", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        pasteBox.setText(randomSampleJson());
+                        parseFromText(pasteBox.getText().toString(), "随机示例");
+                    }
+                })));
+        paste.addView(Ui.grid(this,
+                Ui.button(this, "复制 JSON", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { copyPaste(); }
+                }),
+                Ui.button(this, "选择文件", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { pickFile(); }
+                })));
+        root.addView(paste);
+        root.addView(Ui.space(this, 10));
+
+        // 预览卡（默认隐藏）
+        previewCard = new LinearLayout(this);
+        previewCard.setOrientation(LinearLayout.VERTICAL);
+        previewCard.setVisibility(View.GONE);
+        previewInfo = Ui.text(this, "", 12.5f, Ui.TEXT, true);
+        previewCard.addView(previewInfo);
+        previewCard.addView(Ui.space(this, 8));
+        previewBox = new LinearLayout(this);
+        previewBox.setOrientation(LinearLayout.VERTICAL);
+        previewCard.addView(previewBox);
+        previewCard.addView(Ui.space(this, 8));
+        previewCard.addView(Ui.grid(this,
+                Ui.button(this, "全选", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { setAllChecked(true); }
+                }),
+                Ui.button(this, "全不选", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { setAllChecked(false); }
+                })));
+        previewCard.addView(Ui.button(this, "导入到手环（覆盖当前课表）", true,
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) { confirmImportSelected(); }
+                }));
+        root.addView(previewCard);
+        root.addView(Ui.space(this, 10));
+
+        infoView = Ui.text(this, "准备就绪", 12.5f, Ui.TEXT, false);
+        root.addView(infoView);
+        root.addView(Ui.space(this, 8));
+        resultView = Ui.text(this, "", 12f, Ui.MUTED, false);
+        root.addView(resultView);
+        root.addView(Ui.space(this, 8));
+        root.addView(Ui.mono(this,
+                "必填：name + day(1-7 或 星期X) + time\n"
+                        + "提示：导入会【覆盖】手环当前课表，EV 侧会自动备份到 astrobox_sync_backup"));
+    }
+
+    // ======================= 导出：读取清单 =======================
+
+    private void loadSchedules() {
+        if (scheduleBox == null) {
+            return;
+        }
+        scheduleBox.removeAllViews();
+        scheduleBox.addView(Ui.text(this, "正在读取课程表清单…", 12f, Ui.MUTED, false));
+        scheduleStatus.setText("");
+        SyncEngine.get(this).listSchedules(new SyncEngine.Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    JSONObject o = new JSONObject(json);
+                    if (!o.optBoolean("ok", false)
+                            || !"list_schedules".equals(o.optString("action"))) {
+                        failSchedules("手环拒绝了清单请求（回包：" + shortJson(json) + "）");
+                        return;
+                    }
+                    JSONArray names = o.optJSONArray("names");
+                    if (names == null || names.length() == 0) {
+                        failSchedules("手环返回的课程表清单为空");
+                        return;
+                    }
+                    scheduleNames = new String[names.length()];
+                    for (int i = 0; i < names.length(); i++) {
+                        scheduleNames[i] = names.optString(i);
+                    }
+                    int cur = o.optInt("current", 0);
+                    selectedIndex = (cur >= 0 && cur < names.length()) ? cur : 0;
+                    selectedName = scheduleNames[selectedIndex];
+                    renderScheduleList();
+                    scheduleStatus.setTextColor(Ui.OK);
+                    scheduleStatus.setText("共 " + names.length() + " 套，当前激活："
+                            + selectedName);
+                } catch (Throwable t) {
+                    failSchedules("清单回包无法解析：" + shortJson(json));
+                }
+            }
+            @Override public void onTimeout(String hint) {
+                failSchedules("读取清单超时。请确认手环已连接，且手环上的 EV 课程表已升级到 1.6.139 及以上");
+            }
+            @Override public void onError(String msg) {
+                failSchedules("读取清单失败：" + msg);
+            }
+        });
+    }
+
+    private void renderScheduleList() {
+        scheduleBox.removeAllViews();
+        RadioGroup group = new RadioGroup(this);
+        group.setOrientation(RadioGroup.VERTICAL);
+        for (int i = 0; i < scheduleNames.length; i++) {
+            RadioButton rb = new RadioButton(this);
+            rb.setText(scheduleNames[i] + (i == selectedIndex ? "　（当前激活）" : ""));
+            rb.setTextSize(13f);
+            rb.setTextColor(Ui.TEXT);
+            rb.setId(i + 1);
+            rb.setPadding(Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 6));
+            final int idx = i;
+            rb.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    selectedIndex = idx;
+                    selectedName = scheduleNames[idx];
+                    scheduleStatus.setTextColor(Ui.OK);
+                    scheduleStatus.setText("已选择：" + selectedName);
+                }
+            });
+            group.addView(rb);
+            if (i == selectedIndex) {
+                rb.setChecked(true);
+            }
+        }
+        scheduleBox.addView(group, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+    }
+
+    private void failSchedules(String why) {
+        if (scheduleBox == null) {
+            return;
+        }
+        scheduleBox.removeAllViews();
+        scheduleBox.addView(Ui.text(this,
+                "没能读出课程表清单。\n" + why, 12f, Ui.WARN, false));
+        scheduleStatus.setTextColor(Ui.WARN);
+        scheduleStatus.setText("可点「读取当前课表」先导出当前这一套");
+    }
+
+    private static String shortJson(String json) {
+        if (json == null) {
+            return "null";
+        }
+        return json.length() > 120 ? json.substring(0, 120) + "…" : json;
+    }
 
     private void readFromBand() {
         infoView.setText("正在读取手环数据…");
@@ -144,6 +350,8 @@ public class TransferActivity extends Activity {
                             }
                         }
                         sb.append("合计：").append(total).append(" 节");
+                    } else {
+                        sb.append("回包无 data：").append(shortJson(json));
                     }
                     if (selectedName != null && selectedName.length() > 0) {
                         sb.insert(0, "课程表：" + selectedName + "\n");
@@ -166,67 +374,12 @@ public class TransferActivity extends Activity {
         }
     }
 
-    // ======================= 课程表清单 =======================
-
-    private void loadSchedules() {
-        if (scheduleSpinner == null) {
-            return;
-        }
-        scheduleSpinner.setEnabled(false);
-        SyncEngine.get(this).listSchedules(new SyncEngine.Reply() {
-            @Override public void onReply(String json) {
-                try {
-                    JSONObject o = new JSONObject(json);
-                    if (!o.optBoolean("ok", false)
-                            || !"list_schedules".equals(o.optString("action"))) {
-                        return;
-                    }
-                    JSONArray names = o.optJSONArray("names");
-                    if (names == null || names.length() == 0) {
-                        selectedIndex = -1;
-                        selectedName = "";
-                        return;
-                    }
-                    scheduleNames = new String[names.length()];
-                    for (int i = 0; i < names.length(); i++) {
-                        scheduleNames[i] = names.optString(i);
-                    }
-                    int cur = o.optInt("current", 0);
-                    selectedIndex = (cur >= 0 && cur < names.length()) ? cur : 0;
-                    selectedName = scheduleNames[selectedIndex];
-                    ArrayAdapter<String> adp = new ArrayAdapter<>(
-                            TransferActivity.this,
-                            android.R.layout.simple_spinner_item, scheduleNames);
-                    adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-                    scheduleSpinner.setAdapter(adp);
-                    scheduleSpinner.setSelection(selectedIndex);
-                    scheduleSpinner.setEnabled(true);
-                    scheduleSpinner.setOnItemSelectedListener(
-                            new AdapterView.OnItemSelectedListener() {
-                                @Override public void onItemSelected(
-                                        AdapterView<?> parent, View view, int pos, long id) {
-                                    selectedIndex = pos;
-                                    selectedName = scheduleNames[pos];
-                                }
-                                @Override public void onNothingSelected(AdapterView<?> parent) {}
-                            });
-                } catch (Throwable t) {
-                    // 老版本 EV 不支持 list_schedules：退回单套模式
-                    selectedIndex = -1;
-                }
-            }
-            @Override public void onTimeout(String hint) { /* 静默，单套模式 */ }
-            @Override public void onError(String msg) { /* 静默，单套模式 */ }
-        });
-    }
-
     private void showSaveButton() {
         LinearLayout root = (LinearLayout) resultView.getParent();
-        // 避免重复添加
         for (int i = 0; i < root.getChildCount(); i++) {
             View v = root.getChildAt(i);
-            if (v instanceof android.widget.Button
-                    && "保存到下载目录".equals(((android.widget.Button) v).getText().toString())) {
+            if (v instanceof Button
+                    && "保存到下载目录".equals(((Button) v).getText().toString())) {
                 return;
             }
         }
@@ -275,7 +428,51 @@ public class TransferActivity extends Activity {
         }
     }
 
-    // ======================= 导入 =======================
+    // ======================= 导入：粘贴 / 复制 / 示例 =======================
+
+    private void copyPaste() {
+        String text = pasteBox.getText().toString();
+        if (TextUtils.isEmpty(text)) {
+            infoView.setText("文本框是空的，先粘贴或点「生成示例课表」");
+            return;
+        }
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) {
+                cm.setPrimaryClip(ClipData.newPlainText("EV课程表", text));
+                infoView.setText("已复制 " + text.length() + " 个字符到剪贴板，可到别处粘贴编辑");
+                infoView.setTextColor(Ui.OK);
+            }
+        } catch (Throwable t) {
+            infoView.setText("复制失败：" + t);
+            infoView.setTextColor(Ui.ERR);
+        }
+    }
+
+    /** 生成一份随机示例课表 JSON（格式与 EV import 完全兼容，可直接导入做链路自测） */
+    private String randomSampleJson() {
+        Random r = new Random();
+        int n = 4 + r.nextInt(4); // 4~7 门
+        JSONArray courses = new JSONArray();
+        for (int i = 0; i < n; i++) {
+            JSONObject c = new JSONObject();
+            try {
+                c.put("name", SAMPLE_NAMES[r.nextInt(SAMPLE_NAMES.length)]);
+                c.put("day", 1 + r.nextInt(7));
+                c.put("time", PERIODS[r.nextInt(PERIODS.length)]);
+                c.put("teacher", SAMPLE_TEACHERS[r.nextInt(SAMPLE_TEACHERS.length)]);
+                c.put("location", SAMPLE_ROOMS[r.nextInt(SAMPLE_ROOMS.length)]);
+            } catch (Throwable ignored) {
+            }
+            courses.put(c);
+        }
+        JSONObject root = new JSONObject();
+        try {
+            root.put("courses", courses);
+        } catch (Throwable ignored) {
+        }
+        return root.toString();
+    }
 
     private void pickFile() {
         try {
@@ -305,68 +502,143 @@ public class TransferActivity extends Activity {
                 bos.write(buf, 0, n);
             }
             in.close();
-            prepareImport(new String(bos.toByteArray(), UTF8), uri.getLastPathSegment());
+            String text = new String(bos.toByteArray(), UTF8);
+            pasteBox.setText(text);
+            parseFromText(text, uri.getLastPathSegment());
         } catch (Throwable t) {
             infoView.setText("读取文件失败：" + t);
         }
     }
 
-    private void prepareImport(String text, String fileName) {
+    /** 解析文本框内容 → 渲染多选预览（默认全选） */
+    private void parseFromText(String text, String srcName) {
         JSONArray courses = null;
-        try {
-            JSONObject o = new JSONObject(text);
-            courses = toCourseArray(o.has("data") ? o.opt("data") : o);
-        } catch (Throwable ignored) {
+        if (!TextUtils.isEmpty(text)) {
             try {
-                courses = toCourseArray(new JSONArray(text));
-            } catch (Throwable ignored2) {
+                JSONObject o = new JSONObject(text);
+                courses = toCourseArray(o.has("data") ? o.opt("data") : o);
+            } catch (Throwable ignored) {
+                try {
+                    courses = toCourseArray(new JSONArray(text));
+                } catch (Throwable ignored2) {
+                }
             }
         }
         if (courses == null || courses.length() == 0) {
-            infoView.setText("没能从这个文件解析出课程数组");
+            previewCard.setVisibility(View.GONE);
+            infoView.setTextColor(Ui.ERR);
+            infoView.setText("没能从「" + srcName + "」解析出课程数组");
             return;
         }
-        try {
-            JSONObject payload = new JSONObject();
-            payload.put("courses", courses);
-            JSONObject o = new JSONObject();
-            o.put("action", "import");
-            o.put("payload", payload);
-            pendingImportPayload = o.toString();
-        } catch (Throwable t) {
-            infoView.setText("构造报文失败：" + t);
+        parsedCourses = courses;
+        renderPreview();
+        previewCard.setVisibility(View.VISIBLE);
+        infoView.setTextColor(Ui.TEXT);
+    }
+
+    private void renderPreview() {
+        previewBox.removeAllViews();
+        courseChecks.clear();
+        int valid = 0;
+        for (int i = 0; i < parsedCourses.length(); i++) {
+            JSONObject c = parsedCourses.optJSONObject(i);
+            if (c == null) {
+                continue;
+            }
+            String name = c.optString("name");
+            String day = dayLabel(c.opt("day"));
+            String time = c.optString("time");
+            if (name.length() > 0 && day.length() > 0 && time.length() > 0) {
+                valid++;
+            }
+            StringBuilder sb = new StringBuilder();
+            sb.append(name.length() > 0 ? name : "（缺 name）");
+            sb.append("　·　").append(day.length() > 0 ? day : "（缺 day）");
+            sb.append("　·　").append(time.length() > 0 ? time : "（缺 time）");
+            if (c.has("location")) {
+                sb.append("　·　").append(c.optString("location"));
+            }
+            if (c.has("teacher")) {
+                sb.append("　·　").append(c.optString("teacher"));
+            }
+            CheckBox cb = new CheckBox(this);
+            cb.setText(sb.toString());
+            cb.setTextSize(11.5f);
+            cb.setTextColor(Ui.TEXT);
+            cb.setChecked(true);
+            previewBox.addView(cb);
+            courseChecks.add(cb);
+        }
+        previewInfo.setText("待导入 " + courseChecks.size() + " 门（其中 " + valid
+                + " 门必填字段完整，默认全选）");
+    }
+
+    private void setAllChecked(boolean v) {
+        for (CheckBox cb : courseChecks) {
+            cb.setChecked(v);
+        }
+    }
+
+    private void confirmImportSelected() {
+        if (parsedCourses == null || parsedCourses.length() == 0) {
+            infoView.setText("还没有可导入的课程，先解析");
             return;
         }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("文件：").append(fileName).append('\n');
-        sb.append("解析到 ").append(courses.length()).append(" 门课\n");
-        infoView.setText(sb.toString());
-
+        JSONArray picked = new JSONArray();
+        for (int i = 0; i < parsedCourses.length() && i < courseChecks.size(); i++) {
+            if (courseChecks.get(i).isChecked()) {
+                JSONObject c = parsedCourses.optJSONObject(i);
+                if (c != null) {
+                    picked.put(c);
+                }
+            }
+        }
+        if (picked.length() == 0) {
+            infoView.setText("一门课都没勾选");
+            infoView.setTextColor(Ui.WARN);
+            return;
+        }
+        final String payload = buildImportPayload(picked);
+        if (payload == null) {
+            infoView.setText("构造报文失败");
+            infoView.setTextColor(Ui.ERR);
+            return;
+        }
         new AlertDialog.Builder(this)
                 .setTitle("确认导入？")
-                .setMessage("导入会【覆盖】手环上 EV 课程表的当前课表。\n"
+                .setMessage("将导入选中的 " + picked.length() + " 门课，"
+                        + "并【覆盖】手环上 EV 课程表的当前课表。\n"
                         + "EV 侧写盘前会自动备份到 astrobox_sync_backup。\n\n确定继续？")
                 .setPositiveButton("导入并覆盖", new DialogInterface.OnClickListener() {
-                    @Override public void onClick(DialogInterface d, int w) { doImport(); }
+                    @Override public void onClick(DialogInterface d, int w) { doImport(payload); }
                 })
                 .setNegativeButton("取消", null)
                 .show();
     }
 
-    private void doImport() {
-        if (pendingImportPayload == null) {
-            return;
+    private String buildImportPayload(JSONArray courses) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("courses", courses);
+            JSONObject o = new JSONObject();
+            o.put("action", "import");
+            o.put("payload", body);
+            return o.toString();
+        } catch (Throwable t) {
+            return null;
         }
+    }
+
+    private void doImport(String payload) {
         infoView.setText("正在导入到手环…");
-        SyncEngine.get(this).send(pendingImportPayload, new SyncEngine.Reply() {
+        infoView.setTextColor(Ui.TEXT);
+        SyncEngine.get(this).send(payload, new SyncEngine.Reply() {
             @Override public void onReply(String json) {
                 try {
                     JSONObject o = new JSONObject(json);
                     if (o.optBoolean("ok", false)) {
                         int count = o.optInt("count", -1);
-                        infoView.setText("导入成功"
-                                + (count >= 0 ? ("，共 " + count + " 门课") : ""));
+                        infoView.setText("导入成功" + (count >= 0 ? ("，共 " + count + " 门课") : ""));
                         infoView.setTextColor(Ui.OK);
                         resultView.setText(json);
                     } else {
@@ -391,6 +663,22 @@ public class TransferActivity extends Activity {
     }
 
     // ======================= 数据转换 =======================
+
+    /** day 兼容 1-7 / 星期X / 英文 */
+    private static String dayLabel(Object day) {
+        if (day == null) {
+            return "";
+        }
+        if (day instanceof Number) {
+            int d = ((Number) day).intValue();
+            return (d >= 1 && d <= 7) ? WEEK[d - 1] : "";
+        }
+        String s = String.valueOf(day).trim();
+        if (s.length() == 1 && s.charAt(0) >= '1' && s.charAt(0) <= '7') {
+            return WEEK[s.charAt(0) - '1'];
+        }
+        return s;
+    }
 
     /**
      * EV 的 export 产出是「格式 A」（按天分组），而 import 只认「一条课一个对象」。
