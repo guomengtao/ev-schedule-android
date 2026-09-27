@@ -2,7 +2,8 @@
 <!--
   注意：versionCode / versionName 不写在这里，由 build.sh 从 version.env 读取后
   通过 aapt2 的版本参数注入，实现「每次打包自动 +1」。
-  android:label 同理，由 build.sh 用 sed 注入版本号（如 EV Sync v0.5.0）。
+  android:label 同理由 build.sh 用 sed 注入桌面名（EV 变体 = 「Ev课程表」，EvBox 变体 = 「EvBox Sync」）。
+  桌面名不带版本号：版本号只在 App 内首页展示，避免每次升级桌面名都变。
   注意：XML 注释里不能出现两个连续的短横线。
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"

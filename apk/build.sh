@@ -35,7 +35,10 @@ VARIANT="${APP_VARIANT:-ev}"
 case "$VARIANT" in
   ev)
     APP_ID="com.application.watch.classschedule"
-    LABEL_BASE="EV Sync"
+    # 桌面名：与手环快应用同品牌（用户装了能认出是「EV 课程表」的配套手机端）
+    # 注意：桌面名【不带版本号】——版本号在 App 内首页显示即可，
+    #       带版本号会导致每次升级桌面名都变，也不像正经产品名。
+    LABEL_BASE="Ev课程表"
     PEER_PKG="com.application.watch.classschedule"
     VFILE="$HERE/version.env"
     OUT_NAME="EVSyncProbe"
@@ -108,7 +111,7 @@ mkdir -p out/gen out/classes out/dex out/sdkclasses dist
 
 # 注入：包名（配对键）/ launcher 名称 / 变体信息（对端包名给 Variant.java 运行期读）
 sed -e "s|package=\"com.application.watch.classschedule\"|package=\"$APP_ID\"|" \
-    -e "s/android:label=\"EV Sync\"/android:label=\"$LABEL_BASE v$VERSION_NAME\"/" \
+    -e "s/android:label=\"EV Sync\"/android:label=\"$LABEL_BASE\"/" \
     -e "s|__VARIANT__|$VARIANT|" \
     -e "s|__PEER_PKG__|$PEER_PKG|" \
   AndroidManifest.xml > out/AndroidManifest.xml
