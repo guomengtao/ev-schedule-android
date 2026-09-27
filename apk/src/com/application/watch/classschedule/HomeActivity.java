@@ -2,6 +2,7 @@ package com.application.watch.classschedule;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -49,11 +50,29 @@ public class HomeActivity extends Activity {
         }
     };
 
+    private static final int REQ_NOTIF = 2001;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         buildUi();
+        // 常驻前台服务：进程活着才能在后台收到手环推来的留言（可在设置页关闭）
+        SyncService.startIfEnabled(this);
+        requestNotifPermission();
         startConnect();
+    }
+
+    /** Android 13+ 需用户授权通知，前台服务的常驻通知才会显示 */
+    private void requestNotifPermission() {
+        try {
+            if (Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(
+                        new String[]{"android.permission.POST_NOTIFICATIONS"}, REQ_NOTIF);
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     // ======================= UI =======================
@@ -319,6 +338,13 @@ public class HomeActivity extends Activity {
         Intent i = new Intent(this, TransferActivity.class);
         i.putExtra(TransferActivity.EXTRA_MODE, mode);
         startActivity(i);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // 退到后台：把手环消息交给服务/应用上下文接管 → 改用系统通知提醒
+        SyncService.installObserverIfEnabled(this);
     }
 
     @Override

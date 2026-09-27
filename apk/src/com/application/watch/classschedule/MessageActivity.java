@@ -127,6 +127,13 @@ public class MessageActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        // 退到后台：把手环消息交给服务/应用上下文接管 → 改用系统通知提醒
+        SyncService.installObserverIfEnabled(this);
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         Analytics.pageView(this, "/apk/message");
@@ -440,6 +447,8 @@ public class MessageActivity extends Activity {
         } catch (Throwable ignored) {
         }
         if (!(ctx instanceof Activity)) {
+            // 后台（服务进程）：后台弹窗没意义，改用系统通知提醒
+            Notifications.showMessage(ctx, "来自手环的留言", text);
             return;
         }
         final Activity a = (Activity) ctx;

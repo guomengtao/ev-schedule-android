@@ -104,6 +104,11 @@
 - ⚠️ 因此**不要轮询 `ev_chat_inbox`**（只会拉到自己发出去的）→ 想真后台提醒必须先做 EV 出站箱，或只依赖 push（并要求进程存活）。
 - **去重约定（硬要求：禁止重复提醒）**：`id` 每条必须唯一（EV 用 `时间戳-随机4位`，不能用裸 `Date.now()`，否则同毫秒撞 id 会**漏提醒**）；APK `MessageActivity.markSeen()` 按 id 全局去重（`SharedPreferences` `seen_ids`，上限 500），兼容老 EV 无 id 时用 `ts+文本哈希` 兜底；`HomeActivity`/`MessageActivity` 的 `onResume` 重装观察者。
 - ⚠️ `SyncEngine` 原先在 `pending == null` 时**静默丢弃**手环推来的消息 → 已加 `Observer`（`setObserver()`）承接无人认领的消息。
+- **后台提醒（方案 B，v0.5.17，用户选定）**：新增 `SyncService`（前台服务：`START_STICKY`、`foregroundServiceType=dataSync`、常驻通知；启动时若 `nodeId` 丢失则**静默重连一次**，**不轮询**）+ `Notifications`（渠道 `ev_service` 常驻无声 / `ev_message` 新留言带声音震动）。
+  - 页面 `onPause` → `SyncService.installObserverIfEnabled()` 把观察者交给应用上下文；后台收到留言时 `alert()` **改发系统通知**（非 Activity 上下文不弹窗），前台仍是弹窗。
+  - `HomeActivity.onCreate` 启动服务 + 申请 `POST_NOTIFICATIONS`（13+）；设置页「后台常驻提醒」开关（默认开，存 `ev_settings` / `bg_service`），关闭即 `stopService`。
+  - 去重：服务与页面共用 `MessageActivity.markSeen()`，切换前台/后台不会重复提醒。
+  - 权衡：一条常驻通知 + 少量电量；**仍可能被 ROM 省电杀掉** → 需引导加白名单；不承诺实时。
 
 ## 其他约定
 - 数据开放边界由手环侧守门人模型控制（interconnect 通道）；策略建议收敛成 `SYNC_ACCESS` 权限表。当前：schedule/profile/homepage/appearance 默认读+可写；pinned 需显式请求+只读（数据在 `src/data/pin-helper.js`）；auth 禁读写。

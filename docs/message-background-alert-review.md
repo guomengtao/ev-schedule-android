@@ -170,7 +170,29 @@ MIUI/HyperOS 等 ROM 的省电策略会杀前台服务；被杀期间**没有任
 
 ---
 
-## 十、本文核对过的路径
+## 十、方案 B 实现：常驻前台服务（v0.5.17）
+
+按选择落地方案 B：**加前台服务常驻，换取"进程活着时能提醒"**。
+
+| 文件 | 改动 |
+|---|---|
+| `SyncService.java`（新增） | 前台服务：`START_STICKY`；常驻通知（低优先级、不可划掉）；启动时若 `nodeId` 已丢失则**静默重建一次连接**（一次性，**不是轮询**）；持有 `SyncEngine.Observer` |
+| `Notifications.java`（新增） | 两个渠道：`ev_service`（常驻、无声）、`ev_message`（新留言、声音+震动）；**后台用通知替代弹窗** |
+| `MessageActivity.java` | `alert()` 在非 Activity 上下文时改发**系统通知**；`onPause` 把观察者交给服务/应用上下文接管 |
+| `HomeActivity.java` | 启动时 `SyncService.startIfEnabled()` + 申请 `POST_NOTIFICATIONS`（13+）；`onPause` 交管 |
+| `SettingsActivity.java` | 新增「后台常驻提醒」开关（默认开），关闭即停服务 |
+| `AndroidManifest.xml` | `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_DATA_SYNC`；`<service ... foregroundServiceType="dataSync">`（API 34 必需） |
+
+要点：
+
+- **不做任何轮询** —— 只有"进程保活"+"启动时一次性重连"；
+- 前台服务不受 Doze 挂起影响，但**仍可能被 ROM 省电策略杀掉** → 仍需引导用户加白名单；
+- 代价：一条常驻通知 + 少量内存/电量；设置页可一键关闭；
+- 去重仍是硬约束：服务与页面**共用同一套 `markSeen(id)`**，不会因为"页面接管/服务接管"而重复提醒。
+
+---
+
+## 十一、本文核对过的路径
 
 - 本仓：`apk/src/.../SyncEngine.java`（`OnMessageReceivedListener`、`send`）、`MessageActivity.java`（本地队列）、`apk/AndroidManifest.xml`（权限现状）、`docs/ui-message-import-export-improvements.md` §3.5。
 - 跨仓**只读**：`tom/class/class/src/app.ux`（`syncHandleChatIncoming`、`vibrateLong`、`startResident`、`chatBridge.register`）、`src/data/chat-bridge.js`、`src/data/storage-tables.js`（`ev_chat_inbox`）。

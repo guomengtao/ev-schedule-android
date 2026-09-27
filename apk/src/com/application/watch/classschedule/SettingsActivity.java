@@ -12,7 +12,7 @@ import android.widget.TextView;
 /** 设置页：显示当前昵称，并允许写回手环 */
 public class SettingsActivity extends Activity {
 
-    private TextView currentView, resultView;
+    private TextView currentView, resultView, bgStatusView;
     private EditText nickView;
 
     @Override
@@ -71,6 +71,17 @@ public class SettingsActivity extends Activity {
                     }
                 }));
 
+        root.addView(Ui.space(this, 12));
+        LinearLayout bgCard = Ui.card(this);
+        bgCard.addView(Ui.text(this, "后台常驻提醒", 12.5f, Ui.TEXT, true));
+        bgStatusView = Ui.text(this, bgText(), 11.5f, Ui.MUTED, false);
+        bgStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
+        bgCard.addView(bgStatusView);
+        bgCard.addView(Ui.button(this, "切换开关", false, new View.OnClickListener() {
+            @Override public void onClick(View v) { toggleBg(); }
+        }));
+        root.addView(bgCard);
+
         root.addView(Ui.space(this, 8));
         SyncEngine e = SyncEngine.get(this);
         root.addView(Ui.mono(this, "手环 " + (e.connected()
@@ -92,6 +103,27 @@ public class SettingsActivity extends Activity {
             return pi.versionName;
         } catch (Throwable t) {
             return "?";
+        }
+    }
+
+    // ======================= 后台常驻提醒 =======================
+
+    private String bgText() {
+        return SyncService.enabled(this)
+                ? "已开启：App 退到后台也能提醒新留言（会有一条常驻通知）"
+                : "已关闭：仅在 App 打开时提醒";
+    }
+
+    private void toggleBg() {
+        boolean on = !SyncService.enabled(this);
+        SyncService.setEnabled(this, on);
+        if (on) {
+            SyncService.startIfEnabled(this);
+        } else {
+            SyncService.stop(this);
+        }
+        if (bgStatusView != null) {
+            bgStatusView.setText(bgText());
         }
     }
 
