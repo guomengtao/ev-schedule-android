@@ -74,11 +74,24 @@ public class TransferActivity extends Activity {
     private int selectedIndex = -1;
     private String selectedName = "";
 
+    // ---- 导出：JSON 编辑 ----
+    private LinearLayout exportCard;
+    private EditText exportBox;
+
     // ---- 导入：粘贴 / 预览 ----
     private EditText pasteBox;
     private LinearLayout previewBox, previewCard;
     private final List<CheckBox> courseChecks = new ArrayList<>();
     private JSONArray parsedCourses;
+
+    // ---- 导入：课程表名称 + 同名检测 ----
+    private EditText nameBox;
+    private String[] knownNames;
+
+    private static final String JSON_SPEC_HINT =
+            "字段规范：name 课程名(必填) · day 星期(1-7 或 星期X) · time 时间段(如 08:00 - 09:40)\n"
+                    + "teacher 老师 · location 教室 · notes 备注。\n"
+                    + "改完直接点「更新到手环」即写入（覆盖当前课表）；也可把这段 JSON 发给 AI 帮你规范整理。";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,8 +117,14 @@ public class TransferActivity extends Activity {
 
         setContentView(Ui.wrapWithBottomBar(this, root, 0));
 
+        // 进页面不自动弹出输入法（把焦点交给根布局，EditText 不抢焦点）
+        root.setFocusableInTouchMode(true);
+        root.requestFocus();
+
         if (!MODE_IMPORT.equals(mode)) {
             loadSchedules();
+        } else {
+            loadKnownNames();
         }
     }
 
@@ -150,6 +169,31 @@ public class TransferActivity extends Activity {
         root.addView(read);
         root.addView(Ui.space(this, 10));
 
+        // JSON 编辑卡（读取成功后显示）
+        exportCard = Ui.card(this);
+        exportCard.setVisibility(View.GONE);
+        exportCard.addView(Ui.text(this,
+                "JSON（可复制出去改，再点「更新到手环」）", 12.5f, Ui.TEXT, true));
+        exportCard.addView(Ui.space(this, 8));
+        exportBox = new EditText(this);
+        exportBox.setTextSize(11f);
+        exportBox.setTextColor(Ui.TEXT);
+        exportBox.setMinLines(6);
+        exportBox.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+        exportCard.addView(exportBox);
+        exportCard.addView(Ui.space(this, 8));
+        exportCard.addView(Ui.grid(this,
+                Ui.button(this, "复制 JSON", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { copyExportJson(); }
+                }),
+                Ui.button(this, "更新到手环", true, new View.OnClickListener() {
+                    @Override public void onClick(View v) { updateToBand(); }
+                })));
+        exportCard.addView(Ui.space(this, 6));
+        exportCard.addView(Ui.mono(this, JSON_SPEC_HINT));
+        root.addView(exportCard);
+        root.addView(Ui.space(this, 10));
+
         resultView = Ui.text(this, "", 12f, Ui.MUTED, false);
         root.addView(resultView);
         root.addView(Ui.space(this, 8));
@@ -189,6 +233,21 @@ public class TransferActivity extends Activity {
                     @Override public void onClick(View v) { pickFile(); }
                 })));
         root.addView(paste);
+        root.addView(Ui.space(this, 10));
+
+        // 课程表名称（必填）
+        LinearLayout nameCard = Ui.card(this);
+        nameCard.addView(Ui.text(this, "课程表名称（必填）", 12.5f, Ui.TEXT, true));
+        nameCard.addView(Ui.space(this, 6));
+        nameBox = new EditText(this);
+        nameBox.setTextSize(13f);
+        nameBox.setTextColor(Ui.TEXT);
+        nameBox.setHintTextColor(Ui.MUTED);
+        nameBox.setHint("例如：2026 秋季学期 / 暑假辅导班");
+        nameCard.addView(nameBox);
+        nameCard.addView(Ui.space(this, 4));
+        nameCard.addView(Ui.mono(this, "导入时会先检查手环上是否已有同名课程表"));
+        root.addView(nameCard);
         root.addView(Ui.space(this, 10));
 
         // 预览卡（默认隐藏）
@@ -350,6 +409,9 @@ public class TransferActivity extends Activity {
                             }
                         }
                         sb.append("合计：").append(total).append(" 节");
+                        if (sch != null) {
+                            setExportJson(flattenFormatA(sch));
+                        }
                     } else {
                         sb.append("回包无 data：").append(shortJson(json));
                     }
@@ -371,6 +433,87 @@ public class TransferActivity extends Activity {
             SyncEngine.get(this).exportSchedule(selectedIndex, cb);
         } else {
             SyncEngine.get(this).export(cb);
+        }
+    }
+
+    // ======================= 导出：JSON 编辑 / 复制 / 更新 =======================
+
+    /** 把导出结果摊平成可编辑的规范 JSON（含 day/time 字段），放进编辑框 */
+    private void setExportJson(JSONArray flat) {
+        if (exportBox == null) {
+            return;
+        }
+        try {
+            JSONObject o = new JSONObject();
+            o.put("courses", flat);
+            exportBox.setText(o.toString(2));
+            exportCard.setVisibility(View.VISIBLE);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void copyExportJson() {
+        if (exportBox == null || TextUtils.isEmpty(exportBox.getText().toString())) {
+            resultView.setText("还没有可复制的 JSON");
+            return;
+        }
+        copyToClipboard(exportBox.getText().toString(), "EV课程表");
+    }
+
+    /** 快捷更新：把编辑框里的 JSON 直接导回手环（覆盖当前课表） */
+    private void updateToBand() {
+        if (exportBox == null) {
+            return;
+        }
+        JSONArray courses = toCourseArray(parseLoose(exportBox.getText().toString()));
+        if (courses == null || courses.length() == 0) {
+            resultView.setText("编辑框里的 JSON 解析不出课程数组");
+            resultView.setTextColor(Ui.ERR);
+            return;
+        }
+        final String payload = buildImportPayload(courses);
+        if (payload == null) {
+            resultView.setText("构造报文失败");
+            resultView.setTextColor(Ui.ERR);
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("确认更新？")
+                .setMessage("将把编辑框里的 " + courses.length() + " 门课写回首环，"
+                        + "【覆盖】当前课表。\nEV 侧写盘前会自动备份。\n\n确定继续？")
+                .setPositiveButton("更新到手环", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) { doImport(payload); }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private static Object parseLoose(String text) {
+        if (TextUtils.isEmpty(text)) {
+            return null;
+        }
+        try {
+            return new JSONObject(text);
+        } catch (Throwable ignored) {
+        }
+        try {
+            return new JSONArray(text);
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private void copyToClipboard(String text, String label) {
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) {
+                cm.setPrimaryClip(ClipData.newPlainText(label, text));
+                infoView.setText("已复制 " + text.length() + " 个字符到剪贴板，可到别处粘贴编辑");
+                infoView.setTextColor(Ui.OK);
+            }
+        } catch (Throwable t) {
+            infoView.setText("复制失败：" + t);
+            infoView.setTextColor(Ui.ERR);
         }
     }
 
@@ -436,17 +579,7 @@ public class TransferActivity extends Activity {
             infoView.setText("文本框是空的，先粘贴或点「生成示例课表」");
             return;
         }
-        try {
-            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            if (cm != null) {
-                cm.setPrimaryClip(ClipData.newPlainText("EV课程表", text));
-                infoView.setText("已复制 " + text.length() + " 个字符到剪贴板，可到别处粘贴编辑");
-                infoView.setTextColor(Ui.OK);
-            }
-        } catch (Throwable t) {
-            infoView.setText("复制失败：" + t);
-            infoView.setTextColor(Ui.ERR);
-        }
+        copyToClipboard(text, "EV课程表");
     }
 
     /** 生成一份随机示例课表 JSON（格式与 EV import 完全兼容，可直接导入做链路自测） */
@@ -584,6 +717,12 @@ public class TransferActivity extends Activity {
             infoView.setText("还没有可导入的课程，先解析");
             return;
         }
+        final String name = (nameBox == null) ? "" : nameBox.getText().toString().trim();
+        if (name.length() == 0) {
+            infoView.setText("请先填写课程表名称（必填）");
+            infoView.setTextColor(Ui.ERR);
+            return;
+        }
         JSONArray picked = new JSONArray();
         for (int i = 0; i < parsedCourses.length() && i < courseChecks.size(); i++) {
             if (courseChecks.get(i).isChecked()) {
@@ -598,28 +737,119 @@ public class TransferActivity extends Activity {
             infoView.setTextColor(Ui.WARN);
             return;
         }
-        final String payload = buildImportPayload(picked);
+        final JSONArray finalPicked = picked;
+        int idx = indexOfName(name);
+        if (idx >= 0) {
+            infoView.setText("检测到同名课程表，正在读取它的课程数…");
+            infoView.setTextColor(Ui.MUTED);
+            SyncEngine.get(this).exportSchedule(idx, new SyncEngine.Reply() {
+                @Override public void onReply(String json) {
+                    showImportConfirm(name, countCourses(json), finalPicked);
+                }
+                @Override public void onTimeout(String hint) { showImportConfirm(name, -1, finalPicked); }
+                @Override public void onError(String msg) { showImportConfirm(name, -1, finalPicked); }
+            });
+        } else {
+            showImportConfirm(name, -1, finalPicked);
+        }
+    }
+
+    private void showImportConfirm(String name, int existingCount, JSONArray picked) {
+        final String payload = buildImportPayload(picked, name);
         if (payload == null) {
             infoView.setText("构造报文失败");
             infoView.setTextColor(Ui.ERR);
             return;
         }
+        String dup = existingCount >= 0
+                ? ("检测到同名课程表「" + name + "」已存在，当前有 " + existingCount + " 门课。\n")
+                : "";
+        String title = existingCount >= 0 ? "同名课程表已存在，是否覆盖？" : "确认导入？";
         new AlertDialog.Builder(this)
-                .setTitle("确认导入？")
-                .setMessage("将导入选中的 " + picked.length() + " 门课，"
+                .setTitle(title)
+                .setMessage(dup
+                        + "将导入选中的 " + picked.length() + " 门课到「" + name + "」，"
                         + "并【覆盖】手环上 EV 课程表的当前课表。\n"
                         + "EV 侧写盘前会自动备份到 astrobox_sync_backup。\n\n确定继续？")
-                .setPositiveButton("导入并覆盖", new DialogInterface.OnClickListener() {
-                    @Override public void onClick(DialogInterface d, int w) { doImport(payload); }
-                })
+                .setPositiveButton(existingCount >= 0 ? "覆盖导入" : "导入并覆盖",
+                        new DialogInterface.OnClickListener() {
+                            @Override public void onClick(DialogInterface d, int w) { doImport(payload); }
+                        })
                 .setNegativeButton("取消", null)
                 .show();
     }
 
+    private int indexOfName(String name) {
+        if (knownNames == null || name == null) {
+            return -1;
+        }
+        for (int i = 0; i < knownNames.length; i++) {
+            if (name.equalsIgnoreCase(knownNames[i] == null ? "" : knownNames[i].trim())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int countCourses(String json) {
+        try {
+            JSONObject o = new JSONObject(json);
+            JSONObject d = o.optJSONObject("data");
+            JSONArray sch = (d == null) ? null : d.optJSONArray("schedule");
+            int n = 0;
+            if (sch != null) {
+                for (int i = 0; i < sch.length(); i++) {
+                    JSONObject day = sch.optJSONObject(i);
+                    JSONArray cs = (day == null) ? null : day.optJSONArray("classes");
+                    n += (cs == null) ? 0 : cs.length();
+                }
+            }
+            return n;
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    /** 后台静默拉一次课程表清单，供导入时的同名检测使用 */
+    private void loadKnownNames() {
+        SyncEngine.get(this).listSchedules(new SyncEngine.Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    JSONObject o = new JSONObject(json);
+                    if (!o.optBoolean("ok", false)) {
+                        return;
+                    }
+                    JSONArray names = o.optJSONArray("names");
+                    if (names == null) {
+                        return;
+                    }
+                    knownNames = new String[names.length()];
+                    for (int i = 0; i < names.length(); i++) {
+                        knownNames[i] = names.optString(i);
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            @Override public void onTimeout(String hint) { /* 静默 */ }
+            @Override public void onError(String msg) { /* 静默 */ }
+        });
+    }
+
     private String buildImportPayload(JSONArray courses) {
+        return buildImportPayload(courses, "");
+    }
+
+    /**
+     * scheduleName 目前 EV 侧 import 会忽略（写当前激活套）；
+     * 带上它是为后续「按名新建/覆盖」协议预留，不影响现有导入。
+     */
+    private String buildImportPayload(JSONArray courses, String scheduleName) {
         try {
             JSONObject body = new JSONObject();
             body.put("courses", courses);
+            if (scheduleName != null && scheduleName.length() > 0) {
+                body.put("scheduleName", scheduleName);
+            }
             JSONObject o = new JSONObject();
             o.put("action", "import");
             o.put("payload", body);

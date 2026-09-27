@@ -65,5 +65,23 @@
 ## ★★ 跨仓改动：必须先取得用户同意（用户 2026-09-26 明确提出）
 - 工作区之外（如 `tom/class/class`）的写操作，必须先说明「改哪个文件、改什么」并取得同意；跨仓只读可放行但要告知读过哪些路径。
 
+## 激活体系（三仓共享，2026-09-27 核实）
+- **激活码 = 18 位纯数字**（不是 16 位！），编码 12 字符 `PPCCCCMMDDDD`=产品ID(2)+兑换码(4)+月数(2)+设备ID后4位(4)；`encode/decode` 见 `app-auth/lib/crypto.js`（BigInt）与 `tom/class/class/src/lib/crypto.js`（纯 JS 大数）。展示形式 EV 用 6-6-6。
+- **兑换码 = 4 位 `[A-Z0-9]``，用户从爱发电购买。
+- **设备ID**：EV 用 `@system.device.getDeviceId()`，取不到回落本地 UUID（`src/utils/device-uuid.js`，`uuid-<32hex>`）；显示后 6 位，激活校验比对**后 4 位**。
+- **后端**：`POST https://app-auth.gudq.com/api/activate` body `{deviceId, redeemCode, deviceInfo}` → `{success, activationCode:"<18位>"}`；一码一机（`auth:redeem:<code>` + sha256 deviceHash）、同设备可复用（追加 `:seq`）、NA 设备次数上限 5、IP/设备双限流。web 页 `activate.html?deviceId=&m=&p=&r=&c=`。
+- 激活是**离线校验**：手环无网 → 激活码**无签名**纯数学编码，可伪造（`lib/crypto.js` TODO SECURITY-P4-3）。加固需同步升级 EV。
+- EV 已支持读写配置：`export` 回包含 `homepage` 等；写用 `{"action":"update_settings","payload":{"nickname"|"homepage"|"homepageTemplate"|"baseFontSize"}}`（`app.ux:560-611`）。
+- **主项目设置三栏目**：首页设置(`homepage-settings.ux`)、高级版(`activation.ux` 三步：买码→扫码换 18 位码→手输 18 位)、打赏支持(`donate.ux`)。
+- 待办方案文档：`docs/activation-fast-flow-analysis.md`（4 位码→自动取 18 位码→写手环，需 EV 加 `get_device_id`+`activate` 两个动作，**跨仓需授权**）、`docs/analytics-tracking-plan.md`（埋点）。
+
+## 埋点后台（app-auth 已有，直接复用）
+- `POST /api/activate?section=visitor-track` body `{path,ref,query}` → 写 `visitor_logs` + `tracking_events(kind=visit)` + Redis PV/UV；**IP 由服务端取**（x-forwarded-for）。
+- `lib/tracking.js record({ts,kind,ip,visitorHash,deviceId,redeemCode,outTradeNo,activationCode,channel,payload,dedupeKey})`，表 `tracking_events`，`dedupe_key` 唯一；已有 kinds：visit/go_click/purchase_click/order/redeem/activation/failure。
+- `pickModel(model,product)`：`m=model` 常是垃圾值，`p=product` 才是真机型（如 "REDMI Watch 6"），≥3 字符才算有效、取更长的。
+- ⚠️ APK 当前 Manifest **无 INTERNET 权限**，做埋点/快速激活都要加。
+
 ## 其他约定
 - 数据开放边界由手环侧守门人模型控制（interconnect 通道）；策略建议收敛成 `SYNC_ACCESS` 权限表。当前：schedule/profile/homepage/appearance 默认读+可写；pinned 需显式请求+只读（数据在 `src/data/pin-helper.js`）；auth 禁读写。
+- **evnotifier（`app-auth/tools/ev-notifier`）运行环境**：常驻由 LaunchAgent `com.evnotifier.agent` 拉起，解释器固定 **Homebrew python@3.14**（`/opt/homebrew/opt/python@3.14/bin/python3.14`，PEP 668 externally-managed → 装包要 `--break-system-packages`）；改完代码必须 `launchctl kickstart -k gui/$(id -u)/com.evnotifier.agent` 才生效（`git pull` 不生效）。语音播报自 2026-09-27 起用 **Edge TTS**（`zh-CN-XiaoxiaoNeural`，可用 `EV_TTS_VOICE`/`EV_TTS_RATE` 覆盖，缓存 `~/.ev_tts_cache/`），edge-tts 缺失/断网自动降级 macOS `say`。
+- ⚠️ `tools/ev-notifier/mac-notification-scheme.md` 讲的是 **IDE 侧**（AI 每轮完成时通知用户）的约定，与 evnotifier 应用的语音播报是两套独立实现（不互相 import）。**两套都在 2026-09-27 换成了 Edge TTS 晓晓**：app 侧在 `ev_notifier.py` 的 `_voice_worker`，IDE 侧用 `tools/ev-notifier/say-edge.py`（`osascript -e 'display notification ...' ; say-edge.py "文本"`，用 `;` 不用 `&&`）。两者共用音色/环境变量与 `~/.ev_tts_cache/` 缓存。

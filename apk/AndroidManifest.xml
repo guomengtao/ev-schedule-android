@@ -43,6 +43,7 @@
         <activity android:name="com.application.watch.classschedule.DebugActivity" />
         <activity android:name="com.application.watch.classschedule.SettingsActivity"
             android:windowSoftInputMode="stateHidden" />
-        <activity android:name="com.application.watch.classschedule.TransferActivity" />
+        <activity android:name="com.application.watch.classschedule.TransferActivity"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
     </application>
 </manifest>
