@@ -1,6 +1,7 @@
 package com.application.watch.classschedule;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
@@ -48,6 +49,28 @@ public class SettingsActivity extends Activity {
         resultView = Ui.text(this, "", 12.5f, Ui.MUTED, false);
         root.addView(resultView);
 
+        root.addView(Ui.space(this, 12));
+        root.addView(Ui.row(this, "首页设置", "显示开关 / 栏目时间 / 字号", Ui.TEXT,
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        startActivity(new Intent(SettingsActivity.this, HomepageSettingsActivity.class));
+                    }
+                }));
+        root.addView(Ui.space(this, 6));
+        root.addView(Ui.row(this, "高级版", "4 位兑换码一键激活", Ui.TEXT,
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        startActivity(new Intent(SettingsActivity.this, FastActivateActivity.class));
+                    }
+                }));
+        root.addView(Ui.space(this, 6));
+        root.addView(Ui.row(this, "打赏支持", "爱发电 / 微信 / 支付宝", Ui.TEXT,
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        startActivity(new Intent(SettingsActivity.this, DonateActivity.class));
+                    }
+                }));
+
         root.addView(Ui.space(this, 8));
         SyncEngine e = SyncEngine.get(this);
         root.addView(Ui.mono(this, "手环 " + (e.connected()
@@ -59,6 +82,7 @@ public class SettingsActivity extends Activity {
 
         refresh();
         setContentView(Ui.wrapWithBottomBar(this, root, 2));
+        Analytics.pageView(this, "/apk/settings");
     }
 
     private String version() {

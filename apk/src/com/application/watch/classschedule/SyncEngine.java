@@ -170,6 +170,16 @@ public final class SyncEngine {
         send("{\"action\":\"export\",\"scheduleIndex\":" + index + "}", cb);
     }
 
+    /** 索取手环设备ID（APK 侧拿不到）：回包 {ok,action:"get_device_id",deviceId,deviceId4,fallback} */
+    public void getDeviceId(Reply cb) {
+        send("{\"action\":\"get_device_id\"}", cb);
+    }
+
+    /** 一键激活：把后端换来的 18 位激活码交给手环本地校验并落库 */
+    public void activate(String code18, Reply cb) {
+        send("{\"action\":\"activate\",\"code\":" + quote(code18) + "}", cb);
+    }
+
     public void setNickname(String nick, Reply cb) {
         send("{\"action\":\"update_settings\",\"payload\":{\"nickname\":" + quote(nick) + "}}", cb);
     }

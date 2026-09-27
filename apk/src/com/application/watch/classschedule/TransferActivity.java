@@ -120,6 +120,7 @@ public class TransferActivity extends Activity {
         // 进页面不自动弹出输入法（把焦点交给根布局，EditText 不抢焦点）
         root.setFocusableInTouchMode(true);
         root.requestFocus();
+        Analytics.pageView(this, MODE_IMPORT.equals(mode) ? "/apk/transfer/import" : "/apk/transfer/export");
 
         if (!MODE_IMPORT.equals(mode)) {
             loadSchedules();

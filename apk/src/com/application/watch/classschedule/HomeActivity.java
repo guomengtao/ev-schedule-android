@@ -324,6 +324,7 @@ public class HomeActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        Analytics.pageView(this, "/apk/home");
         SyncEngine e = SyncEngine.get(this);
         if (e.connected() && phase == PHASE_DONE && e.nickname.length() > 0) {
             welcomeView.setText("欢迎，" + e.nickname + "！");

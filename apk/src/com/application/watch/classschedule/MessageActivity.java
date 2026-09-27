@@ -120,6 +120,7 @@ public class MessageActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        Analytics.pageView(this, "/apk/message");
         // 每次回到本页：刷新状态并尝试补发（断线期间写的留言在此刻发出）
         refreshState();
         flush();

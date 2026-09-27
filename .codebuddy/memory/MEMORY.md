@@ -18,6 +18,10 @@
 - AstroBox 插件不受此约束（走宿主 WIT 旁路：`transport::request/send` 等）。
 - EV 接口：`{"action":"ping"}` → `{ok,pong,versionName,versionCode}`；`{"action":"export"}` → 格式 A（`{day,classes:[]}` 按天分组）；`import` 只认「一条课一个对象」（需 `name`+`time`），export 回灌前必须摊平。
 - **多课程表导出（2026-09-27 已实现）**：EV 支持 `{"action":"list_schedules"}` → `{ok,action:"list_schedules",names:[...],current:N}`（读 `scheduleNames`+`currentScheduleIndex`）；`{"action":"export","scheduleIndex":N}` 导第 N 套（`getAllCoursesWithIndex`），缺省导当前激活套（`getAllCourses`）。APK 侧 `SyncEngine.listSchedules()/exportSchedule(index)` + `TransferActivity` 下拉选套。数据层多套 = `allCourses_<index>` + `scheduleNames` 列表。
+- **激活/设备ID 动作（2026-09-27 已实现，EV commit b15432c，rpk 1.6.140）**：
+  - `{"action":"get_device_id"}` → `{ok,action:"get_device_id",deviceId,deviceId4,fallback}`；EV 取 `@system.device.getDeviceId()`，NA/失败回落本地 UUID。
+  - `{"action":"activate","code":"<18位>"}` → EV 本地 `crypto.decryptActivationCode` 校验 + 比对设备ID后4位 + `authStore.markActivated(days=-1或months*30, code, redeemCode)` 落库；回 `{ok,action:"activate",status,displayStatus,expireAt,months}`。
+  - `{"action":"import","payload":{courses,scheduleName}}`：给了 `scheduleName` 就**按名新建或覆盖同名表**（`store.getScheduleNames`→新名 push+`setScheduleNames`→写 `allCourses_<idx>`→`database.setScheduleIndex(idx)`）；缺省仍写当前激活套。回包带 `action/scheduleName/scheduleIndex/created`。
 - 签名不一致报 `SignatureVerifyFailedException: fingerprint verify failed`，设备侧接口全挂；`getServiceApiLevel`/`getConnectedNodes` 不受影响（本地查询）。
 
 ## 已打通基线（真机实测）
@@ -27,7 +31,9 @@
 - `OnMessageReceivedListener` 在 Binder 线程，UI 更新须 `runOnUiThread`。
 
 ## App 结构（v0.5.0 起）
-- Activity：`HomeActivity`（首页，4 步连接进度卡+失败指引）、`DebugActivity`（单步调试）、`SettingsActivity`（昵称）、`TransferActivity`（导入/导出复用）、`MessageActivity`（留言，v0.5.12 由 `ChatActivity` 改名重构）。
+- Activity：`HomeActivity`（首页，4 步连接进度卡+失败指引）、`DebugActivity`（单步调试）、`SettingsActivity`（昵称 + 首页设置/高级版/打赏三入口）、`TransferActivity`（导入/导出复用）、`MessageActivity`（留言，v0.5.12 由 `ChatActivity` 改名重构）、`FastActivateActivity`（高级版一键激活）、`HomepageSettingsActivity`（首页设置读写）、`DonateActivity`（打赏）。
+- 工具类：`Net`（POST JSON，子线程）、`Analytics`（页面访问上报，复用后台 `?section=visitor-track`）。
+- **快速激活（v0.5.14）**：APK「高级版」页 → `get_device_id` 取设备ID → 用户输 4 位兑换码 → POST `https://app-auth.gudq.com/api/activate` 换 18 位激活码 → `activate` 写回手环。APK Manifest 已加 `INTERNET`/`ACCESS_NETWORK_STATE`。
 - `SyncEngine.java` 单例：4 步 = 初始化穿戴服务(`getServiceApiLevel`) → 查找设备(`getConnectedNodes`) → 申请权限 → ping EV；单一 listener + 6s 超时。
 - `Ui.java` 统一深空蓝视觉；设计文档 `apk/首页与多步骤调试页设计.md`。
 - **底部导航（v0.5.12 起）**：三个常驻 tab = 首页 / 留言 / 设置（`Ui.bottomBar`，目标 `HomeActivity/MessageActivity/SettingsActivity`），所有页面（含 `TransferActivity`/`DebugActivity`）都挂。

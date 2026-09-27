@@ -2,7 +2,11 @@
 
 > 目标：用户**只填 4 位兑换码**，网站自动按设备 ID 生成激活码，再**直接写入手环**完成激活，省掉现有"扫两个码 + 手输 18 位"的繁琐操作。
 > 日期：2026-09-27
-> 本文只做分析与方案设计，未改代码。
+>
+> **实现状态（2026-09-27 更新）**：方案已落地。
+> - 手环端 EV（commit `b15432c`，rpk 1.6.140）：新增 `get_device_id`、`activate` 两个动作，`import` 支持 `scheduleName`。
+> - APK（v0.5.14）：`SyncEngine.getDeviceId()/activate()`、新页 `FastActivateActivity`（高级版一键激活）、`HomepageSettingsActivity`（首页设置）、`DonateActivity`（打赏支持）；Manifest 已加 `INTERNET`。
+> - 后端 `/api/activate` 未改（已可用）。
 
 ---
 
