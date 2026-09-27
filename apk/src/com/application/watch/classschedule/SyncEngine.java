@@ -160,6 +160,16 @@ public final class SyncEngine {
         send("{\"action\":\"export\"}", cb);
     }
 
+    /** 请求课程表清单（多课程表导出前置）：回包 {ok,action:"list_schedules",names:[...],current:N} */
+    public void listSchedules(Reply cb) {
+        send("{\"action\":\"list_schedules\"}", cb);
+    }
+
+    /** 导出指定第 index 套课程表（index 对应 allCourses_<index>） */
+    public void exportSchedule(int index, Reply cb) {
+        send("{\"action\":\"export\",\"scheduleIndex\":" + index + "}", cb);
+    }
+
     public void setNickname(String nick, Reply cb) {
         send("{\"action\":\"update_settings\",\"payload\":{\"nickname\":" + quote(nick) + "}}", cb);
     }

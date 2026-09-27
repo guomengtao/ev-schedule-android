@@ -11,7 +11,10 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import org.json.JSONArray;
@@ -44,6 +47,12 @@ public class TransferActivity extends Activity {
     private String pendingImportPayload;
     private String lastExportJson;
 
+    // 多课程表选择器
+    private Spinner scheduleSpinner;
+    private String[] scheduleNames;
+    private int selectedIndex = -1;
+    private String selectedName = "";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -56,6 +65,13 @@ public class TransferActivity extends Activity {
         titleView = Ui.title(this, MODE_IMPORT.equals(mode) ? "导入课程表" : "导出课程表");
         root.addView(titleView);
         root.addView(Ui.space(this, 12));
+
+        if (!MODE_IMPORT.equals(mode)) {
+            scheduleSpinner = new Spinner(this);
+            scheduleSpinner.setEnabled(false);
+            root.addView(scheduleSpinner);
+            root.addView(Ui.space(this, 8));
+        }
 
         LinearLayout card = Ui.card(this);
         infoView = Ui.text(this, "准备就绪", 13f, Ui.TEXT, false);
@@ -80,10 +96,14 @@ public class TransferActivity extends Activity {
                     "支持：[] / {courses} / {schedule} / {schedules} / {payload} / 格式 A / EV 导出包\n"
                             + "注意：导入会【覆盖】手环当前课表，EV 侧会自动备份到 astrobox_sync_backup"));
         } else {
-            root.addView(Ui.mono(this, "导出结果会保存到「下载 / EVSync」目录"));
+            root.addView(Ui.mono(this, "先选课程表，再点读取；导出结果保存到「下载 / EVSync」"));
         }
 
         setContentView(root);
+
+        if (!MODE_IMPORT.equals(mode)) {
+            loadSchedules();
+        }
     }
 
     private void primary() {
@@ -99,7 +119,7 @@ public class TransferActivity extends Activity {
     private void readFromBand() {
         infoView.setText("正在读取手环数据…");
         resultView.setText("");
-        SyncEngine.get(this).export(new SyncEngine.Reply() {
+        SyncEngine.Reply cb = new SyncEngine.Reply() {
             @Override public void onReply(String json) {
                 lastExportJson = json;
                 SyncEngine.get(TransferActivity.this).lastExportJson = json;
@@ -125,6 +145,9 @@ public class TransferActivity extends Activity {
                         }
                         sb.append("合计：").append(total).append(" 节");
                     }
+                    if (selectedName != null && selectedName.length() > 0) {
+                        sb.insert(0, "课程表：" + selectedName + "\n");
+                    }
                     infoView.setText(sb.toString());
                     resultView.setText("共 " + json.length() + " 字节，可保存到文件");
                     showSaveButton();
@@ -135,6 +158,65 @@ public class TransferActivity extends Activity {
             }
             @Override public void onTimeout(String hint) { infoView.setText(hint); }
             @Override public void onError(String msg) { infoView.setText("读取失败：" + msg); }
+        };
+        if (selectedIndex >= 0) {
+            SyncEngine.get(this).exportSchedule(selectedIndex, cb);
+        } else {
+            SyncEngine.get(this).export(cb);
+        }
+    }
+
+    // ======================= 课程表清单 =======================
+
+    private void loadSchedules() {
+        if (scheduleSpinner == null) {
+            return;
+        }
+        scheduleSpinner.setEnabled(false);
+        SyncEngine.get(this).listSchedules(new SyncEngine.Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    JSONObject o = new JSONObject(json);
+                    if (!o.optBoolean("ok", false)
+                            || !"list_schedules".equals(o.optString("action"))) {
+                        return;
+                    }
+                    JSONArray names = o.optJSONArray("names");
+                    if (names == null || names.length() == 0) {
+                        selectedIndex = -1;
+                        selectedName = "";
+                        return;
+                    }
+                    scheduleNames = new String[names.length()];
+                    for (int i = 0; i < names.length(); i++) {
+                        scheduleNames[i] = names.optString(i);
+                    }
+                    int cur = o.optInt("current", 0);
+                    selectedIndex = (cur >= 0 && cur < names.length()) ? cur : 0;
+                    selectedName = scheduleNames[selectedIndex];
+                    ArrayAdapter<String> adp = new ArrayAdapter<>(
+                            TransferActivity.this,
+                            android.R.layout.simple_spinner_item, scheduleNames);
+                    adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                    scheduleSpinner.setAdapter(adp);
+                    scheduleSpinner.setSelection(selectedIndex);
+                    scheduleSpinner.setEnabled(true);
+                    scheduleSpinner.setOnItemSelectedListener(
+                            new AdapterView.OnItemSelectedListener() {
+                                @Override public void onItemSelected(
+                                        AdapterView<?> parent, View view, int pos, long id) {
+                                    selectedIndex = pos;
+                                    selectedName = scheduleNames[pos];
+                                }
+                                @Override public void onNothingSelected(AdapterView<?> parent) {}
+                            });
+                } catch (Throwable t) {
+                    // 老版本 EV 不支持 list_schedules：退回单套模式
+                    selectedIndex = -1;
+                }
+            }
+            @Override public void onTimeout(String hint) { /* 静默，单套模式 */ }
+            @Override public void onError(String msg) { /* 静默，单套模式 */ }
         });
     }
 
@@ -158,7 +240,8 @@ public class TransferActivity extends Activity {
             resultView.setText("还没有数据");
             return;
         }
-        String name = "ev-export-" + FN.format(new Date()) + ".json";
+        String safe = (selectedName == null) ? "" : selectedName.replaceAll("[\\\\/:*?\"<>|]", "_");
+        String name = "ev-export-" + (safe.length() > 0 ? safe + "-" : "") + FN.format(new Date()) + ".json";
         try {
             if (Build.VERSION.SDK_INT >= 29) {
                 ContentValues cv = new ContentValues();
