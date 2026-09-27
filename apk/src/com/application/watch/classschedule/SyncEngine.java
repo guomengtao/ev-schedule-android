@@ -668,6 +668,34 @@ public final class SyncEngine {
         }
     }
 
+    /**
+     * 把任意文本推成「手表通知」—— 走 {@link NotifyApi}（小米运动健康通知转发），
+     * 完全不经过 EV 的 interconnect 点对点通道，因此**不依赖手环上是否装了 EV 课程表**。
+     *
+     * 与 {@link #notifyTest} 是同一通道，区别仅在于内容由调用方指定。
+     * 典型用途：发留言时把正文同时推到手环，让没装 EV 的用户也能在手环看到。
+     */
+    public void notifyWatch(String title, String msg, final Cb cb) {
+        if (nodeId == null) {
+            cb.on(false, "先连接手环");
+            return;
+        }
+        try {
+            Wearable.getNotifyApi(ctx).sendNotify(nodeId, title, msg)
+                    .addOnSuccessListener(new OnSuccessListener<Status>() {
+                        @Override public void onSuccess(Status st) {
+                            cb.on(st != null && st.isSuccess(),
+                                    "status=" + (st == null ? "null" : st.getCode()));
+                        }
+                    })
+                    .addOnFailureListener(new OnFailureListener() {
+                        @Override public void onFailure(Exception e) { cb.on(false, String.valueOf(e)); }
+                    });
+        } catch (Throwable t) {
+            cb.on(false, String.valueOf(t));
+        }
+    }
+
     public void evInstalled(final Cb cb) {
         if (nodeId == null) {
             cb.on(false, "先执行步骤 2");

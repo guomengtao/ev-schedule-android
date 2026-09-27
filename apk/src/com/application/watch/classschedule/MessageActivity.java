@@ -248,6 +248,16 @@ public class MessageActivity extends Activity {
         final String id = pending.optString("id");
         final String text = pending.optString("text");
         final long ts = pending.optLong("ts");
+
+        // 同时推一条「手表通知」（NotifyApi，不经 EV）—— 手环即使没装 EV 课程表也能看到留言。
+        // 用 notified 标记保证每条留言只推一次（避免 flush 重发时重复弹通知）。
+        if (!pending.optBoolean("notified", false)) {
+            e.notifyWatch("手机留言", text, new SyncEngine.Cb() {
+                @Override public void on(boolean ok, String m) { /* 尽力推送，不阻塞留言发送 */ }
+            });
+            try { pending.put("notified", true); save(); } catch (Throwable ignored) {}
+        }
+
         JSONObject o = new JSONObject();
         try {
             o.put("action", "chat");
