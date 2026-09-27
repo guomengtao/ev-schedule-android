@@ -13,6 +13,8 @@ import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.List;
+
 /**
  * 首页：
  *   1. 进来就自动连接手环（4 步，带进度与预计剩余时间）
@@ -28,6 +30,10 @@ public class HomeActivity extends Activity {
 
     private TextView welcomeView, statusView, estimateView, hintView;
     private LinearLayout stepsView, errorCard, actionsView;
+    /** 首屏课表卡（阶段 0：本地只读缓存渲染；手上没连也能显示上次的数据） */
+    private LinearLayout timetableCard;
+    /** false = 只看今天，true = 整周 */
+    private boolean showWeek = false;
     private final TextView[] stepRows = new TextView[4];
     private final int[] states = new int[4];
     private int phase = PHASE_CONNECT;
@@ -139,6 +145,16 @@ public class HomeActivity extends Activity {
         welcome.addView(statusView);
         root.addView(welcome);
         root.addView(Ui.space(this, 10));
+
+        // 课表卡（阶段 0：由本地只读缓存渲染 —— 只有 EV 变体才有 schedule 域）
+        timetableCard = Ui.card(this);
+        timetableCard.setVisibility(View.GONE);
+        root.addView(timetableCard);
+        root.addView(Ui.space(this, 10));
+        if (Variant.isEv(this) && CourseCache.savedAt(this) > 0) {
+            // 进来先给看上次的课表，连接成功后会被刷新
+            renderTimetable(true);
+        }
 
         // 进度卡
         LinearLayout progress = Ui.card(this);
@@ -335,6 +351,10 @@ public class HomeActivity extends Activity {
                             }
                         }
                         e.courseCount = total;
+                        // 阶段 0：本次读到的课表存一份本地只读缓存（供首屏 / 后续插件与提醒使用）
+                        if (Variant.isEv(HomeActivity.this)) {
+                            CourseCache.save(HomeActivity.this, sch, "");
+                        }
                     }
                     done();
                 } catch (Throwable t) {
@@ -360,6 +380,9 @@ public class HomeActivity extends Activity {
         estimateView.setTextColor(Ui.OK);
         errorCard.setVisibility(View.GONE);
         actionsView.setVisibility(View.VISIBLE);
+        if (Variant.isEv(this)) {
+            renderTimetable(false);
+        }
     }
 
     private void fail(String hint) {
@@ -372,6 +395,116 @@ public class HomeActivity extends Activity {
         hintView.setText(hint);
         errorCard.setVisibility(View.VISIBLE);
         actionsView.setVisibility(View.VISIBLE);
+        // 连不上也把上次缓存的课表显示出来（脚注标明陈旧），总比一片空白有用
+        if (Variant.isEv(this) && CourseCache.savedAt(this) > 0) {
+            renderTimetable(true);
+        }
+    }
+
+    // ======================= 首屏课表（阶段 0：只读） =======================
+
+    /**
+     * 渲染课表卡。数据取自本地缓存，**手环仍是唯一真源**，手机端不可编辑。
+     *
+     * @param stale true = 这份数据不是本次刚拉到的（未连接 / 正在连接），脚注需标明
+     */
+    private void renderTimetable(boolean stale) {
+        if (timetableCard == null) {
+            return;
+        }
+        timetableCard.removeAllViews();
+
+        List<CourseCache.Course> all = CourseCache.load(this);
+        List<CourseCache.Course> shown;
+        String head;
+        if (showWeek) {
+            CourseCache.sortForWeek(all);
+            shown = all;
+            head = "本周课表";
+        } else {
+            int today = CourseCache.todayIndex();
+            shown = CourseCache.coursesOfDay(all, today);
+            head = "今日课程　" + CourseCache.WEEK[today];
+        }
+
+        // 标题 + 今日/本周切换
+        LinearLayout headRow = new LinearLayout(this);
+        headRow.setOrientation(LinearLayout.HORIZONTAL);
+        headRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        headRow.addView(Ui.text(this, head, 12.5f, Ui.TEXT, true),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        headRow.addView(Ui.button(this, showWeek ? "只看今天" : "查看本周", false,
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        showWeek = !showWeek;
+                        renderTimetable(phase != PHASE_DONE);
+                    }
+                }));
+        timetableCard.addView(headRow);
+        timetableCard.addView(Ui.space(this, 8));
+
+        if (all.isEmpty()) {
+            timetableCard.addView(Ui.text(this, "还没有课表数据，连接手环后会自动显示",
+                    12.5f, Ui.MUTED, false));
+        } else if (shown.isEmpty()) {
+            timetableCard.addView(Ui.text(this, "今天没有课", 13f, Ui.MUTED, false));
+        } else {
+            for (int i = 0; i < shown.size(); i++) {
+                if (i > 0) {
+                    timetableCard.addView(Ui.space(this, 6));
+                }
+                timetableCard.addView(courseRow(shown.get(i), showWeek));
+            }
+        }
+
+        String note = footNote(stale);
+        if (note.length() > 0) {
+            timetableCard.addView(Ui.space(this, 8));
+            timetableCard.addView(Ui.mono(this, note));
+        }
+        timetableCard.setVisibility(View.VISIBLE);
+    }
+
+    private String footNote(boolean stale) {
+        long at = CourseCache.savedAt(this);
+        if (at <= 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        String n = CourseCache.scheduleName(this);
+        if (n.length() > 0) {
+            sb.append(n).append("　·　");
+        }
+        sb.append("更新于 ").append(CourseCache.ago(at));
+        if (stale) {
+            sb.append("　（未连接，显示的是上次的数据）");
+        }
+        return sb.toString();
+    }
+
+    private View courseRow(CourseCache.Course c, boolean withDay) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(Ui.dp(this, 10), Ui.dp(this, 7), Ui.dp(this, 10), Ui.dp(this, 7));
+        row.setBackground(Ui.round(Ui.CARD2, 10, Ui.LINE, this));
+
+        StringBuilder first = new StringBuilder();
+        if (withDay && c.day >= 0) {
+            first.append(c.dayLabel()).append("　");
+        }
+        first.append(c.time);
+        if (c.name.length() > 0) {
+            first.append("　").append(c.name);
+        }
+        row.addView(Ui.text(this, first.toString(), 13f, Ui.TEXT, true));
+
+        String sub = c.sub();
+        if (sub.length() > 0) {
+            TextView t = Ui.text(this, sub, 11f, Ui.MUTED, false);
+            t.setPadding(0, Ui.dp(this, 2), 0, 0);
+            row.addView(t);
+        }
+        return row;
     }
 
     private void launchEv() {

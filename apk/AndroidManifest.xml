@@ -63,21 +63,31 @@
             </intent-filter>
         </activity>
 
+        <!-- 内部页面也 exported=true：方便 adb shell am start 直达做回归/UED 验证
+             （无 intent-filter，外部只能按类名显式唤起；自用工具，可接受）。 -->
         <activity android:name="com.application.watch.classschedule.MessageActivity"
+            android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.DebugActivity"
+            android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
         <activity android:name="com.application.watch.classschedule.SettingsActivity"
+            android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
         <activity android:name="com.application.watch.classschedule.TransferActivity"
+            android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.FastActivateActivity"
+            android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.HomepageSettingsActivity"
+            android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
         <activity android:name="com.application.watch.classschedule.DonateActivity"
+            android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
         <activity android:name="com.application.watch.classschedule.BatteryGuideActivity"
+            android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
 
         <service

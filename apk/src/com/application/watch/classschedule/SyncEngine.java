@@ -254,17 +254,17 @@ public final class SyncEngine {
                         @Override public void onSuccess(Void v) { /* 受理 != 送达 */ }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override public void onFailure(Exception e) {
+                        @Override                         public void onFailure(Exception e) {
                             if (timeoutTask != null) {
                                 main.removeCallbacks(timeoutTask);
                                 timeoutTask = null;
                             }
                             pending = null;
-                            cb.onError(String.valueOf(e));
+                            cb.onError(humanize(e));
                         }
                     });
         } catch (Throwable t) {
-            cb.onError(String.valueOf(t));
+            cb.onError(humanize(t));
         }
     }
 
@@ -348,6 +348,57 @@ public final class SyncEngine {
         });
     }
 
+    // ======================= 异常翻译 =======================
+
+    /**
+     * 底层 SDK 抛的是英文异常（如 {@code IllegalStateException: not bond}），
+     * 直接显示会把类名/堆栈前缀糊到用户脸上。这里统一翻译成短中文短语，
+     * 用于「四步进度」里的 detail（要求短，一行放得下）。
+     */
+    static String humanize(Throwable t) {
+        String raw = String.valueOf(t);                                   // java.lang.IllegalStateException: not bond
+        String msg = String.valueOf(t == null ? null : t.getMessage());   // not bond
+        String low = (raw + " " + msg).toLowerCase();
+        if (low.contains("not bond") || low.contains("not bonded")) {
+            return "手环未在本机配对";
+        }
+        if (low.contains("signature")) {
+            return "签名校验未通过";
+        }
+        if (low.contains("permission") || low.contains("securityexception")) {
+            return "权限被拒绝";
+        }
+        if (low.contains("timeout") || low.contains("timed out")) {
+            return "超时未响应";
+        }
+        if (low.contains("disconnected") || low.contains("binder died")) {
+            return "服务连接中断";
+        }
+        if (low.contains("not found") || low.contains("unavailable")) {
+            return "服务不可用";
+        }
+        // 兜底：只有 message 足够短、且不含类名前缀时才敢直接用，否则给通用文案
+        if (msg.length() > 0 && msg.length() <= 40 && msg.indexOf(':') < 0) {
+            return msg;
+        }
+        return "穿戴服务不可用";
+    }
+
+    /** 首屏失败时的可执行建议（比 detail 长，讲清楚下一步该干什么） */
+    static String hintFor(Throwable t) {
+        if (t == null) {
+            return "请安装并打开「小米运动健康」App，并让它在后台运行";
+        }
+        String low = (String.valueOf(t) + " " + String.valueOf(t.getMessage())).toLowerCase();
+        if (low.contains("not bond") || low.contains("not bonded")) {
+            return "这台手机还没和手环配对。请打开「小米运动健康」完成手环配对、保持连接后重试。";
+        }
+        if (low.contains("signature")) {
+            return "APK 与手环端签名不一致，无法互通。请安装与手环匹配的版本。";
+        }
+        return "请安装并打开「小米运动健康」App，并让它在后台运行";
+    }
+
     // 步骤 1：穿戴服务
     private void stepService(final Steps s, final String[] labels, final int[] states, final String[] details) {
         if (api == null) {
@@ -370,16 +421,16 @@ public final class SyncEngine {
                     .addOnFailureListener(new OnFailureListener() {
                         @Override public void onFailure(Exception e) {
                             states[0] = FAIL;
-                            details[0] = String.valueOf(e.getMessage());
+                            details[0] = humanize(e);
                             emit(s, labels, states, details);
-                            finish(s, false, "请安装并打开「小米运动健康」App，并让它在后台运行");
+                            finish(s, false, hintFor(e));
                         }
                     });
         } catch (Throwable t) {
             states[0] = FAIL;
-            details[0] = String.valueOf(t);
+            details[0] = humanize(t);
             emit(s, labels, states, details);
-            finish(s, false, "穿戴服务不可用，请打开「小米运动健康」");
+            finish(s, false, hintFor(t));
         }
     }
 
@@ -442,14 +493,14 @@ public final class SyncEngine {
                     .addOnFailureListener(new OnFailureListener() {
                         @Override public void onFailure(Exception e) {
                             states[1] = FAIL;
-                            details[1] = String.valueOf(e.getMessage());
+                            details[1] = humanize(e);
                             emit(s, labels, states, details);
                             finish(s, false, "读取设备列表失败，请检查小米运动健康的手环连接");
                         }
                     });
         } catch (Throwable t) {
             states[1] = FAIL;
-            details[1] = String.valueOf(t);
+            details[1] = humanize(t);
             emit(s, labels, states, details);
             finish(s, false, "读取设备列表失败");
         }
@@ -476,7 +527,7 @@ public final class SyncEngine {
                             String m = String.valueOf(e);
                             boolean sig = m.contains("Signature") || m.contains("fingerprint");
                             states[2] = FAIL;
-                            details[2] = String.valueOf(e.getMessage());
+                            details[2] = humanize(e);
                             emit(s, labels, states, details);
                             finish(s, false, sig
                                     ? "签名校验未通过：本 APK 与手环 EV 课程表不是同一把签名"
@@ -485,7 +536,7 @@ public final class SyncEngine {
                     });
         } catch (Throwable t) {
             states[2] = FAIL;
-            details[2] = String.valueOf(t);
+            details[2] = humanize(t);
             emit(s, labels, states, details);
             finish(s, false, "权限申请失败");
         }
@@ -550,10 +601,10 @@ public final class SyncEngine {
                         @Override public void onSuccess(Integer lv) { cb.on(true, "服务可用 (level " + lv + ")"); }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override public void onFailure(Exception e) { cb.on(false, String.valueOf(e)); }
+                        @Override public void onFailure(Exception e) { cb.on(false, humanize(e)); }
                     });
         } catch (Throwable t) {
-            cb.on(false, String.valueOf(t));
+            cb.on(false, humanize(t));
         }
     }
 
@@ -582,10 +633,10 @@ public final class SyncEngine {
                         }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override public void onFailure(Exception e) { cb.on(false, String.valueOf(e)); }
+                        @Override public void onFailure(Exception e) { cb.on(false, humanize(e)); }
                     });
         } catch (Throwable t) {
-            cb.on(false, String.valueOf(t));
+            cb.on(false, humanize(t));
         }
     }
 
@@ -601,10 +652,10 @@ public final class SyncEngine {
                         @Override public void onSuccess(Permission[] ps) { cb.on(true, "已授权"); }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override public void onFailure(Exception e) { cb.on(false, String.valueOf(e)); }
+                        @Override public void onFailure(Exception e) { cb.on(false, humanize(e)); }
                     });
         } catch (Throwable t) {
-            cb.on(false, String.valueOf(t));
+            cb.on(false, humanize(t));
         }
     }
 
@@ -640,10 +691,10 @@ public final class SyncEngine {
                         @Override public void onSuccess(Void v) { cb.on(true, "已请求拉起，请看手环"); }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override public void onFailure(Exception e) { cb.on(false, String.valueOf(e)); }
+                        @Override public void onFailure(Exception e) { cb.on(false, humanize(e)); }
                     });
         } catch (Throwable t) {
-            cb.on(false, String.valueOf(t));
+            cb.on(false, humanize(t));
         }
     }
 
@@ -661,10 +712,10 @@ public final class SyncEngine {
                         }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override public void onFailure(Exception e) { cb.on(false, String.valueOf(e)); }
+                        @Override public void onFailure(Exception e) { cb.on(false, humanize(e)); }
                     });
         } catch (Throwable t) {
-            cb.on(false, String.valueOf(t));
+            cb.on(false, humanize(t));
         }
     }
 
@@ -689,10 +740,10 @@ public final class SyncEngine {
                         }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override public void onFailure(Exception e) { cb.on(false, String.valueOf(e)); }
+                        @Override public void onFailure(Exception e) { cb.on(false, humanize(e)); }
                     });
         } catch (Throwable t) {
-            cb.on(false, String.valueOf(t));
+            cb.on(false, humanize(t));
         }
     }
 
@@ -707,10 +758,10 @@ public final class SyncEngine {
                         @Override public void onSuccess(Boolean b) { cb.on(Boolean.TRUE.equals(b), String.valueOf(b)); }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override public void onFailure(Exception e) { cb.on(false, String.valueOf(e)); }
+                        @Override public void onFailure(Exception e) { cb.on(false, humanize(e)); }
                     });
         } catch (Throwable t) {
-            cb.on(false, String.valueOf(t));
+            cb.on(false, humanize(t));
         }
     }
 }

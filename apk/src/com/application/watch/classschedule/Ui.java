@@ -217,6 +217,7 @@ public final class Ui {
      * 底栏由本方法唯一创建；调用方【不要】再往 contentRoot 里加 bottomBar。
      */
     public static ViewGroup wrapWithBottomBar(Activity a, LinearLayout contentRoot, int currentTab) {
+        final LinearLayout bar = bottomBar(a, currentTab);
         reserveBottomSpace(a, contentRoot);
 
         FrameLayout root = new FrameLayout(a);
@@ -234,7 +235,8 @@ public final class Ui {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        root.addView(bottomBar(a, currentTab), barParams());
+        root.addView(bar, barParams());
+        syncPaddingToBar(contentRoot, bar);
         return root;
     }
 
@@ -244,6 +246,7 @@ public final class Ui {
      * 给内容区预留底部留白，让内部 weight=1 的滚动区自然收在底栏之上。
      */
     public static ViewGroup fixedWithBottomBar(Activity a, LinearLayout contentRoot, int currentTab) {
+        final LinearLayout bar = bottomBar(a, currentTab);
         reserveBottomSpace(a, contentRoot);
 
         FrameLayout root = new FrameLayout(a);
@@ -253,13 +256,34 @@ public final class Ui {
         root.addView(contentRoot, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
-        root.addView(bottomBar(a, currentTab), barParams());
+        root.addView(bar, barParams());
+        syncPaddingToBar(contentRoot, bar);
         return root;
     }
 
     private static void reserveBottomSpace(Activity a, LinearLayout contentRoot) {
         contentRoot.setPadding(contentRoot.getPaddingLeft(), contentRoot.getPaddingTop(),
                 contentRoot.getPaddingRight(), dp(a, BAR_HEIGHT_DP));
+    }
+
+    /**
+     * 用【实测】的底栏高度校准底部留白，而不是只信 BAR_HEIGHT_DP 常量。
+     *
+     * 底栏实际高度 = 图标(19sp emoji) + 文字 + 上下 padding，在某些机型/字体缩放下会超过
+     * 常量的 62dp（实测 BLN-AL20 density=3 时是 86dp），于是「最后一行按钮被压掉半截」。
+     * 这里在布局完成后按真实高度重设 paddingBottom，常量退化为"首次渲染前的估计值"。
+     */
+    private static void syncPaddingToBar(final LinearLayout contentRoot, final View bar) {
+        bar.post(new Runnable() {
+            @Override public void run() {
+                int h = bar.getHeight();
+                if (h <= 0) {
+                    return;
+                }
+                contentRoot.setPadding(contentRoot.getPaddingLeft(), contentRoot.getPaddingTop(),
+                        contentRoot.getPaddingRight(), h + dp(contentRoot.getContext(), 12));
+            }
+        });
     }
 
     private static FrameLayout.LayoutParams barParams() {
