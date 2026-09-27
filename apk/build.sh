@@ -195,6 +195,23 @@ rm -f "$OUT.idsig"
 # 便于固定路径安装（可覆盖安装的前提是签名没变）
 cp "$OUT" "$OUT_NAME.apk"
 
+# --- 生成升级描述文件（App 自动升级用，见 docs/自动升级实现方案.md）---
+#   发布物共两件：本 JSON → 上传 Vercel/静态服务器；APK → 上传 GitHub Release。
+#   双地址：downloadUrlMirror（ghproxy 镜像前缀，App 优先尝试）+ downloadUrlOrigin（GitHub 直链，兜底）。
+#   GH_REPO / GH_PROXY 可用环境变量覆盖；GH_REPO 未设置时 URL 留空，发布时手补。
+GH_REPO="${GH_REPO:-}"                            # 例: yourname/EvCourse
+GH_PROXY="${GH_PROXY:-https://ghproxy.com}"
+SHA256=$(shasum -a 256 "$OUT" | cut -d' ' -f1)
+ORIGIN=""
+if [ -n "$GH_REPO" ]; then
+  ORIGIN="https://github.com/$GH_REPO/releases/download/v${VERSION_NAME}/${OUT_NAME}-v${VERSION_NAME}.apk"
+fi
+cat > "dist/update-${VARIANT}.json" <<EOF
+{"versionCode":$VERSION_CODE,"versionName":"$VERSION_NAME","sha256":"$SHA256",
+ "downloadUrlMirror":"${GH_PROXY:+$GH_PROXY/}$ORIGIN","downloadUrlOrigin":"$ORIGIN",
+ "isForce":false,"updateLog":""}
+EOF
+
 echo
 echo "产物: $HERE/$OUT"
 ls -la "$OUT" "$OUT_NAME.apk"

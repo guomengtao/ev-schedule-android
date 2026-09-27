@@ -43,6 +43,8 @@
     <!-- 上课提醒：精确定时（Android 12+ 需用户授予；未授予时降级 ±1 分钟） + 开机后补排 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- App 自动升级（PackageInstaller 自装自更）：Android 8+ 必需，安装时系统仍会弹用户确认 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:label="EV Sync"

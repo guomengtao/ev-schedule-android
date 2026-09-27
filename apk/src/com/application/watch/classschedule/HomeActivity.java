@@ -65,6 +65,8 @@ public class HomeActivity extends Activity {
         // 常驻前台服务：进程活着才能在后台收到手环推来的留言（可在设置页关闭）
         SyncService.startIfEnabled(this);
         requestNotifPermission();
+        // 自动升级：静默检查（仅发现新版本才弹窗，失败不打扰；见 docs/自动升级实现方案.md）
+        UpdateChecker.checkSilent(this);
         installNodeChooser();
         startConnect();
     }
