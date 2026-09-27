@@ -98,9 +98,7 @@ public class ChatActivity extends Activity {
                         + "—— 那说明链路通了，只是手环还不认识这个指令。"));
 
         root.addView(Ui.space(this, 6));
-        root.addView(Ui.bottomBar(this, 1));
-
-        setContentView(root);
+        setContentView(Ui.wrapWithBottomBar(this, root, 1));
         refreshState();
     }
 

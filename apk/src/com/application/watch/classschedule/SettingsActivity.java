@@ -57,7 +57,7 @@ public class SettingsActivity extends Activity {
         root.addView(Ui.bottomBar(this, 2));
 
         refresh();
-        setContentView(root);
+        setContentView(Ui.wrapWithBottomBar(this, root, 2));
     }
 
     private void refresh() {

@@ -30,6 +30,10 @@
 - `SyncEngine.java` 单例：4 步 = 初始化穿戴服务(`getServiceApiLevel`) → 查找设备(`getConnectedNodes`) → 申请权限 → ping EV；单一 listener + 6s 超时。
 - `Ui.java` 统一深空蓝视觉；设计文档 `apk/首页与多步骤调试页设计.md`。
 
+## ⚠️ 仓库文件命名雷区（2026-09-27 踩坑）
+- **git 跟踪的文件不要用中文名**（尤其 root 下的 .md）。macOS 的 NFC/NFD Unicode 规范化会让 git 索引与磁盘文件名错配，表现为：① `git add 中文名` 静默失效（staged 为空）；② `git status` 反复出现物理不存在的 `?? apk/<中文名>` 幽灵 untracked 条目（find 确认无此文件，无害但刷屏）。
+- 中文 .md 文档改用 **ASCII 文件名**（如 `harmonyos-ble-adapter-plan.md`）。已存在的 `纯血鸿蒙适配方案-直连蓝牙与备选.md` 已改用 ASCII 名重新入库。
+
 ## 构建方式（不要轻易改）
 - `apk/`，无 Gradle：`aapt2 link → javac → d8 → zip dex → zipalign → apksigner`；SDK 在 `$HOME/android-sdk`。
 - ⚠️ javac 用 JDK 8（zulu-8，JDK22 产出的 class 让 d8 NPE）；d8/apksigner 用 JDK 11+。

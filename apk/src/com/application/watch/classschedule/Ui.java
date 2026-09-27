@@ -10,7 +10,9 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 /** 统一视觉：深空蓝风格（对齐 EV 课程表默认主题） */
@@ -190,5 +192,39 @@ public final class Ui {
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         }
         return bar;
+    }
+
+    /**
+     * Wrap content + bottom bar into a FrameLayout.
+     * Content sits in a ScrollView (fills screen), bottom bar pinned at bottom.
+     * Caller must have added Ui.bottomBar() as the LAST child of contentRoot.
+     */
+    public static ViewGroup wrapWithBottomBar(Activity a, LinearLayout contentRoot, int currentTab) {
+        int count = contentRoot.getChildCount();
+        if (count > 0) {
+            contentRoot.removeViewAt(count - 1);
+        }
+
+        FrameLayout root = new FrameLayout(a);
+        root.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+
+        ScrollView scroll = new ScrollView(a);
+        scroll.setFillViewport(true);
+        scroll.addView(contentRoot);
+
+        root.addView(scroll, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+
+        LinearLayout bar = bottomBar(a, currentTab);
+        FrameLayout.LayoutParams barLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        barLp.gravity = Gravity.BOTTOM;
+        root.addView(bar, barLp);
+
+        return root;
     }
 }
