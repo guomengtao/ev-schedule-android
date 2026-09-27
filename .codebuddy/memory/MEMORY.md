@@ -31,7 +31,8 @@
 - `OnMessageReceivedListener` 在 Binder 线程，UI 更新须 `runOnUiThread`。
 
 ## App 结构（v0.5.0 起）
-- Activity：`HomeActivity`（首页，4 步连接进度卡+失败指引）、`DebugActivity`（单步调试）、`SettingsActivity`（昵称 + 首页设置/高级版/打赏三入口）、`TransferActivity`（导入/导出复用）、`MessageActivity`（留言，v0.5.12 由 `ChatActivity` 改名重构）、`FastActivateActivity`（高级版一键激活）、`HomepageSettingsActivity`（首页设置读写）、`DonateActivity`（打赏）。
+- Activity：`HomeActivity`（首页，4 步连接进度卡+失败指引）、`DebugActivity`（单步调试）、`SettingsActivity`（昵称 + 首页设置/高级版/打赏 + 后台常驻提醒/省电白名单）、`TransferActivity`（导入/导出复用）、`MessageActivity`（留言，v0.5.12 由 `ChatActivity` 改名重构）、`FastActivateActivity`（高级版一键激活）、`HomepageSettingsActivity`（首页设置读写）、`DonateActivity`（打赏）、`BatteryGuideActivity`（省电白名单引导）。
+- Service：`SyncService`（前台服务，见「留言」章节）、`Notifications`（通知渠道统一出口）。
 - 工具类：`Net`（POST JSON，子线程）、`Analytics`（页面访问上报，复用后台 `?section=visitor-track`）。
 - **快速激活（v0.5.14）**：APK「高级版」页 → `get_device_id` 取设备ID → 用户输 4 位兑换码 → POST `https://app-auth.gudq.com/api/activate` 换 18 位激活码 → `activate` 写回手环。APK Manifest 已加 `INTERNET`/`ACCESS_NETWORK_STATE`。
 - `SyncEngine.java` 单例：4 步 = 初始化穿戴服务(`getServiceApiLevel`) → 查找设备(`getConnectedNodes`) → 申请权限 → ping EV；单一 listener + 6s 超时。
