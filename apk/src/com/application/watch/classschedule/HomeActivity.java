@@ -355,6 +355,11 @@ public class HomeActivity extends Activity {
                         if (Variant.isEv(HomeActivity.this)) {
                             CourseCache.save(HomeActivity.this, sch, "");
                         }
+                        // 手环外观镜像（「跟随手环」主题模式的数据源）
+                        WatchAppearance.save(HomeActivity.this,
+                                d.has("appTheme") ? d.optString("appTheme") : null,
+                                d.has("homepageTemplate") ? d.optString("homepageTemplate") : null,
+                                d.has("weekviewTemplate") ? d.optString("weekviewTemplate") : null);
                     }
                     done();
                 } catch (Throwable t) {

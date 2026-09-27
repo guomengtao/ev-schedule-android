@@ -82,15 +82,34 @@ public final class Ui {
         return dark;
     }
 
-    /** 按系统夜间模式套用主题。每个页面入口（screen / wrapWithBottomBar / fixedWithBottomBar）都会调它 */
+    /**
+     * 套用主题。每个页面入口（screen / wrapWithBottomBar / fixedWithBottomBar）都会调它。
+     *
+     * 优先级：**「跟随手环」开启且已同步到手环主题色** → 明暗与主色跟手环走；
+     * 否则按系统夜间模式（浅色默认 / 深色夜间）。
+     * 中性色（背景/卡片/文字）始终用本端色板，保证可读性不失控。
+     */
     public static void applyTheme(Context c) {
+        boolean night;
         try {
             int mode = c.getResources().getConfiguration().uiMode
                     & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
-            dark = (mode == android.content.res.Configuration.UI_MODE_NIGHT_YES);
+            night = (mode == android.content.res.Configuration.UI_MODE_NIGHT_YES);
         } catch (Throwable t) {
-            dark = true;
+            night = true;
         }
+        int accentOverride = 0;
+        try {
+            if (WatchAppearance.followEnabled(c)) {
+                int[] wa = WatchAppearance.watchColors(WatchAppearance.themeId(c));
+                if (wa != null) {
+                    night = WatchAppearance.isDarkBg(wa[0]);
+                    accentOverride = wa[1];
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        dark = night;
         int[] p = dark ? D : L;
         BG = p[0];
         CARD = p[1];
@@ -102,6 +121,9 @@ public final class Ui {
         OK = p[7];
         WARN = p[8];
         ERR = p[9];
+        if (accentOverride != 0) {
+            ACCENT = accentOverride;
+        }
         // 系统控件（Switch / AlertDialog / EditText 光标等）也要跟着换：
         // 必须在 setContentView 之前 setTheme —— 每个页面都是先走 Ui.screen()，恰好满足
         if (c instanceof Activity) {

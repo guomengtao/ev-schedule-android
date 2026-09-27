@@ -6,6 +6,7 @@ import android.content.DialogInterface;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -65,6 +66,11 @@ public class HomepageSettingsActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // 未连接也先显示上次同步的值（跟随手环模式的数据源就在这里）
+        homeTpl = emptyToNull(WatchAppearance.homeTpl(this));
+        weekTpl = emptyToNull(WatchAppearance.weekTpl(this));
+        appTheme = emptyToNull(WatchAppearance.themeId(this));
 
         LinearLayout root = Ui.screen(this);
         root.addView(Ui.title(this, "首页设置"));
@@ -128,6 +134,27 @@ public class HomepageSettingsActivity extends Activity {
         homeBtn.setText("首页模板：（读取中）");
         weekBtn.setText("周视图模板：（读取中）");
         themeBtn.setText("主题色：（读取中）");
+        apCard.addView(Ui.space(this, 4));
+        Switch followSw = new Switch(this);
+        followSw.setText("跟随手环（手机主题自动跟手环走）");
+        followSw.setTextSize(12.5f);
+        followSw.setTextColor(Ui.TEXT);
+        followSw.setChecked(WatchAppearance.followEnabled(this));
+        followSw.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(CompoundButton b, boolean isChecked) {
+                WatchAppearance.setFollow(HomepageSettingsActivity.this, isChecked);
+                recreate(); // 整页按新模式立即重新着色
+            }
+        });
+        apCard.addView(followSw);
+        apCard.addView(Ui.space(this, 6));
+        apCard.addView(Ui.button(this, "立即同步手环设置", true, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                resultView.setText("正在读取手环外观设置…");
+                resultView.setTextColor(Ui.MUTED);
+                load();
+            }
+        }));
         apCard.addView(Ui.mono(this,
                 "选项与手环端同源；若显示「手环未上报」表示手环 EV 版本较旧，升级手环端后可用"));
         root.addView(apCard);
@@ -211,6 +238,14 @@ public class HomepageSettingsActivity extends Activity {
                     setEnabled(true);
                     resultView.setText("已读取当前设置");
                     resultView.setTextColor(Ui.OK);
+                    // 更新「跟随手环」镜像；主题变了且跟随开启 → 整页重新着色
+                    String prevTheme = WatchAppearance.themeId(HomepageSettingsActivity.this);
+                    WatchAppearance.save(HomepageSettingsActivity.this, appTheme, homeTpl, weekTpl);
+                    if (WatchAppearance.followEnabled(HomepageSettingsActivity.this)
+                            && appTheme != null && appTheme.length() > 0
+                            && !appTheme.equals(prevTheme)) {
+                        recreate();
+                    }
                 } catch (Throwable t) {
                     resultView.setText("读取失败：回包无法解析");
                     resultView.setTextColor(Ui.ERR);
@@ -366,5 +401,9 @@ public class HomepageSettingsActivity extends Activity {
         homeBtn.setText("首页模板：" + labelOf(HOME_TPLS, homeTpl));
         weekBtn.setText("周视图模板：" + labelOf(WEEK_TPLS, weekTpl));
         themeBtn.setText("主题色：" + labelOf(THEME_LIST, appTheme));
+    }
+
+    private static String emptyToNull(String s) {
+        return (s == null || s.length() == 0) ? null : s;
     }
 }
