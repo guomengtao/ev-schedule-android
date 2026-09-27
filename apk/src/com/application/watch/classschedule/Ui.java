@@ -163,9 +163,11 @@ public final class Ui {
      */
     public static final int BAR_HEIGHT_DP = 62;
 
-    /** 底部固定导航：首页 / 留言 / 设置（任何时候都常驻） */
+    /** 底部固定导航：首页 / 留言 / 设置（任何时候都常驻）。
+     *  每个 tab = 图标 + 文字 的竖向布局（图标用 emoji，零资源依赖）。 */
     public static LinearLayout bottomBar(final Activity a, int current) {
-        final String[] names = {"首页", "留言", "设置"};
+        final String[] icons = {"🏠", "💬", "⚙"};   // 首页 / 留言 / 设置
+        final String[] labels = {"首页", "留言", "设置"};
         final Class[] targets = {HomeActivity.class, MessageActivity.class, SettingsActivity.class};
 
         LinearLayout bar = new LinearLayout(a);
@@ -175,16 +177,19 @@ public final class Ui {
 
         for (int i = 0; i < 3; i++) {
             final int idx = i;
-            Button b = new Button(a);
-            b.setText(names[i]);
-            b.setAllCaps(false);
-            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
-            b.setTextColor(i == current ? ACCENT : MUTED);
-            b.setBackground(round(i == current ? CARD2 : 0x00000000, 12, 0, a));
-            b.setMinimumHeight(0);
-            b.setMinimumWidth(0);
-            b.setPadding(dp(a, 6), dp(a, 8), dp(a, 6), dp(a, 8));
-            b.setOnClickListener(new View.OnClickListener() {
+            final int color = (i == current) ? ACCENT : MUTED;
+            LinearLayout tab = new LinearLayout(a);
+            tab.setOrientation(LinearLayout.VERTICAL);
+            tab.setGravity(Gravity.CENTER);
+            tab.setClickable(true);
+            tab.setBackground(round(i == current ? CARD2 : 0x00000000, 12, 0, a));
+            TextView ic = text(a, icons[i], 19f, color, false);
+            ic.setGravity(Gravity.CENTER);
+            TextView lb = text(a, labels[i], 10.5f, color, false);
+            lb.setGravity(Gravity.CENTER);
+            tab.addView(ic);
+            tab.addView(lb);
+            tab.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     if (idx == current) {
                         return;
@@ -194,8 +199,8 @@ public final class Ui {
                     a.startActivity(it);
                 }
             });
-            bar.addView(b, new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            bar.addView(tab, new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
         }
         return bar;
     }

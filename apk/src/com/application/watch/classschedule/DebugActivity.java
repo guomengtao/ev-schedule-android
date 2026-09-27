@@ -101,6 +101,10 @@ public class DebugActivity extends Activity {
 
         // 调试页也保留常驻底栏（不属于三个 tab，故不高亮任何一项）
         setContentView(Ui.fixedWithBottomBar(this, root, -1));
+
+        // 进页面不自动弹出输入法（把焦点交给根布局，EditText 不抢焦点）
+        root.setFocusableInTouchMode(true);
+        root.requestFocus();
     }
 
     // ======================= 步骤 =======================

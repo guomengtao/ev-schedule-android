@@ -66,6 +66,12 @@ JRE_HOME="$(/usr/libexec/java_home -v 22 2>/dev/null || /usr/libexec/java_home -
 [ -f "$BT/aapt2" ]            || { echo "缺少 build-tools: $BT"; exit 1; }
 [ -f "$AJAR" ]                || { echo "缺少 platform: $AJAR"; exit 1; }
 [ -f libs/xms-wearable.jar ]  || { echo "缺少 libs/xms-wearable.jar（从 AAR 的 classes.jar 提取）"; exit 1; }
+# 打赏页二维码需要的 zxing 核心库（纯 Java，随 APK 打包，离线可用）
+if [ ! -f libs/zxing-core.jar ]; then
+  curl -sL -o libs/zxing-core.jar \
+    "https://repo1.maven.org/maven2/com/google/zxing/core/3.5.3/core-3.5.3.jar"
+fi
+[ -f libs/zxing-core.jar ] || { echo "缺少 libs/zxing-core.jar（二维码库下载失败）"; exit 1; }
 [ -n "$JAVA8_HOME" ]          || { echo "需要 JDK 8 用于 javac（R8 不兼容 JDK 22 的 class 文件）"; exit 1; }
 [ -n "$JRE_HOME" ]            || { echo "需要 JDK 11+（d8 / apksigner）"; exit 1; }
 
@@ -133,7 +139,7 @@ echo "[2/7] javac（必须用 JDK 8）..."
 find src out/gen -name '*.java' > out/sources.txt
 "$JAVA8_HOME/bin/javac" -nowarn -encoding UTF-8 -source 1.8 -target 1.8 \
   -bootclasspath "$AJAR" \
-  -classpath "libs/xms-wearable.jar" \
+  -classpath "libs/xms-wearable.jar:libs/zxing-core.jar" \
   -d out/classes @out/sources.txt
 
 echo "[3/7] d8（生成 classes.dex）..."
@@ -144,7 +150,8 @@ echo "[3/7] d8（生成 classes.dex）..."
   --release --min-api 24 \
   --lib "$AJAR" \
   --output out/dex \
-  $(find out/sdkclasses out/classes -name '*.class')
+  $(find out/sdkclasses out/classes -name '*.class') \
+  libs/zxing-core.jar
 
 echo "[4/7] 打包 dex 到 APK ..."
 cp out/base.apk out/unsigned.apk

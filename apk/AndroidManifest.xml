@@ -16,6 +16,16 @@
     <queries>
         <package android:name="com.xiaomi.wearable" />
         <package android:name="com.mi.health" />
+        <!-- 打赏页「打开」微信/支付宝：Android 11+ 必须声明可见性，否则 resolveActivity / getLaunchIntentForPackage 返回 null -->
+        <package android:name="com.tencent.mm" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="wxp" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="alipays" />
+        </intent>
     </queries>
 
     <!-- 留言提醒：震动；Android 13+ 通知（后续做后台提醒时需要） -->
@@ -35,7 +45,8 @@
         android:icon="@drawable/ic_launcher"
         android:allowBackup="false"
         android:roundIcon="@drawable/ic_launcher"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:windowSoftInputMode="stateAlwaysHidden">
 
         <!-- 构建变体：由 build.sh 在打包时替换占位符（一套源码 → 两个包名的 APK） -->
         <meta-data android:name="ev.variant" android:value="__VARIANT__" />
@@ -43,7 +54,8 @@
 
         <activity
             android:name="com.application.watch.classschedule.HomeActivity"
-            android:exported="true">
+            android:exported="true"
+            android:windowSoftInputMode="stateAlwaysHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -51,17 +63,21 @@
         </activity>
 
         <activity android:name="com.application.watch.classschedule.MessageActivity"
-            android:windowSoftInputMode="stateHidden|adjustResize" />
-        <activity android:name="com.application.watch.classschedule.DebugActivity" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
+        <activity android:name="com.application.watch.classschedule.DebugActivity"
+            android:windowSoftInputMode="stateAlwaysHidden" />
         <activity android:name="com.application.watch.classschedule.SettingsActivity"
-            android:windowSoftInputMode="stateHidden" />
+            android:windowSoftInputMode="stateAlwaysHidden" />
         <activity android:name="com.application.watch.classschedule.TransferActivity"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.FastActivateActivity"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
-        <activity android:name="com.application.watch.classschedule.HomepageSettingsActivity" />
-        <activity android:name="com.application.watch.classschedule.DonateActivity" />
-        <activity android:name="com.application.watch.classschedule.BatteryGuideActivity" />
+        <activity android:name="com.application.watch.classschedule.HomepageSettingsActivity"
+            android:windowSoftInputMode="stateAlwaysHidden" />
+        <activity android:name="com.application.watch.classschedule.DonateActivity"
+            android:windowSoftInputMode="stateAlwaysHidden" />
+        <activity android:name="com.application.watch.classschedule.BatteryGuideActivity"
+            android:windowSoftInputMode="stateAlwaysHidden" />
 
         <service
             android:name="com.application.watch.classschedule.SyncService"
