@@ -58,6 +58,9 @@
   - ⚠️ 清单 sed 注入后有**自检**（包名/占位符没替换干净就报错退出），别删。
   - `Variant.java` 运行期读 meta-data（`Variant.isEv(ctx)`），**不要在代码里硬编码对端快应用包名**；EV 专属入口（导入导出课表/高级版激活）已按变体隐藏。
   - 物理分层（`src/common`+`src/ev`+`src/evbox`）**尚未做**，等出现 EvBox 专属页面再拆。
+- ⚠️ **IDE「批量删除保护」会中断 aiot 构建（2026-09-27 踩坑，重要）**：阈值约 500 文件/次。`aiot build/release` 在 `beforeWorks` 会先删临时目录（class-schedule 是 `tom/class/.temp_class`；EvBox 因自带补丁是 `node_modules/.aiot-temp-<name>`）。**只要该临时目录已存在且 >500 文件 → 删除被拦 → 整个构建立刻中止**（日志里 0 个 afterCompile，只看到 safe-delete 报错）。解法：**在 IDE 里手动删除那个临时目录**再构建；不要用 `rm -rf` 硬删（安全层会拒绝并提示停止）。
+- ⚠️ `npx aiot build`（debug，页面为可读 `.js`）与 `npx aiot release --enable-jsc`（release，页面为 `.jsc` **字节码**，grep 不到源码字符串属正常）产出形态不同，别把两者混着比对体积。
+- ⚠️ EvBox 仓库的 `@aiot-toolkit/parser` 补丁（过滤模板里的 `<import>`，否则解析报 THROW）**会因 node_modules 重装而丢失** → `npx patch-package` 重新应用（2026-09-27 发现未应用并已补上）。
 - ⚠️ javac 用 JDK 8（zulu-8，JDK22 产出的 class 让 d8 NPE）；d8/apksigner 用 JDK 11+。
 - ⚠️ d8 的 `--classpath` 不打进 dex：AAR 的 classes.jar 必须作为输入传给 d8，否则运行时闪退。
 - 排闪退：`adb logcat -s EVProbe AndroidRuntime`；崩溃写 `last_crash.txt`。
