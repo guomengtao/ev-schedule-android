@@ -19,8 +19,10 @@ public final class Notifications {
 
     public static final String CH_SERVICE = "ev_service";
     public static final String CH_MESSAGE = "ev_message";
+    public static final String CH_REMIND = "ev_remind";
     public static final int ID_SERVICE = 1001;
     public static final int ID_MESSAGE = 1002;
+    public static final int ID_REMIND = 1003;
 
     private Notifications() {
     }
@@ -47,6 +49,14 @@ public final class Notifications {
                 msg.setDescription("收到新留言时提醒");
                 msg.enableVibration(true);
                 nm.createNotificationChannel(msg);
+            }
+            if (nm.getNotificationChannel(CH_REMIND) == null) {
+                NotificationChannel rm = new NotificationChannel(CH_REMIND, "上课提醒",
+                        NotificationManager.IMPORTANCE_HIGH);
+                rm.setDescription("临近上课时间时提醒");
+                rm.enableVibration(true);
+                rm.enableLights(true);
+                nm.createNotificationChannel(rm);
             }
         } catch (Throwable ignored) {
         }
@@ -100,6 +110,31 @@ public final class Notifications {
                 b.setPriority(Notification.PRIORITY_HIGH);
             }
             nm.notify(ID_MESSAGE, b.build());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 上课提醒（Reminders 闹钟触发 / 测试按钮） */
+    public static void remind(Context c, String title, String text) {
+        ensureChannels(c);
+        try {
+            NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) {
+                return;
+            }
+            Notification.Builder b = (Build.VERSION.SDK_INT >= 26)
+                    ? new Notification.Builder(c, CH_REMIND)
+                    : new Notification.Builder(c);
+            b.setContentTitle(title)
+                    .setContentText(text)
+                    .setStyle(new Notification.BigTextStyle().bigText(text))
+                    .setSmallIcon(R.drawable.ic_launcher)
+                    .setAutoCancel(true)
+                    .setContentIntent(activity(c, HomeActivity.class, 2));
+            if (Build.VERSION.SDK_INT >= 21) {
+                b.setPriority(Notification.PRIORITY_HIGH);
+            }
+            nm.notify(ID_REMIND, b.build());
         } catch (Throwable ignored) {
         }
     }

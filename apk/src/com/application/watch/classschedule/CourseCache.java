@@ -118,6 +118,8 @@ public final class CourseCache {
             // 桌面上的插件跟着刷新（未添加插件时这两句是 no-op）
             TodayWidgetProvider.refreshAll(c);
             NextWidgetProvider.refreshAll(c);
+            // 课表变了，上课提醒也要重排
+            Reminders.reschedule(c);
             return flat.length();
         } catch (Throwable t) {
             return 0;

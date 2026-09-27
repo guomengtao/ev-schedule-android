@@ -1,8 +1,11 @@
 package com.application.watch.classschedule;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -40,6 +43,25 @@ public class HomepageSettingsActivity extends Activity {
     private JSONObject homepage = new JSONObject();
     private boolean loaded = false;
 
+    // ---- 模板与主题（与手环 EV 同源；id 必须与手环侧一致） ----
+    /** 首页模板（手环 index.ux HOMEPAGE_TEMPLATES） */
+    private static final String[][] HOME_TPLS = {
+            {"default", "默认标题"}, {"accent-title", "强调标题"}, {"soft-title", "柔和标题"}};
+    /** 周视图模板（手环 template-picker.ux TEMPLATES） */
+    private static final String[][] WEEK_TPLS = {
+            {"minimal-char", "极简·单字"}, {"minimal-en", "极简·英文缩写"},
+            {"standard-block", "标准块"}, {"compact-grid", "紧凑网格"},
+            {"color-pastel", "柔和色彩"}};
+    /** 主题色（手环 store.js THEMES，共 10 套） */
+    private static final String[][] THEME_LIST = {
+            {"blue", "深空蓝"}, {"green", "翡翠绿"}, {"red", "珊瑚红"}, {"dark", "暗夜黑"},
+            {"gray", "深空灰"}, {"purple", "暗紫魅影"}, {"light", "晨光白"},
+            {"warm", "暖阳米"}, {"forest", "墨绿护眼"}, {"amber", "琥珀金"}};
+
+    /** 当前值；null = 手环未上报（EV 版本较旧），此时不写该字段以免误改 */
+    private String homeTpl, weekTpl, appTheme;
+    private Button homeBtn, weekBtn, themeBtn;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -61,6 +83,54 @@ public class HomepageSettingsActivity extends Activity {
             toggleCard.addView(sw);
         }
         root.addView(toggleCard);
+        root.addView(Ui.space(this, 10));
+
+        // ======================= 模板与主题（读手环回显，保存时写回） =======================
+        LinearLayout apCard = Ui.card(this);
+        apCard.addView(Ui.text(this, "模板与主题（保存时写回手环）", 12.5f, Ui.TEXT, true));
+        apCard.addView(Ui.space(this, 8));
+        homeBtn = Ui.button(this, "", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                pick("首页模板", HOME_TPLS, homeTpl, new Picker() {
+                    @Override public void onPick(String id, String label) {
+                        homeTpl = id;
+                        updateAppearanceButtons();
+                    }
+                });
+            }
+        });
+        apCard.addView(homeBtn);
+        apCard.addView(Ui.space(this, 6));
+        weekBtn = Ui.button(this, "", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                pick("周视图模板", WEEK_TPLS, weekTpl, new Picker() {
+                    @Override public void onPick(String id, String label) {
+                        weekTpl = id;
+                        updateAppearanceButtons();
+                    }
+                });
+            }
+        });
+        apCard.addView(weekBtn);
+        apCard.addView(Ui.space(this, 6));
+        themeBtn = Ui.button(this, "", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                pick("主题色", THEME_LIST, appTheme, new Picker() {
+                    @Override public void onPick(String id, String label) {
+                        appTheme = id;
+                        updateAppearanceButtons();
+                    }
+                });
+            }
+        });
+        apCard.addView(themeBtn);
+        apCard.addView(Ui.space(this, 6));
+        homeBtn.setText("首页模板：（读取中）");
+        weekBtn.setText("周视图模板：（读取中）");
+        themeBtn.setText("主题色：（读取中）");
+        apCard.addView(Ui.mono(this,
+                "选项与手环端同源；若显示「手环未上报」表示手环 EV 版本较旧，升级手环端后可用"));
+        root.addView(apCard);
         root.addView(Ui.space(this, 10));
 
         LinearLayout fontCard = Ui.card(this);
@@ -127,6 +197,11 @@ public class HomepageSettingsActivity extends Activity {
                     applyHomepage();
                     if (d != null) {
                         baseFontSize = d.optInt("baseFontSize", 48);
+                        // 模板与主题回显（旧版手环不返回这些字段 → 置 null，保存时跳过）
+                        homeTpl = d.has("homepageTemplate") ? d.optString("homepageTemplate") : null;
+                        weekTpl = d.has("weekviewTemplate") ? d.optString("weekviewTemplate") : null;
+                        appTheme = d.has("appTheme") ? d.optString("appTheme") : null;
+                        updateAppearanceButtons();
                     }
                     if (baseFontSize < 20 || baseFontSize > 76) {
                         baseFontSize = 48;
@@ -197,6 +272,16 @@ public class HomepageSettingsActivity extends Activity {
             JSONObject payload = new JSONObject();
             payload.put("homepage", home);
             payload.put("baseFontSize", baseFontSize);
+            // 模板与主题（手环未上报的项不写，避免误改）
+            if (homeTpl != null && homeTpl.length() > 0) {
+                payload.put("homepageTemplate", homeTpl);
+            }
+            if (weekTpl != null && weekTpl.length() > 0) {
+                payload.put("weekviewTemplate", weekTpl);
+            }
+            if (appTheme != null && appTheme.length() > 0) {
+                payload.put("appTheme", appTheme);
+            }
             JSONObject req = new JSONObject();
             req.put("action", "update_settings");
             req.put("payload", payload);
@@ -232,5 +317,54 @@ public class HomepageSettingsActivity extends Activity {
             resultView.setText("构造报文失败：" + t);
             resultView.setTextColor(Ui.ERR);
         }
+    }
+
+    // ======================= 模板与主题 =======================
+
+    private interface Picker {
+        void onPick(String id, String label);
+    }
+
+    /** 通用单选对话框（选项 id 与手环端同源） */
+    private void pick(String title, final String[][] opts, String current, final Picker cb) {
+        try {
+            String[] names = new String[opts.length];
+            int checked = -1;
+            for (int i = 0; i < opts.length; i++) {
+                names[i] = opts[i][1];
+                if (opts[i][0].equals(current)) {
+                    checked = i;
+                }
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle(title)
+                    .setSingleChoiceItems(names, checked, new DialogInterface.OnClickListener() {
+                        @Override public void onClick(DialogInterface d, int which) {
+                            cb.onPick(opts[which][0], opts[which][1]);
+                            d.dismiss();
+                        }
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static String labelOf(String[][] opts, String id) {
+        if (id == null || id.length() == 0) {
+            return "手环未上报";
+        }
+        for (String[] o : opts) {
+            if (o[0].equals(id)) {
+                return o[1];
+            }
+        }
+        return id;
+    }
+
+    private void updateAppearanceButtons() {
+        homeBtn.setText("首页模板：" + labelOf(HOME_TPLS, homeTpl));
+        weekBtn.setText("周视图模板：" + labelOf(WEEK_TPLS, weekTpl));
+        themeBtn.setText("主题色：" + labelOf(THEME_LIST, appTheme));
     }
 }

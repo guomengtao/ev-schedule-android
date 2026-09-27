@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -12,8 +13,9 @@ import android.widget.TextView;
 /** 设置页：显示当前昵称，并允许写回手环 */
 public class SettingsActivity extends Activity {
 
-    private TextView currentView, resultView, bgStatusView, devStatusView;
+    private TextView currentView, resultView, bgStatusView, devStatusView, remindStatusView;
     private EditText nickView;
+    private Button remindToggleBtn, remindLeadBtn, remindPushBtn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,6 +109,71 @@ public class SettingsActivity extends Activity {
         }));
         root.addView(devCard);
 
+        // ======================= 上课提醒（本地闹钟 + 可选推手环） =======================
+        root.addView(Ui.space(this, 10));
+        LinearLayout remindCard = Ui.card(this);
+        remindCard.addView(Ui.text(this, "上课提醒", 12.5f, Ui.TEXT, true));
+        remindStatusView = Ui.text(this, "", 11.5f, Ui.MUTED, false);
+        remindStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
+        remindCard.addView(remindStatusView);
+        remindToggleBtn = Ui.button(this, "", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                boolean on = !Reminders.enabled(SettingsActivity.this);
+                Reminders.setEnabled(SettingsActivity.this, on);
+                refreshRemind();
+                resultView.setText(!on ? "已关闭上课提醒"
+                        : (Reminders.exactAllowed(SettingsActivity.this)
+                                ? "上课提醒已开启"
+                                : "已开启。未授予「闹钟和提醒」权限，可能有 ±1 分钟误差"));
+                resultView.setTextColor(!on ? Ui.MUTED : Ui.OK);
+            }
+        });
+        remindCard.addView(remindToggleBtn);
+        remindCard.addView(Ui.space(this, 6));
+        remindCard.addView(Ui.grid(this,
+                remindLeadBtn = Ui.button(this, "", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        int cur = Reminders.leadMinutes(SettingsActivity.this);
+                        int idx = 0;
+                        for (int i = 0; i < Reminders.LEAD_STEPS.length; i++) {
+                            if (Reminders.LEAD_STEPS[i] == cur) {
+                                idx = i;
+                                break;
+                            }
+                        }
+                        Reminders.setLeadMinutes(SettingsActivity.this,
+                                Reminders.LEAD_STEPS[(idx + 1) % Reminders.LEAD_STEPS.length]);
+                        refreshRemind();
+                    }
+                }),
+                remindPushBtn = Ui.button(this, "", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        Reminders.setPushWatch(SettingsActivity.this, !Reminders.pushWatch(SettingsActivity.this));
+                        refreshRemind();
+                    }
+                })));
+        remindCard.addView(Ui.space(this, 6));
+        remindCard.addView(Ui.grid(this,
+                Ui.button(this, "测试提醒", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        Reminders.test(SettingsActivity.this);
+                        resultView.setText("已发测试提醒（手机通知"
+                                + (Reminders.pushWatch(SettingsActivity.this) ? " + 手环通知，手环需已连接" : "") + "）");
+                        resultView.setTextColor(Ui.OK);
+                    }
+                }),
+                Ui.button(this, "重排提醒", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        Reminders.reschedule(SettingsActivity.this);
+                        resultView.setText("已按最新课表重排提醒");
+                        resultView.setTextColor(Ui.OK);
+                    }
+                })));
+        remindCard.addView(Ui.space(this, 6));
+        remindCard.addView(Ui.mono(this,
+                "基于本地课表缓存 + 系统闹钟，不依赖手环连接；课表更新/开机后自动重排"));
+        root.addView(remindCard);
+
         root.addView(Ui.space(this, 8));
         SyncEngine e = SyncEngine.get(this);
         root.addView(Ui.mono(this, "手环 " + (e.connected()
@@ -117,6 +184,7 @@ public class SettingsActivity extends Activity {
         root.addView(Ui.space(this, 6));
 
         refresh();
+        refreshRemind();
         setContentView(Ui.wrapWithBottomBar(this, root, 2));
         Analytics.pageView(this, "/apk/settings");
     }
@@ -182,6 +250,27 @@ public class SettingsActivity extends Activity {
         } catch (Throwable t) {
             return false;
         }
+    }
+
+    // ======================= 上课提醒 =======================
+
+    private String remindText() {
+        if (!Reminders.enabled(this)) {
+            return "已关闭";
+        }
+        String s = "已开启 · 提前 " + Reminders.leadMinutes(this) + " 分钟"
+                + (Reminders.pushWatch(this) ? " · 同时推送到手环" : " · 仅手机通知");
+        if (!Reminders.exactAllowed(this)) {
+            s += "\n未授予「闹钟和提醒」权限，可能有 ±1 分钟误差";
+        }
+        return s;
+    }
+
+    private void refreshRemind() {
+        remindStatusView.setText(remindText());
+        remindToggleBtn.setText(Reminders.enabled(this) ? "关闭提醒" : "开启提醒");
+        remindLeadBtn.setText("提前 " + Reminders.leadMinutes(this) + " 分钟");
+        remindPushBtn.setText("推手环：" + (Reminders.pushWatch(this) ? "开" : "关"));
     }
 
     private void refresh() {

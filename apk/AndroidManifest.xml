@@ -40,6 +40,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- 省电白名单引导：申请「忽略电池优化」 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- 上课提醒：精确定时（Android 12+ 需用户授予；未授予时降级 ±1 分钟） + 开机后补排 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:label="EV Sync"
@@ -119,6 +122,19 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_next_info" />
+        </receiver>
+
+        <!-- 上课提醒：闹钟触发 + 开机/应用更新后补排（闹钟不跨重启存活） -->
+        <receiver
+            android:name="com.application.watch.classschedule.ReminderReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="com.application.watch.classschedule.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
         </receiver>
     </application>
 </manifest>
