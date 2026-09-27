@@ -27,6 +27,8 @@
     <!-- 常驻前台服务：进程活着才能在后台收到手环推来的留言（不轮询） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- 省电白名单引导：申请「忽略电池优化」 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:label="EV Sync"
@@ -55,6 +57,7 @@
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.HomepageSettingsActivity" />
         <activity android:name="com.application.watch.classschedule.DonateActivity" />
+        <activity android:name="com.application.watch.classschedule.BatteryGuideActivity" />
 
         <service
             android:name="com.application.watch.classschedule.SyncService"

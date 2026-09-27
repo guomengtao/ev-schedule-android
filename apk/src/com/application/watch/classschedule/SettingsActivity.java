@@ -77,9 +77,15 @@ public class SettingsActivity extends Activity {
         bgStatusView = Ui.text(this, bgText(), 11.5f, Ui.MUTED, false);
         bgStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
         bgCard.addView(bgStatusView);
-        bgCard.addView(Ui.button(this, "切换开关", false, new View.OnClickListener() {
-            @Override public void onClick(View v) { toggleBg(); }
-        }));
+        bgCard.addView(Ui.grid(this,
+                Ui.button(this, "切换开关", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { toggleBg(); }
+                }),
+                Ui.button(this, "省电白名单", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        startActivity(new Intent(SettingsActivity.this, BatteryGuideActivity.class));
+                    }
+                })));
         root.addView(bgCard);
 
         root.addView(Ui.space(this, 8));
@@ -119,11 +125,32 @@ public class SettingsActivity extends Activity {
         SyncService.setEnabled(this, on);
         if (on) {
             SyncService.startIfEnabled(this);
+            // 打开后台提醒后，顺手引导加省电白名单（否则服务仍可能被 ROM 清理）
+            if (!isIgnoringBattery(this)) {
+                resultView.setText("已开启。建议加省电白名单，否则后台仍可能被清理");
+                resultView.setTextColor(Ui.WARN);
+                startActivity(new Intent(SettingsActivity.this, BatteryGuideActivity.class));
+            } else {
+                resultView.setText("已开启后台常驻提醒");
+                resultView.setTextColor(Ui.OK);
+            }
         } else {
             SyncService.stop(this);
+            resultView.setText("已关闭后台常驻提醒（仅在 App 打开时提醒）");
+            resultView.setTextColor(Ui.MUTED);
         }
         if (bgStatusView != null) {
             bgStatusView.setText(bgText());
+        }
+    }
+
+    private static boolean isIgnoringBattery(android.content.Context c) {
+        try {
+            android.os.PowerManager pm =
+                    (android.os.PowerManager) c.getSystemService(android.content.Context.POWER_SERVICE);
+            return pm != null && pm.isIgnoringBatteryOptimizations(c.getPackageName());
+        } catch (Throwable t) {
+            return false;
         }
     }
 
