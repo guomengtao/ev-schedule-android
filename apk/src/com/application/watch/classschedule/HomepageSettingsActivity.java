@@ -23,6 +23,8 @@ import java.util.Map;
  */
 public class HomepageSettingsActivity extends Activity {
 
+    private int lastThemeVersion = 0;
+
     private static final int[] FONT_STEPS = {28, 36, 48, 62, 76};
 
     /** 字段 key → 中文标签（顺序即展示顺序） */
@@ -69,7 +71,7 @@ public class HomepageSettingsActivity extends Activity {
                 : (localTheme != null ? localTheme : mirrored);
 
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.title(this, "首页设置"));
+        root.addView(Ui.header(this, "首页设置"));
         root.addView(Ui.space(this, 4));
         root.addView(Ui.text(this, "与手环上的首页显示保持一致", 11.5f, Ui.MUTED, false));
         root.addView(Ui.space(this, 10));
@@ -370,5 +372,15 @@ public class HomepageSettingsActivity extends Activity {
 
     private static String emptyToNull(String s) {
         return (s == null || s.length() == 0) ? null : s;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (lastThemeVersion != 0 && lastThemeVersion != Ui.themeVersion) {
+            recreate();
+            return;
+        }
+        lastThemeVersion = Ui.themeVersion;
     }
 }

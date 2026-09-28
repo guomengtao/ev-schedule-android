@@ -27,6 +27,8 @@ import java.util.Map;
 /** 打赏支持：与手环 EV 主项目 donate 页一致的三个渠道。 */
 public class DonateActivity extends Activity {
 
+    private int lastThemeVersion = 0;
+
     // 顺序：微信第一、支付宝第二、爱发电第三
     private static final String[][] PLATFORMS = {
             {"微信", "wxp://f2f0i7FYfQ5xBhxQtXDwsQpkyGZLB7UsjrRjsrXn02Qx8NQHjn8WlZEnozT2BURX_JRy"},
@@ -41,7 +43,7 @@ public class DonateActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.title(this, "打赏支持"));
+        root.addView(Ui.header(this, "打赏支持"));
         root.addView(Ui.space(this, 4));
         root.addView(Ui.text(this, "感谢支持，这是持续维护的动力", 11.5f, Ui.MUTED, false));
         root.addView(Ui.space(this, 10));
@@ -152,5 +154,15 @@ public class DonateActivity extends Activity {
         } catch (WriterException | RuntimeException e) {
             return null;
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (lastThemeVersion != 0 && lastThemeVersion != Ui.themeVersion) {
+            recreate();
+            return;
+        }
+        lastThemeVersion = Ui.themeVersion;
     }
 }

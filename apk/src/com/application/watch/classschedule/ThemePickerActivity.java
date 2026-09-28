@@ -25,6 +25,8 @@ import org.json.JSONObject;
  */
 public class ThemePickerActivity extends Activity {
 
+    private int lastThemeVersion = 0;
+
     private TextView statusView, resultView;
     private Switch followSw;
 
@@ -33,7 +35,7 @@ public class ThemePickerActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.title(this, "主题外观"));
+        root.addView(Ui.header(this, "主题外观"));
         root.addView(Ui.space(this, 4));
         root.addView(Ui.text(this, "10 套主题 · 选择后整个 App 立即生效，无需手环",
                 11.5f, Ui.MUTED, false));
@@ -86,6 +88,11 @@ public class ThemePickerActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (lastThemeVersion != 0 && lastThemeVersion != Ui.themeVersion) {
+            recreate();
+            return;
+        }
+        lastThemeVersion = Ui.themeVersion;
         refreshStatus();
     }
 

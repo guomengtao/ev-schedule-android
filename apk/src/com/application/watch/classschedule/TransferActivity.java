@@ -43,6 +43,8 @@ import java.util.Random;
 /** 导入 / 导出（按 mode 区分） */
 public class TransferActivity extends Activity {
 
+    private int lastThemeVersion = 0;
+
     public static final String EXTRA_MODE = "mode";
     public static final String MODE_IMPORT = "import";
     public static final String MODE_EXPORT = "export";
@@ -102,8 +104,10 @@ public class TransferActivity extends Activity {
         }
 
         LinearLayout root = Ui.screen(this);
-        titleView = Ui.title(this, MODE_IMPORT.equals(mode) ? "导入课程表" : "导出课程表");
-        root.addView(titleView);
+        LinearLayout headerBar = Ui.header(this,
+                MODE_IMPORT.equals(mode) ? "导入课程表" : "导出课程表");
+        titleView = (TextView) headerBar.getTag(); // 升级结果页会动态改标题
+        root.addView(headerBar);
         root.addView(Ui.space(this, 12));
 
         if (MODE_IMPORT.equals(mode)) {
@@ -986,5 +990,15 @@ public class TransferActivity extends Activity {
         } catch (Throwable ignored) {
         }
         return out;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (lastThemeVersion != 0 && lastThemeVersion != Ui.themeVersion) {
+            recreate();
+            return;
+        }
+        lastThemeVersion = Ui.themeVersion;
     }
 }

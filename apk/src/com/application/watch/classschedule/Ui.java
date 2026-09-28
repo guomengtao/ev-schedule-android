@@ -33,26 +33,31 @@ public final class Ui {
 
     // ============ Token（由 applyTheme 按当前主题刷新；不要在别处写死颜色） ============
     public static int BG;
+    public static int CANVAS;
     public static int CARD;
     public static int CARD2;
     public static int LINE;
     public static int TEXT;
     public static int MUTED;
     public static int ACCENT;
+    public static int ACCENT_LIGHT;
     public static int OK;
     public static int WARN;
     public static int ERR;
+    public static int themeVersion = 0;
     private static boolean dark = true;
 
     // ============ 浅色「晴空蓝」 ============
     private static final int[] L = {
             0xFFF4F7FB, // BG
+            0xFFE9EAEF, // CANVAS
             0xFFFFFFFF, // CARD
             0xFFEAF0F8, // CARD2（次级表面 / 非主按钮）
             0xFFE3EAF3, // LINE
             0xFF0F172A, // TEXT
             0xFF64748B, // MUTED
             0xFF2F6BFF, // ACCENT
+            0xFFEBF0FF, // ACCENT_LIGHT（主色 8% 透明混白，用于今天列背景）
             0xFF16A34A, // OK
             0xFFF59E0B, // WARN
             0xFFDC2626, // ERR
@@ -61,22 +66,28 @@ public final class Ui {
     // ============ 深色「夜幕蓝」（ACCENT 提亮一档保证对比度） ============
     private static final int[] D = {
             0xFF0B1020, // BG
+            0xFF060912, // CANVAS
             0xFF151C30, // CARD
             0xFF1C2542, // CARD2
             0xFF27314C, // LINE
             0xFFE9EEF9, // TEXT
             0xFF8695B4, // MUTED
             0xFF5B9BFF, // ACCENT
+            0xFF1A2544, // ACCENT_LIGHT
             0xFF34C759, // OK
             0xFFFFB020, // WARN
             0xFFFF6B6B, // ERR
     };
 
-    /** 12 色课程区分色（浅/深两套主题共用；同一门课永远同色） */
+    /** 7 色语义课程区分色（浅/深两套主题共用；同一门课永远同色） */
     public static final int[] COURSE_COLORS = {
-            0xFF3B82F6, 0xFFEF4444, 0xFF10B981, 0xFFF59E0B,
-            0xFF8B5CF6, 0xFF06B6D4, 0xFFEC4899, 0xFF84CC16,
-            0xFFF97316, 0xFF6366F1, 0xFF14B8A6, 0xFFA855F7,
+            0xFF5B6CF9, // c-blue
+            0xFF33C77A, // c-green
+            0xFFFF9E42, // c-orange
+            0xFF9C6BF7, // c-purple
+            0xFF35C4D6, // c-cyan
+            0xFFFF7AA8, // c-pink
+            0xFFFF6B6B, // c-red
     };
 
     public static boolean isDark() {
@@ -119,16 +130,32 @@ public final class Ui {
         }
         dark = night;
         int[] p = dark ? D : L;
-        BG = custom != null ? custom[0] : p[0];
-        CARD = custom != null ? custom[1] : p[1];
-        CARD2 = custom != null ? custom[2] : p[2];
-        LINE = custom != null ? custom[3] : p[3];
-        TEXT = custom != null ? custom[4] : p[4];
-        MUTED = custom != null ? custom[5] : p[5];
-        ACCENT = custom != null ? custom[6] : p[6];
-        OK = p[7];
-        WARN = p[8];
-        ERR = p[9];
+        // custom palette (WatchAppearance) has 7 elements: {bg, card, card2, line, text, muted, accent}
+        // built-in palette has 12: {bg, canvas, card, card2, line, text, muted, accent, accentLight, ok, warn, err}
+        if (custom != null) {
+            BG = custom[0];
+            CANVAS = p[1];                          // custom palette has no canvas
+            CARD = custom[1];
+            CARD2 = custom[2];
+            LINE = custom[3];
+            TEXT = custom[4];
+            MUTED = custom[5];
+            ACCENT = custom[6];
+            ACCENT_LIGHT = p[8];                    // custom palette has no accentLight
+        } else {
+            BG = p[0];
+            CANVAS = p[1];
+            CARD = p[2];
+            CARD2 = p[3];
+            LINE = p[4];
+            TEXT = p[5];
+            MUTED = p[6];
+            ACCENT = p[7];
+            ACCENT_LIGHT = p[8];
+        }
+        OK = p[9];
+        WARN = p[10];
+        ERR = p[11];
         // 系统控件（Switch / AlertDialog / EditText 光标等）也要跟着换：
         // 必须在 setContentView 之前 setTheme —— 每个页面都是先走 Ui.screen()，恰好满足
         if (c instanceof Activity) {
@@ -136,6 +163,7 @@ public final class Ui {
                     ? android.R.style.Theme_Material_NoActionBar
                     : android.R.style.Theme_Material_Light_NoActionBar);
         }
+        themeVersion++;
     }
 
     /** 课程 → 区分色（稳定：同一门课在任何页面/任何手机上都是同一个颜色） */
@@ -153,8 +181,8 @@ public final class Ui {
         applyTheme(a);
         LinearLayout root = new LinearLayout(a);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BG);
-        root.setPadding(dp(a, 14), dp(a, 14), dp(a, 14), dp(a, 14));
+        root.setBackgroundColor(CANVAS);
+        root.setPadding(dp(a, 20), dp(a, 12), dp(a, 20), dp(a, 12));
         return root;
     }
 
@@ -174,6 +202,15 @@ public final class Ui {
         l.setOrientation(LinearLayout.VERTICAL);
         l.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12));
         l.setBackground(round(CARD, 14, LINE, c));
+        return l;
+    }
+
+    public static LinearLayout cardElevated(Context c) {
+        LinearLayout l = new LinearLayout(c);
+        l.setOrientation(LinearLayout.VERTICAL);
+        l.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12));
+        l.setBackground(round(CARD, 16, 0, c));
+        l.setElevation(dp(c, 6));
         return l;
     }
 
@@ -274,39 +311,91 @@ public final class Ui {
     }
 
     /**
+     * 子页面顶栏：Lucide「arrow-left」返回键 + 栏目标题，点返回即 finish()。
+     * 仅非 tab 页使用；底部导航的三个主页（首页/课程表/设置）保持裸标题。
+     * 需要动态改标题的页面：((TextView) header.getTag()).setText(...)
+     */
+    public static LinearLayout header(final Activity a, String title) {
+        LinearLayout h = new LinearLayout(a);
+        h.setOrientation(LinearLayout.HORIZONTAL);
+        h.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView back = new ImageView(a);
+        back.setImageResource(R.drawable.ic_arrow_left);
+        back.setColorFilter(TEXT);
+        back.setPadding(dp(a, 4), dp(a, 4), dp(a, 12), dp(a, 4));
+        back.setClickable(true);
+        back.setContentDescription("返回");
+        back.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                a.finish();
+            }
+        });
+        h.addView(back, new LinearLayout.LayoutParams(dp(a, 28), dp(a, 28)));
+        TextView t = text(a, title, 18f, TEXT, true);
+        h.addView(t);
+        h.setTag(t);
+        return h;
+    }
+
+    /**
      * 底栏高度（dp）。内容区必须预留这么多底部留白，
      * 否则最后一段内容会被悬浮在底部的导航栏盖住（"底部的东西看不到"）。
      */
     public static final int BAR_HEIGHT_DP = 62;
 
-    /** 底部固定导航：首页 / 留言 / 设置（任何时候都常驻）。
+    /** 底部固定导航：首页 / 课程表 / 设置（任何时候都常驻）。
+     *  留言从底栏移除（低频功能），改由首页快捷按钮触达。
      *  每个 tab = 图标 + 文字 的竖向布局。
      *  图标：Lucide 规范单色线性图标（res/drawable/ic_tab_*.xml，24×24 描边 2），
      *  运行时按选中态染色（选中 = 主色，未选中 = 次要色）。 */
     public static LinearLayout bottomBar(final Activity a, int current) {
-        final int[] icons = {R.drawable.ic_tab_home, R.drawable.ic_tab_message,
+        final int[] icons = {R.drawable.ic_tab_home, R.drawable.ic_tab_schedule,
                 R.drawable.ic_tab_settings};
-        final String[] labels = {"首页", "留言", "设置"};
-        final Class[] targets = {HomeActivity.class, MessageActivity.class, SettingsActivity.class};
+        final String[] labels = {"首页", "课程表", "设置"};
+        final Class[] targets = {HomeActivity.class, ScheduleListActivity.class, SettingsActivity.class};
 
+        return buildBar(a, current, icons, labels, targets, false);
+    }
+
+    /** Pill 胶囊式底部导航（4 tab）：课表 / 周视图 / 消息 / 设置 */
+    public static LinearLayout pillBar(final Activity a, int current) {
+        final int[] icons = {R.drawable.ic_tab_schedule, R.drawable.ic_tab_home,
+                R.drawable.ic_tab_message, R.drawable.ic_tab_settings};
+        final String[] labels = {"课表", "周视图", "消息", "设置"};
+        final Class[] targets = {ScheduleListActivity.class, HomeActivity.class,
+                MessageActivity.class, SettingsActivity.class};
+
+        return buildBar(a, current, icons, labels, targets, true);
+    }
+
+    private static LinearLayout buildBar(final Activity a, int current, int[] icons,
+                                         String[] labels, Class[] targets, boolean pill) {
         LinearLayout bar = new LinearLayout(a);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setBackgroundColor(CARD);
-        bar.setPadding(dp(a, 4), dp(a, 6), dp(a, 4), dp(a, 6));
+        if (pill) {
+            bar.setBackground(round(CARD, 36, LINE, a));
+            bar.setPadding(dp(a, 4), dp(a, 4), dp(a, 4), dp(a, 4));
+            bar.setElevation(dp(a, 8));
+        } else {
+            bar.setBackgroundColor(CARD);
+            bar.setPadding(dp(a, 4), dp(a, 6), dp(a, 4), dp(a, 6));
+        }
 
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < icons.length; i++) {
             final int idx = i;
-            final int color = (i == current) ? ACCENT : MUTED;
+            final boolean active = (i == current);
+            final int color = active ? ACCENT : MUTED;
             LinearLayout tab = new LinearLayout(a);
             tab.setOrientation(LinearLayout.VERTICAL);
             tab.setGravity(Gravity.CENTER);
             tab.setClickable(true);
-            tab.setBackground(round(i == current ? CARD2 : 0x00000000, 12, 0, a));
+            // 选中态只靠图标/文字颜色区分（ACCENT），不加任何背景高亮
             ImageView ic = new ImageView(a);
             ic.setImageResource(icons[i]);
-            ic.setColorFilter(color); // 单色染色：SRC_IN，透明底描边图标整体变色
-            tab.addView(ic, new LinearLayout.LayoutParams(dp(a, 22), dp(a, 22)));
-            TextView lb = text(a, labels[i], 10.5f, color, false);
+            ic.setColorFilter(color);
+            int iconSize = pill ? dp(a, 20) : dp(a, 22);
+            tab.addView(ic, new LinearLayout.LayoutParams(iconSize, iconSize));
+            TextView lb = text(a, labels[i], pill ? 10f : 10.5f, color, active);
             lb.setGravity(Gravity.CENTER);
             tab.addView(lb);
             tab.setOnClickListener(new View.OnClickListener() {
@@ -367,8 +456,43 @@ public final class Ui {
      * 给内容区预留底部留白，让内部 weight=1 的滚动区自然收在底栏之上。
      */
     public static ViewGroup fixedWithBottomBar(Activity a, LinearLayout contentRoot, int currentTab) {
+        return fixedWithBar(a, contentRoot, bottomBar(a, currentTab));
+    }
+
+    public static ViewGroup wrapWithPillBar(Activity a, LinearLayout contentRoot, int currentTab) {
+        return wrapWithBar(a, contentRoot, pillBar(a, currentTab));
+    }
+
+    public static ViewGroup fixedWithPillBar(Activity a, LinearLayout contentRoot, int currentTab) {
+        return fixedWithBar(a, contentRoot, pillBar(a, currentTab));
+    }
+
+    private static ViewGroup wrapWithBar(Activity a, LinearLayout contentRoot, final LinearLayout bar) {
         applyTheme(a);
-        final LinearLayout bar = bottomBar(a, currentTab);
+        reserveBottomSpace(a, contentRoot);
+
+        FrameLayout root = new FrameLayout(a);
+        root.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+
+        ScrollView scroll = new ScrollView(a);
+        scroll.setFillViewport(true);
+        scroll.addView(contentRoot, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT));
+
+        root.addView(scroll, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+
+        root.addView(bar, barParams());
+        syncPaddingToBar(contentRoot, bar);
+        return root;
+    }
+
+    private static ViewGroup fixedWithBar(Activity a, LinearLayout contentRoot, final LinearLayout bar) {
+        applyTheme(a);
         reserveBottomSpace(a, contentRoot);
 
         FrameLayout root = new FrameLayout(a);

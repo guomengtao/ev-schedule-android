@@ -48,6 +48,8 @@ import java.util.UUID;
  */
 public class MessageActivity extends Activity {
 
+    private int lastThemeVersion = 0;
+
     private static final String PREF = "ev_message_queue";
     private static final String KEY = "items";
     /** 已提醒过的消息 id（去重的唯一依据） */
@@ -67,7 +69,7 @@ public class MessageActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.title(this, "留言"));
+        root.addView(Ui.header(this, "留言"));
         root.addView(Ui.space(this, 4));
         root.addView(Ui.text(this, "离线留言：不连接也能写，连上手环后自动送达", 11.5f, Ui.MUTED, false));
         root.addView(Ui.space(this, 8));
@@ -119,7 +121,7 @@ public class MessageActivity extends Activity {
                     @Override public void onClick(View v) { clearAll(); }
                 })));
 
-        setContentView(Ui.fixedWithBottomBar(this, root, 1));
+        setContentView(Ui.fixedWithBottomBar(this, root, -1));
         installObserver(this);
         load();
         render();
@@ -136,6 +138,11 @@ public class MessageActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (lastThemeVersion != 0 && lastThemeVersion != Ui.themeVersion) {
+            recreate();
+            return;
+        }
+        lastThemeVersion = Ui.themeVersion;
         Analytics.pageView(this, "/apk/message");
         // 回到本页：重装观察者（弹窗落到当前可见页面）+ 重新载入（其它页面可能已收过留言）
         installObserver(this);
@@ -494,6 +501,80 @@ public class MessageActivity extends Activity {
     }
 
     // ======================= 持久化 =======================
+
+    /**
+     * 首页「📝 快速留言」直发通道：写入本机队列 + 尽力立即送达。
+     * 与留言页共用同一份队列存储；未连接时保持 pending，留言页下次打开会自动补发。
+     */
+    public static synchronized void enqueueOutgoing(Context ctx, String text) {
+        if (ctx == null || text == null || text.length() == 0) {
+            return;
+        }
+        final String id = UUID.randomUUID().toString().substring(0, 8);
+        try {
+            SharedPreferences sp = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+            JSONArray arr;
+            try {
+                arr = new JSONArray(sp.getString(KEY, "[]"));
+            } catch (Throwable t) {
+                arr = new JSONArray();
+            }
+            JSONObject item = new JSONObject();
+            item.put("id", id);
+            item.put("dir", "out");
+            item.put("text", text);
+            item.put("ts", System.currentTimeMillis());
+            item.put("status", "pending");
+            arr.put(item);
+            sp.edit().putString(KEY, arr.toString()).apply();
+        } catch (Throwable t) {
+            return;
+        }
+        // 尽力推一条手表通知（不经 EV，没装 EV 的手环也能看到）
+        SyncEngine e = SyncEngine.get(ctx);
+        if (!e.hasNode()) {
+            return; // 未连接：留在队列里，等连上后由留言页 flush
+        }
+        e.notifyWatch("手机留言", text, new SyncEngine.Cb() {
+            @Override public void on(boolean ok, String m) { /* 尽力推送 */ }
+        });
+        JSONObject o = new JSONObject();
+        try {
+            o.put("action", "chat");
+            o.put("id", id);
+            o.put("text", text);
+            o.put("ts", System.currentTimeMillis());
+        } catch (Throwable t) {
+            return;
+        }
+        final Context appCtx = ctx.getApplicationContext();
+        e.send(o.toString(), new SyncEngine.Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    JSONObject r = new JSONObject(json);
+                    boolean ack = "chat_ack".equals(r.optString("action"))
+                            || (r.optBoolean("ok", false)
+                                && !"no courses".equals(r.optString("reason")));
+                    if (ack) {
+                        SharedPreferences sp =
+                                appCtx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+                        JSONArray arr = new JSONArray(sp.getString(KEY, "[]"));
+                        for (int i = 0; i < arr.length(); i++) {
+                            JSONObject it = arr.optJSONObject(i);
+                            if (it != null && id.equals(it.optString("id"))) {
+                                it.put("status", "sent");
+                                break;
+                            }
+                        }
+                        sp.edit().putString(KEY, arr.toString()).apply();
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            @Override public void onTimeout(String hint) { /* 保持 pending，留言页补发 */ }
+            @Override public void onError(String msg) { /* 保持 pending，留言页补发 */ }
+        });
+    }
 
     private void load() {
         SharedPreferences sp = getSharedPreferences(PREF, MODE_PRIVATE);

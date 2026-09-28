@@ -25,6 +25,8 @@ import android.widget.TextView;
  */
 public class BatteryGuideActivity extends Activity {
 
+    private int lastThemeVersion = 0;
+
     private TextView statusView, resultView;
 
     @Override
@@ -32,7 +34,7 @@ public class BatteryGuideActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.title(this, "省电白名单"));
+        root.addView(Ui.header(this, "省电白名单"));
         root.addView(Ui.space(this, 4));
         root.addView(Ui.text(this, "让 App 在后台活着，才收得到手环留言", 11.5f, Ui.MUTED, false));
         root.addView(Ui.space(this, 10));
@@ -105,7 +107,11 @@ public class BatteryGuideActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        // 从系统设置页返回后自动复检
+        if (lastThemeVersion != 0 && lastThemeVersion != Ui.themeVersion) {
+            recreate();
+            return;
+        }
+        lastThemeVersion = Ui.themeVersion;
         refreshStatus(false);
     }
 

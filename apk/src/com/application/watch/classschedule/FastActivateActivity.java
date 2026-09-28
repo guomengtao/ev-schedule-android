@@ -25,6 +25,8 @@ import java.util.regex.Pattern;
  */
 public class FastActivateActivity extends Activity {
 
+    private int lastThemeVersion = 0;
+
     private static final Pattern REDEEM = Pattern.compile("^[A-Z0-9]{4}$");
 
     private TextView deviceView, statusView, resultView;
@@ -37,7 +39,7 @@ public class FastActivateActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.title(this, "高级版"));
+        root.addView(Ui.header(this, "高级版"));
         root.addView(Ui.space(this, 4));
         root.addView(Ui.text(this, "一键激活：只需填 4 位兑换码", 11.5f, Ui.MUTED, false));
         root.addView(Ui.space(this, 10));
@@ -270,5 +272,15 @@ public class FastActivateActivity extends Activity {
                 resultView.setTextColor(Ui.ERR);
             }
         });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (lastThemeVersion != 0 && lastThemeVersion != Ui.themeVersion) {
+            recreate();
+            return;
+        }
+        lastThemeVersion = Ui.themeVersion;
     }
 }
