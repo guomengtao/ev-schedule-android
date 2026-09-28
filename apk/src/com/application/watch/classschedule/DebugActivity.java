@@ -1,6 +1,7 @@
 package com.application.watch.classschedule;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
@@ -18,6 +19,8 @@ import java.util.Locale;
  * 与首页的区别：这里不做自动化，纯粹是"哪一步不通"的定位工具。
  */
 public class DebugActivity extends Activity {
+
+    private int lastThemeVersion = 0;
 
     private static final int STEPS = 4;
     private static final String[] LABELS =
@@ -42,7 +45,7 @@ public class DebugActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.title(this, "调试"));
+        root.addView(Ui.header(this, "调试"));
         root.addView(Ui.space(this, 4));
         root.addView(Ui.text(this, "按顺序点击任一步骤，逐步定位问题", 12f, Ui.MUTED, false));
         root.addView(Ui.space(this, 12));
@@ -81,6 +84,11 @@ public class DebugActivity extends Activity {
                 Ui.button(this, "清屏", false, new View.OnClickListener() {
                     @Override public void onClick(View v) { logView.setText(""); }
                 })));
+        // 小米运动健康与手环的 BLE 连接时间长了会自己断开（步骤 2 超时的最常见根因）——
+        // 把它拉到前台让它重连手环，是恢复链路最快的路径
+        root.addView(Ui.button(this, "打开小米运动健康（重连手环）", false, new View.OnClickListener() {
+            @Override public void onClick(View v) { openMiFitness(); }
+        }));
 
         inputView = new EditText(this);
         inputView.setText("{\"action\":\"ping\"}");
@@ -186,6 +194,24 @@ public class DebugActivity extends Activity {
         });
     }
 
+    /** 打开小米运动健康：它到前台才会重新去连手环（步骤 2 超时的最常见恢复手段）。 */
+    private void openMiFitness() {
+        try {
+            Intent i = getPackageManager().getLaunchIntentForPackage("com.xiaomi.wearable");
+            if (i == null) {
+                i = getPackageManager().getLaunchIntentForPackage("com.xiaomi.health");
+            }
+            if (i == null) {
+                log("未找到小米运动健康，请手动打开");
+                return;
+            }
+            startActivity(i);
+            log("已打开小米运动健康——等它连上手环后，回来点「全部执行」");
+        } catch (Throwable t) {
+            log("打开失败：" + t);
+        }
+    }
+
     private void notifyTest() {
         SyncEngine.get(this).notifyTest(new SyncEngine.Cb() {
             @Override public void on(boolean ok, String msg) {
@@ -213,5 +239,15 @@ public class DebugActivity extends Activity {
 
     private void log(String s) {
         logView.append(TS.format(new Date()) + "  " + s + "\n");
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (lastThemeVersion != 0 && lastThemeVersion != Ui.themeVersion) {
+            recreate();
+            return;
+        }
+        lastThemeVersion = Ui.themeVersion;
     }
 }

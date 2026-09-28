@@ -802,7 +802,7 @@ public final class SyncEngine {
             @Override public void run() {
                 if (!done[0]) {
                     done[0] = true;
-                    cb.on(false, "查找设备超时：小米运动健康无响应。检查手环蓝牙是否连接（手环插着 USB 调试线时也可能这样），稍后重试");
+                    cb.on(false, "小米运动健康与手环的连接已断开（长时间后台常见）。打开「小米运动健康」等它重新连上手环，再回来重试");
                 }
             }
         };
