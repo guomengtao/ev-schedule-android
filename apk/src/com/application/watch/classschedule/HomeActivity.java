@@ -168,6 +168,7 @@ public class HomeActivity extends Activity {
         buildHeader(root);
 
         // ---- 周日期条 ----
+        // 格子用 weight 均分宽度（原 43dp 固定宽 × 7 + 间隔会超出 360dp 屏宽，最后一格被裁掉）
         dateStripView = new LinearLayout(this);
         dateStripView.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(dateStripView);
@@ -405,7 +406,6 @@ public class HomeActivity extends Activity {
             LinearLayout cell = new LinearLayout(this);
             cell.setOrientation(LinearLayout.VERTICAL);
             cell.setGravity(android.view.Gravity.CENTER);
-            int cellW = Ui.dp(this, 43);
             int cellH = Ui.dp(this, 62);
             boolean sel = (d == selectedDay);
 
@@ -440,10 +440,10 @@ public class HomeActivity extends Activity {
                 }
             });
 
-            dateStripView.addView(cell, new LinearLayout.LayoutParams(cellW, cellH));
+            dateStripView.addView(cell, new LinearLayout.LayoutParams(0, cellH, 1f));
             if (d < 6) {
                 View gap = new View(this);
-                gap.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, 6),
+                gap.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, 4),
                         LinearLayout.LayoutParams.MATCH_PARENT));
                 dateStripView.addView(gap);
             }
