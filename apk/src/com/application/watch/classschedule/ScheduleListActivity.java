@@ -41,9 +41,16 @@ public class ScheduleListActivity extends Activity {
         super.onCreate(savedInstanceState);
         ScheduleStore.ensureInitialized(this);
         buildUi();
-        // 状态回调：手环真实套数读到后自动刷新分组标题
+        // 状态回调：手环真实套数读到后刷新分组标题；并把「手环上有、本机没有」的课表
+        // 自动读取到本机（入库即标记 source=sync，仍属「手环课表」组，无需手动操作）
         SyncEngine.get(this).addStatusCallback(new Runnable() {
-            @Override public void run() { render(); }
+            @Override public void run() {
+                render();
+                SyncEngine e = SyncEngine.get(ScheduleListActivity.this);
+                if (e.hasNode()) {
+                    e.pullMissingFromWatch(ScheduleListActivity.this);
+                }
+            }
         });
     }
 
@@ -138,7 +145,7 @@ public class ScheduleListActivity extends Activity {
                 if (mirror != null) {
                     listBox.addView(scheduleCard(mirror, activeId));
                 } else {
-                    listBox.addView(bandOnlyCard(bandNames[i], i));
+                    listBox.addView(bandOnlyCard(bandNames[i]));
                 }
                 listBox.addView(Ui.space(this, 8));
             }
@@ -161,48 +168,14 @@ public class ScheduleListActivity extends Activity {
         }
     }
 
-    /** 只存在于手环、本机还没有的课表：显示名字 + 「读取到本机」 */
-    private View bandOnlyCard(final String name, final int index) {
+    /** 只存在于手环、本机还没有的课表：显示名字 + 提示（不需要手动点，进页面会自动读取） */
+    private View bandOnlyCard(final String name) {
         LinearLayout card = Ui.card(this);
         card.addView(Ui.text(this, name, 14.5f, Ui.TEXT, true));
-        TextView sub = Ui.text(this, "仅存在于手环 · 本机还没有保存", 11.5f, Ui.MUTED, false);
+        TextView sub = Ui.text(this, "手环课表 · 正在自动读取到本机…", 11.5f, Ui.MUTED, false);
         sub.setPadding(0, Ui.dp(this, 4), 0, 0);
         card.addView(sub);
-        card.addView(Ui.space(this, 8));
-        card.addView(Ui.button(this, "读取到本机", false, new View.OnClickListener() {
-            @Override public void onClick(View v) { pullFromWatch(name, index); }
-        }));
         return card;
-    }
-
-    /** 按手环清单下标拉取该套课表到本地（upsert 进多课表存储）。 */
-    private void pullFromWatch(final String name, final int index) {
-        SyncEngine e = SyncEngine.get(this);
-        if (!e.hasNode()) {
-            status("手环未连接，无法读取", Ui.WARN);
-            return;
-        }
-        status("正在从手环读取「" + name + "」…", Ui.ACCENT);
-        e.exportSchedule(index, new SyncEngine.Reply() {
-            @Override public void onReply(String json) {
-                try {
-                    JSONObject o = new JSONObject(json);
-                    JSONObject d = o.optJSONObject("data");
-                    JSONArray sch = (d == null) ? null : d.optJSONArray("schedule");
-                    if (sch == null) {
-                        status("手环回包里没课表数据", Ui.WARN);
-                        return;
-                    }
-                    ScheduleStore.upsertFromWatch(ScheduleListActivity.this, name, sch);
-                    status("已保存到本机「" + name + "」", Ui.OK);
-                    render();
-                } catch (Throwable t) {
-                    status("回包无法解析", Ui.ERR);
-                }
-            }
-            @Override public void onTimeout(String hint) { status(hint, Ui.WARN); }
-            @Override public void onError(String msg) { status("读取失败：" + msg, Ui.ERR); }
-        });
     }
 
     /** 分组小标题：名称 + 数量 */

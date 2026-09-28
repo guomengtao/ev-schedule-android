@@ -448,6 +448,7 @@ public final class SyncEngine {
     /** 手环上真实的课程表名字清单（null=未知）；bandCurrent = 手环当前激活的下标 */
     public String[] bandScheduleNames = null;
     public int bandCurrent = -1;
+    private boolean pullingMissing = false;
 
     /** 注册状态刷新回调；连接进度 / 心跳 / 套数刷新都会触发（主线程）。重复注册会重复回调。 */
     public void addStatusCallback(Runnable r) {
@@ -558,6 +559,45 @@ public final class SyncEngine {
             }
             @Override public void onTimeout(String hint) { notifyStatus(); }
             @Override public void onError(String msg) { notifyStatus(); }
+        });
+    }
+
+    /** 自动把「手环上有、本机还没有」的课表读到本机（按清单下标逐个 export → 入库）。
+     *  全部标记为 source=sync，归属「手环课表」组；静默执行，单例锁防重复跑。 */
+    public void pullMissingFromWatch(final Context c) {
+        if (nodeId == null || bandScheduleNames == null || pullingMissing) {
+            return;
+        }
+        pullingMissing = true;
+        pullNextMissing(c, 0);
+    }
+
+    private void pullNextMissing(final Context c, final int i) {
+        if (i >= bandScheduleNames.length) {
+            pullingMissing = false;
+            notifyStatus();
+            return;
+        }
+        final String name = bandScheduleNames[i];
+        if (ScheduleStore.find(c, "ev_watch_" + name) != null) { // 本机已有，跳过
+            pullNextMissing(c, i + 1);
+            return;
+        }
+        exportSchedule(i, new Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(json);
+                    org.json.JSONObject d = o.optJSONObject("data");
+                    org.json.JSONArray sch = (d == null) ? null : d.optJSONArray("schedule");
+                    if (sch != null) {
+                        ScheduleStore.upsertFromWatch(c, name, sch); // 标记为手环课程
+                    }
+                } catch (Throwable ignored) {
+                }
+                pullNextMissing(c, i + 1);
+            }
+            @Override public void onTimeout(String hint) { pullNextMissing(c, i + 1); }
+            @Override public void onError(String msg) { pullNextMissing(c, i + 1); }
         });
     }
 
