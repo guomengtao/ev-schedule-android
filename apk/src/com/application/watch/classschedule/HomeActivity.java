@@ -267,7 +267,11 @@ public class HomeActivity extends Activity {
                 }
             }
         });
-        greetingBlock.addView(pageTitleView);
+        // ⚠️ 必须 wrap_content：LinearLayout 纵向默认把子 View 拉成满宽，
+        // 「回到本周」末尾的 ↩ compound drawable 会被推到整行最右端（贴着 ‹ 按钮），
+        // 看起来离文字隔了一个字。wrap 后图标才紧贴文字。
+        greetingBlock.addView(pageTitleView, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         titleRow.addView(greetingBlock,
                 new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
@@ -305,11 +309,11 @@ public class HomeActivity extends Activity {
         root.addView(Ui.space(this, 12));
     }
 
-    /** 微信式 ⊕ 下拉菜单：深色圆角面板，右缘对齐 ⊕ 圆钮，点面板外自动收起。 */
+    /** ⊕ 下拉菜单：白底圆角单框 + 纯文字行 + 细分隔线（简洁清晰，右缘对齐 ⊕，点外面收起）。 */
     private void showPlusMenu(View anchor) {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setBackground(Ui.round(0xF21E1E1E, 14, 0, this));
+        panel.setBackground(Ui.round(Ui.CARD, 12, Ui.LINE, this));
         int pad = Ui.dp(this, 6);
         panel.setPadding(pad, pad, pad, pad);
 
@@ -319,9 +323,11 @@ public class HomeActivity extends Activity {
         pw.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0x00000000));
         pw.setOutsideTouchable(true);
 
-        addMenuItem(panel, pw, R.drawable.ic_upload, "导出课程", TransferActivity.MODE_EXPORT);
-        addMenuItem(panel, pw, R.drawable.ic_download, "导入课程", TransferActivity.MODE_IMPORT);
-        addMenuItem(panel, pw, R.drawable.ic_bell_ring, "呼叫手环", null);
+        addMenuItem(panel, pw, "导出课程", TransferActivity.MODE_EXPORT);
+        panel.addView(menuDivider());
+        addMenuItem(panel, pw, "导入课程", TransferActivity.MODE_IMPORT);
+        panel.addView(menuDivider());
+        addMenuItem(panel, pw, "呼叫手环", null);
 
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
         int[] loc = new int[2];
@@ -331,24 +337,28 @@ public class HomeActivity extends Activity {
                 loc[1] + anchor.getHeight() + Ui.dp(this, 6));
     }
 
-    /** 下拉菜单里的一行：图标 + 文字，白字浅灰图标，整行可点带高亮。 */
+    /** 菜单项之间的 1dp 细分隔线（左右留 12dp 不顶满）。 */
+    private View menuDivider() {
+        View v = new View(this);
+        v.setBackgroundColor(Ui.LINE);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 1)));
+        p.leftMargin = Ui.dp(this, 12);
+        p.rightMargin = Ui.dp(this, 12);
+        v.setLayoutParams(p);
+        return v;
+    }
+
+    /** 下拉菜单里的一行：只有文字，点击即执行。 */
     private void addMenuItem(LinearLayout panel, final android.widget.PopupWindow pw,
-                             int iconRes, String label, final String transferMode) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        row.setClickable(true);
-        row.setForeground(Ui.round(0x22FFFFFF, 10, 0, this));
-        ImageView ic = new ImageView(this);
-        ic.setImageResource(iconRes);
-        ic.setColorFilter(0xFFE0E0E0);
-        row.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 18), Ui.dp(this, 18)));
-        TextView tx = Ui.text(this, label, 14f, 0xFFF2F2F2, false);
-        tx.setPadding(Ui.dp(this, 10), 0, 0, 0);
-        row.addView(tx);
-        panel.addView(row, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 40)));
-        row.setOnClickListener(new View.OnClickListener() {
+                             String label, final String transferMode) {
+        TextView tx = Ui.text(this, label, 15f, Ui.TEXT, false);
+        tx.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        tx.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 28), 0);
+        tx.setClickable(true);
+        panel.addView(tx, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 44)));
+        tx.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 pw.dismiss();
                 if (transferMode != null) {
@@ -363,8 +373,22 @@ public class HomeActivity extends Activity {
     }
 
     /** 呼叫手环：与设备卡「呼叫手环」按钮同一条 EV 指令（action=call）——
-     *  手环响铃、震动、亮屏并弹通知提示，结果反馈在首页 mini 状态条上。 */
+     *  手环响铃、震动、亮屏并弹通知提示，结果反馈在首页 mini 状态条上。
+     *  蓝牙未连接时 call 发不出去 → 弹窗明确提醒，并提供一键去连接。 */
     private void callBand() {
+        if (!SyncEngine.get(this).hasNode()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("手环未连接")
+                    .setMessage("手环蓝牙还没有连接，无法呼叫。\n先到「手环」页连接手环？")
+                    .setPositiveButton("去连接", new DialogInterface.OnClickListener() {
+                        @Override public void onClick(DialogInterface d, int w) {
+                            startActivity(new Intent(HomeActivity.this, BandActivity.class));
+                        }
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+            return;
+        }
         quickSend("{\"action\":\"call\",\"text\":\"请查看手机\"}", "呼叫手环");
     }
 
@@ -542,7 +566,7 @@ public class HomeActivity extends Activity {
             android.graphics.drawable.Drawable undo = new android.graphics.drawable.InsetDrawable(
                     getDrawable(R.drawable.ic_corner_up_left), 0, Ui.dp(this, 3), 0, 0);
             pageTitleView.setCompoundDrawablesWithIntrinsicBounds(null, null, undo, null);
-            pageTitleView.setCompoundDrawablePadding(Ui.dp(this, 2));
+            pageTitleView.setCompoundDrawablePadding(0); // 已是 wrap_content 且字形贴边，0 间距即紧挨
             pageTitleView.getCompoundDrawables()[2].setColorFilter(Ui.ACCENT, android.graphics.PorterDuff.Mode.SRC_IN);
             int rippleColor = (Ui.ACCENT & 0x00FFFFFF) | 0x33000000; // 主色 20% 透明按压反馈
             android.graphics.drawable.GradientDrawable bg = Ui.round(0x00000000, 10, 0, this);
