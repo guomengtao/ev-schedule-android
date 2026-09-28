@@ -412,24 +412,40 @@ public final class SyncEngine {
     }
 
     // ======================= 状态条回调 + 离线自动重连 =======================
-    // 供各页面的 ConnectionBar 使用：弱引用持有回调（页面销毁自动失效，不泄漏 Activity）。
-    private java.lang.ref.WeakReference<Runnable> statusCb;
+    // 多监听：ConnectionBar 与各页面的回调共存（弱引用持有，页面销毁自动失效不泄漏）。
+    private final java.util.List<java.lang.ref.WeakReference<Runnable>> statusCbs =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
     private boolean autoRetryRunning;
     private volatile String connectProgress = "";
     /** 手环上真实的课程表套数（list_schedules 的 names.length；-1=未知）。 */
     public int bandScheduleCount = -1;
 
-    /** 注册状态条刷新回调；连接进度 / 心跳结果都会触发（主线程）。 */
-    public void setStatusCallback(Runnable r) {
-        statusCb = (r == null) ? null : new java.lang.ref.WeakReference<>(r);
+    /** 注册状态刷新回调；连接进度 / 心跳 / 套数刷新都会触发（主线程）。重复注册会重复回调。 */
+    public void addStatusCallback(Runnable r) {
+        if (r != null) {
+            statusCbs.add(new java.lang.ref.WeakReference<>(r));
+        }
         notifyStatus();
+    }
+
+    public void removeStatusCallback(Runnable r) {
+        for (java.lang.ref.WeakReference<Runnable> wr : statusCbs) {
+            if (r.equals(wr.get())) {
+                statusCbs.remove(wr);
+                break;
+            }
+        }
     }
 
     private void notifyStatus() {
         main.post(new Runnable() {
             @Override public void run() {
-                Runnable r = (statusCb == null) ? null : statusCb.get();
-                if (r != null) {
+                for (java.lang.ref.WeakReference<Runnable> wr : statusCbs) {
+                    Runnable r = wr.get();
+                    if (r == null) {
+                        statusCbs.remove(wr); // 页面已销毁，顺手清掉
+                        continue;
+                    }
                     try {
                         r.run();
                     } catch (Throwable ignored) {

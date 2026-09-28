@@ -41,6 +41,10 @@ public class ScheduleListActivity extends Activity {
         super.onCreate(savedInstanceState);
         ScheduleStore.ensureInitialized(this);
         buildUi();
+        // 状态回调：手环真实套数读到后自动刷新分组标题
+        SyncEngine.get(this).addStatusCallback(new Runnable() {
+            @Override public void run() { render(); }
+        });
     }
 
     @Override
@@ -53,6 +57,10 @@ public class ScheduleListActivity extends Activity {
         lastThemeVersion = Ui.themeVersion;
         Analytics.pageView(this, "/apk/schedules");
         render();
+        // 在线时向手环要一次清单，拿到真实套数（离线跳过）
+        if (SyncEngine.get(this).hasNode()) {
+            SyncEngine.get(this).refreshBandScheduleCount();
+        }
     }
 
     private void buildUi() {
@@ -114,7 +122,12 @@ public class ScheduleListActivity extends Activity {
             (s.isSync() ? fromWatch : local).add(s);
         }
         if (!fromWatch.isEmpty()) {
-            listBox.addView(sectionHead("手环课表（已自动同步保存到本地）", fromWatch.size()));
+            // 标题带手环真实套数（list_schedules 权威值；与本地镜像可能不同——本地只有拉取过的）
+            int band = SyncEngine.get(this).bandScheduleCount;
+            String head = (band >= 0)
+                    ? "手环课表 · 本地已存 " + fromWatch.size() + " 套 · 手环上共 " + band + " 套"
+                    : "手环课表（已自动同步保存到本地）";
+            listBox.addView(sectionHead(head, fromWatch.size()));
             for (ScheduleStore.Schedule s : fromWatch) {
                 listBox.addView(scheduleCard(s, activeId));
                 listBox.addView(Ui.space(this, 8));

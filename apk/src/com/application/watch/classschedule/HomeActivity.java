@@ -88,6 +88,13 @@ public class HomeActivity extends Activity {
             ScheduleStore.ensureInitialized(this);
         }
         buildUi();
+        // 状态回调（onCreate 注册一次；onResume 不重复注册，多监听列表会堆积）：
+        // 真实套数读到后 / 连接状态变化时，迷你条自动刷新
+        if (!legacy) {
+            SyncEngine.get(this).addStatusCallback(new Runnable() {
+                @Override public void run() { refreshMiniFromEngine(); }
+            });
+        }
         // 常驻前台服务：进程活着才能在后台收到手环推来的留言（可在设置页关闭）
         SyncService.startIfEnabled(this);
         requestNotifPermission();
@@ -1171,10 +1178,6 @@ public class HomeActivity extends Activity {
         if (!legacy) {
             // 从课程表管理页切换回来 → 刷新周视图
             renderWeek();
-            // 注册状态回调：真实套数读到后 / 连接状态变化时，迷你条自动刷新
-            SyncEngine.get(this).setStatusCallback(new Runnable() {
-                @Override public void run() { refreshMiniFromEngine(); }
-            });
             return;
         }
         SyncEngine e = SyncEngine.get(this);

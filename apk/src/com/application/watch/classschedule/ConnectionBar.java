@@ -47,7 +47,7 @@ public final class ConnectionBar {
             @Override public void run() { refresh(a, icon, tv); }
         };
         bar.setTag(r); // 强引用随 View 生命周期走；引擎侧是弱引用，页面销毁后自动失效
-        SyncEngine.get(a).setStatusCallback(r);
+        SyncEngine.get(a).addStatusCallback(r);
         SyncEngine.get(a).autoReconnect(); // 进页面发现离线就自动重连一轮
     }
 
