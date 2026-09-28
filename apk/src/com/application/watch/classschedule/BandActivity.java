@@ -95,6 +95,15 @@ public class BandActivity extends Activity {
                     }
                 }));
 
+        // ===== 连接调试：连不上手环时在这里分步排查（主入口放本页，紧挨连接管理） =====
+        root.addView(Ui.space(this, 6));
+        root.addView(Ui.row(this, "连接调试", "四步逐步执行，看卡在哪一步", Ui.TEXT,
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        startActivity(new Intent(BandActivity.this, DebugActivity.class));
+                    }
+                }));
+
         refresh();
         setContentView(Ui.wrapWithBottomBar(this, root, 2));
         Analytics.pageView(this, "/apk/band");

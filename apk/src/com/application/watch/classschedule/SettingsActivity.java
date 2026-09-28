@@ -58,6 +58,14 @@ public class SettingsActivity extends Activity {
                     }
                 }));
 
+        root.addView(Ui.space(this, 6));
+        root.addView(Ui.row(this, "调试", "手环连接四步诊断（连不上时排查）", Ui.TEXT,
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        startActivity(new Intent(SettingsActivity.this, DebugActivity.class));
+                    }
+                }));
+
         root.addView(Ui.space(this, 12));
         LinearLayout bgCard = Ui.card(this);
         bgCard.addView(Ui.text(this, "后台常驻提醒", 12.5f, Ui.TEXT, true));
