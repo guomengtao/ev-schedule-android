@@ -92,6 +92,7 @@
 - ⚠️ `Variant.java` 运行期读 meta-data，别硬编码对端包名。
 - ⚠️ javac 用 JDK8（JDK22 的 class 让 d8 NPE）；d8 的 `--classpath` 不打进 dex，AAR/三方 jar 必须作为输入传给 d8。
 - ⚠️ 2026-09-27 起 `apk/libs/zxing-core.jar`（打赏页二维码用，build.sh 按需从 Maven 下载；gitignore 排除）。
+- ⚠️ **提交前必须验「干净检出能不能编译」**：本仓多会话同时开工，极易提交出「引用了从未入库的新文件」的代码——2026-09-28 实测 **main 就是编译不过的**：已提交的 `HomeActivity.java` 引用 `ScheduleStore`，而 `ScheduleStore.java`、`JsonEditorView.java`、`apk/res/raw/` 一直是 untracked；补上后又缺 `CourseCache.fromJson()`（在**未提交的** `CourseCache.java` 里）。验法：`git archive HEAD apk | tar -x -C /tmp/vb` → 把本次要提交的文件 `cp` 进去 → `cd /tmp/vb/apk && bash build.sh`。工作区能编译 ≠ 提交后能编译！
 
 ## 仓库 / 推码 / 用户规则
 - GitHub `guomengtao/ev-schedule-android`（private），**推送必须 SSH**（HTTPS 不通）。`.gitignore` 排除 `*.jks/*.keystore/private.pem/certificate.pem/dist/*.apk`。
