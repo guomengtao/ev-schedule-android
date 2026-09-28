@@ -47,6 +47,8 @@ public class HomeActivity extends Activity {
     private LinearLayout dateStripView, deviceCardView;
     private TextView deviceNameView, deviceStatusView, batteryView;
     private int selectedDay = CourseCache.todayIndex();
+    /** 周视图偏移：0=本周，-1 上周，+1 下周；点周标签回到本周 */
+    private int weekOffset = 0;
 
     // ---- 旧版（EvBox）视图 ----
     private TextView welcomeView, statusView, estimateView;
@@ -272,19 +274,22 @@ public class HomeActivity extends Activity {
         prevBtn.setBackground(Ui.round(Ui.CARD, 17, Ui.LINE, this));
         int btnSize = Ui.dp(this, 34);
         prevBtn.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { /* TODO: prev week */ }
+            @Override public void onClick(View v) { weekOffset--; renderWeek(); }
         });
         weekNav.addView(prevBtn, new LinearLayout.LayoutParams(btnSize, btnSize));
 
         weekLabelView = Ui.text(this, "9.28-10.04", 13f, Ui.TEXT, true);
         weekLabelView.setPadding(Ui.dp(this, 8), 0, Ui.dp(this, 8), 0);
+        weekLabelView.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { weekOffset = 0; renderWeek(); }
+        });
         weekNav.addView(weekLabelView);
 
         TextView nextBtn = Ui.text(this, "›", 22f, Ui.TEXT, true);
         nextBtn.setGravity(android.view.Gravity.CENTER);
         nextBtn.setBackground(Ui.round(Ui.CARD, 17, Ui.LINE, this));
         nextBtn.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { /* TODO: next week */ }
+            @Override public void onClick(View v) { weekOffset++; renderWeek(); }
         });
         weekNav.addView(nextBtn, new LinearLayout.LayoutParams(btnSize, btnSize));
 
@@ -375,8 +380,7 @@ public class HomeActivity extends Activity {
         dateStripView.removeAllViews();
         int today = CourseCache.todayIndex();
         java.util.Calendar cal = java.util.Calendar.getInstance();
-        int todayDayOfMonth = cal.get(java.util.Calendar.DAY_OF_MONTH);
-        cal.add(java.util.Calendar.DAY_OF_MONTH, -today);
+        cal.add(java.util.Calendar.DAY_OF_MONTH, -today + weekOffset * 7);
         String[] weekLabels = {"一", "二", "三", "四", "五", "六", "日"};
 
         for (int d = 0; d < 7; d++) {
@@ -427,6 +431,17 @@ public class HomeActivity extends Activity {
     private void renderWeek() {
         if (legacy || weekBox == null) {
             return;
+        }
+        // 周标签：按 weekOffset 推算周一~周日（点标签回到本周）
+        java.util.Calendar mon = java.util.Calendar.getInstance();
+        mon.add(java.util.Calendar.DAY_OF_MONTH, -CourseCache.todayIndex() + weekOffset * 7);
+        java.util.Calendar sun = (java.util.Calendar) mon.clone();
+        sun.add(java.util.Calendar.DAY_OF_MONTH, 6);
+        if (weekLabelView != null) {
+            weekLabelView.setText((mon.get(java.util.Calendar.MONTH) + 1) + "."
+                    + mon.get(java.util.Calendar.DAY_OF_MONTH) + "-"
+                    + (sun.get(java.util.Calendar.MONTH) + 1) + "."
+                    + sun.get(java.util.Calendar.DAY_OF_MONTH));
         }
         renderDateStrip();
 
@@ -497,9 +512,11 @@ public class HomeActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         headerRow.addView(timeSpacer);
 
+        boolean thisWeek = (weekOffset == 0);
         for (int d = 0; d < 7; d++) {
-            TextView hl = Ui.text(this, heads[d], 9f, d == today ? Ui.ACCENT : Ui.MUTED,
-                    d == today);
+            boolean isToday = thisWeek && d == today;
+            TextView hl = Ui.text(this, heads[d], 9f, isToday ? Ui.ACCENT : Ui.MUTED,
+                    isToday);
             hl.setGravity(android.view.Gravity.CENTER);
             headerRow.addView(hl, new LinearLayout.LayoutParams(
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -527,7 +544,7 @@ public class HomeActivity extends Activity {
         for (int d = 0; d < 7; d++) {
             LinearLayout dayCol = new LinearLayout(this);
             dayCol.setOrientation(LinearLayout.VERTICAL);
-            if (d == today) {
+            if (thisWeek && d == today) {
                 dayCol.setBackground(Ui.round(Ui.ACCENT_LIGHT, 6, 0, this));
             }
             dayCol.setPadding(Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2));
@@ -545,7 +562,7 @@ public class HomeActivity extends Activity {
                 } else {
                     // empty slot
                     View empty = new View(this);
-                    empty.setBackground(Ui.round(Ui.CARD, 5, 0, this));
+                    empty.setBackground(Ui.round(0x00000000, 5, 0, this));
                     empty.setLayoutParams(new LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 40)));
                     dayCol.addView(empty);
@@ -564,7 +581,7 @@ public class HomeActivity extends Activity {
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.VERTICAL);
         b.setGravity(android.view.Gravity.CENTER);
-        b.setBackground(Ui.round(Ui.courseColor(c.name), 5, 0, this));
+        b.setBackground(Ui.round(Ui.courseColor(c.name), 7, 0, this));
         b.setPadding(Ui.dp(this, 2), 0, Ui.dp(this, 2), 0);
         b.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 40)));

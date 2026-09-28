@@ -320,7 +320,7 @@ public final class Ui {
         h.setOrientation(LinearLayout.HORIZONTAL);
         h.setGravity(Gravity.CENTER_VERTICAL);
         ImageView back = new ImageView(a);
-        back.setImageResource(R.drawable.ic_arrow_left);
+        back.setImageResource(R.drawable.ic_chevron_left);
         back.setColorFilter(TEXT);
         back.setPadding(dp(a, 4), dp(a, 4), dp(a, 12), dp(a, 4));
         back.setClickable(true);
