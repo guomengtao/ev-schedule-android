@@ -35,6 +35,8 @@ public class EvApp extends Application implements Application.ActivityLifecycleC
         try {
             if (startedCount == 0) {
                 fgStart = System.currentTimeMillis();
+                // 进前台：启动连接保活心跳（每 60s 静默 ping，防手环 EV 闲置退出）
+                SyncEngine.get(this).startKeepalive();
             }
             startedCount++;
         } catch (Throwable ignored) {
@@ -50,6 +52,8 @@ public class EvApp extends Application implements Application.ActivityLifecycleC
             if (startedCount == 0 && fgStart > 0) {
                 Stats.addForegroundMs(this, System.currentTimeMillis() - fgStart);
                 fgStart = 0;
+                // 退后台：心跳停止（留言接收由常驻服务观察者接管）
+                SyncEngine.get(this).stopKeepalive();
             }
         } catch (Throwable ignored) {
         }

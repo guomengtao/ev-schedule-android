@@ -264,6 +264,7 @@ public final class SyncEngine {
             cb.onError("还没有选中设备，请先完成连接");
             return;
         }
+        lastSendAt = System.currentTimeMillis();
         ensureListener();
         pending = cb;
         timeoutTask = new Runnable() {
@@ -339,6 +340,71 @@ public final class SyncEngine {
             sb.append(c);
         }
         return sb.append('"').toString();
+    }
+
+    // ======================= 前台保活心跳 =======================
+    // 手环上的 EV 快应用闲置一会儿就会退出（症状：首页连得好好的，切到别的页操作就无回应）。
+    // App 在前台期间每 60s 静默 ping 一次保活；ping 超时说明 EV 退了，悄悄拉起它，
+    // 下一轮心跳自然恢复。全程无 UI、不改连接状态；有操作在途或 30s 内有真实收发时跳过，
+    // 避免单 pending 槽位被心跳顶掉用户操作的回包。
+    private static final long KEEPALIVE_MS = 60 * 1000;
+    private long lastSendAt;
+    private Runnable keepaliveTick;
+    private boolean keepaliveOn;
+
+    /** App 进前台时调用（EvApp 生命周期钩子）；重复调用安全。 */
+    public void startKeepalive() {
+        if (keepaliveOn) {
+            return;
+        }
+        keepaliveOn = true;
+        scheduleKeepalive(KEEPALIVE_MS);
+    }
+
+    /** App 退到后台时调用：心跳停止，留言接收交给常驻服务观察者。 */
+    public void stopKeepalive() {
+        keepaliveOn = false;
+        if (keepaliveTick != null) {
+            main.removeCallbacks(keepaliveTick);
+            keepaliveTick = null;
+        }
+    }
+
+    private void scheduleKeepalive(long delay) {
+        if (!keepaliveOn) {
+            return;
+        }
+        if (keepaliveTick != null) {
+            main.removeCallbacks(keepaliveTick);
+        }
+        keepaliveTick = new Runnable() {
+            @Override public void run() {
+                keepaliveTick = null;
+                if (!keepaliveOn) {
+                    return;
+                }
+                boolean idle = (System.currentTimeMillis() - lastSendAt) > 30 * 1000;
+                if (nodeId != null && pending == null && idle) {
+                    android.util.Log.d("EVProbe", "keepalive: ping");
+                    ping(new Reply() {
+                        @Override public void onReply(String json) { /* 通道活着，什么都不做 */ }
+                        @Override public void onTimeout(String hint) {
+                            android.util.Log.d("EVProbe", "keepalive: EV 无回应，拉起");
+                            try {
+                                Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx));
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                        @Override public void onError(String msg) { /* 静默 */ }
+                    });
+                } else {
+                    android.util.Log.d("EVProbe", "keepalive: skip("
+                            + (nodeId == null ? "未连接" : pending != null ? "操作在途" : "刚有收发") + ")");
+                }
+                scheduleKeepalive(KEEPALIVE_MS);
+            }
+        };
+        main.postDelayed(keepaliveTick, delay);
     }
 
     // ======================= 四步连接 =======================
