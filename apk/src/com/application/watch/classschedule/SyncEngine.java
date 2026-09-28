@@ -303,9 +303,35 @@ public final class SyncEngine {
         send("{\"action\":\"export\"}", cb);
     }
 
-    /** 请求课程表清单（多课程表导出前置）：回包 {ok,action:"list_schedules",names:[...],current:N} */
-    public void listSchedules(Reply cb) {
-        send("{\"action\":\"list_schedules\"}", cb);
+    /** 请求课程表清单（多课程表导出前置）：回包 {ok,action:"list_schedules",names:[...],current:N}
+     *  ⭐ 任何调用方拿到结果都会顺手缓存「手环真实清单」，供课程表管理页按真实套数渲染。 */
+    public void listSchedules(final Reply cb) {
+        send("{\"action\":\"list_schedules\"}", new Reply() {
+            @Override public void onReply(String json) {
+                cacheBandList(json);
+                cb.onReply(json);
+            }
+            @Override public void onTimeout(String hint) { cb.onTimeout(hint); }
+            @Override public void onError(String msg) { cb.onError(msg); }
+        });
+    }
+
+    private void cacheBandList(String json) {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(json);
+            org.json.JSONArray names = o.optJSONArray("names");
+            if (names == null) {
+                return;
+            }
+            bandScheduleCount = names.length();
+            bandScheduleNames = new String[names.length()];
+            for (int i = 0; i < names.length(); i++) {
+                bandScheduleNames[i] = names.optString(i);
+            }
+            bandCurrent = o.optInt("current", -1);
+        } catch (Throwable ignored) {
+        }
+        notifyStatus();
     }
 
     /** 导出指定第 index 套课程表（index 对应 allCourses_<index>） */
@@ -419,6 +445,9 @@ public final class SyncEngine {
     private volatile String connectProgress = "";
     /** 手环上真实的课程表套数（list_schedules 的 names.length；-1=未知）。 */
     public int bandScheduleCount = -1;
+    /** 手环上真实的课程表名字清单（null=未知）；bandCurrent = 手环当前激活的下标 */
+    public String[] bandScheduleNames = null;
+    public int bandCurrent = -1;
 
     /** 注册状态刷新回调；连接进度 / 心跳 / 套数刷新都会触发（主线程）。重复注册会重复回调。 */
     public void addStatusCallback(Runnable r) {
