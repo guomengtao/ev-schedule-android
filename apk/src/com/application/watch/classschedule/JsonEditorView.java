@@ -48,6 +48,13 @@ public class JsonEditorView extends FrameLayout {
     private boolean applying = false;
     private String lastError = "";
 
+    // 工具栏与高度控制（组件内置：所有使用方——编辑/新建/导入——共享同一套能力）
+    private android.widget.Button expandBtn;
+    private int rows = 14;
+    private boolean expanded = false;
+    private static final int ROW_H_DP = 22;
+    private static final int EXPANDED_ROWS = 26;
+
     public JsonEditorView(Context c) {
         super(c);
         init(c);
@@ -56,6 +63,86 @@ public class JsonEditorView extends FrameLayout {
     public JsonEditorView(Context c, AttributeSet a) {
         super(c, a);
         init(c);
+    }
+
+    // ======================= 高度控制 =======================
+
+    /** 以「行数」控制编辑区高度（默认 14 行）。 */
+    public void setRows(int n) {
+        rows = Math.max(4, n);
+        expanded = false;
+        if (expandBtn != null) {
+            expandBtn.setText("展开");
+        }
+        applyHeight();
+    }
+
+    private void applyHeight() {
+        int h = Ui.dp(getContext(), (expanded ? EXPANDED_ROWS : rows) * ROW_H_DP);
+        ViewGroup.LayoutParams lp = getLayoutParams();
+        if (lp == null) {
+            setLayoutParams(new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, h));
+        } else {
+            lp.height = h;
+            setLayoutParams(lp);
+        }
+    }
+
+    private void toggleHeight() {
+        expanded = !expanded;
+        if (expandBtn != null) {
+            expandBtn.setText(expanded ? "收起" : "展开");
+        }
+        applyHeight();
+    }
+
+    // ======================= 工具栏动作 =======================
+
+    private void copyToClip() {
+        try {
+            android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                    getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("json", getJson()));
+            toast("已复制 " + getJson().length() + " 字符");
+        } catch (Throwable t) {
+            toast("复制失败");
+        }
+    }
+
+    private void pasteFromClip() {
+        try {
+            android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                    getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            android.content.ClipData clip = cm.getPrimaryClip();
+            String text = (clip != null && clip.getItemCount() > 0)
+                    ? String.valueOf(clip.getItemAt(0).coerceToText(getContext())) : "";
+            if (text.trim().length() == 0) {
+                toast("剪贴板是空的");
+                return;
+            }
+            setJson(text);
+            toast("已粘贴 " + text.length() + " 字符");
+        } catch (Throwable t) {
+            toast("粘贴失败");
+        }
+    }
+
+    private void clearAll() {
+        setJson("");
+        toast("已清空");
+    }
+
+    private void doFormat() {
+        if (format()) {
+            toast("已格式化");
+        } else {
+            toast("JSON 不合法，无法格式化");
+        }
+    }
+
+    private void toast(String s) {
+        android.widget.Toast.makeText(getContext(), s, android.widget.Toast.LENGTH_SHORT).show();
     }
 
     // ======================= 对外 API =======================
@@ -134,9 +221,60 @@ public class JsonEditorView extends FrameLayout {
         });
     }
 
+    /** 工具栏小按钮 */
+    private android.widget.Button toolBtn(Context c, String label, final Runnable action) {
+        android.widget.Button b = new android.widget.Button(c);
+        b.setText(label);
+        b.setTextSize(11);
+        b.setMinHeight(0);
+        b.setMinWidth(0);
+        b.setPadding(Ui.dp(c, 4), Ui.dp(c, 4), Ui.dp(c, 4), Ui.dp(c, 4));
+        b.setBackground(Ui.round(Ui.CARD, 8, Ui.LINE, c));
+        b.setTextColor(Ui.TEXT);
+        b.setAllCaps(false);
+        b.setOnClickListener(new android.view.View.OnClickListener() {
+            @Override public void onClick(android.view.View v) {
+                try {
+                    action.run();
+                } catch (Throwable ignored) {
+                }
+            }
+        });
+        return b;
+    }
+
     // ======================= 初始化 =======================
 
     private void init(Context c) {
+        // 内层竖排：工具栏在代码区上方（FrameLayout 无法直接竖排，包一层）
+        LinearLayout inner = new LinearLayout(c);
+        inner.setOrientation(LinearLayout.VERTICAL);
+
+        // 工具栏：复制 / 粘贴 / 清空 / 格式化 / 展开收起（所有使用方共享）
+        LinearLayout tools = new LinearLayout(c);
+        tools.setOrientation(LinearLayout.HORIZONTAL);
+        tools.setPadding(Ui.dp(c, 6), Ui.dp(c, 6), Ui.dp(c, 6), 0);
+        tools.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tools.addView(toolBtn(c, "复制", new Runnable() {
+            @Override public void run() { copyToClip(); }
+        }), tp);
+        tools.addView(toolBtn(c, "粘贴", new Runnable() {
+            @Override public void run() { pasteFromClip(); }
+        }), tp);
+        tools.addView(toolBtn(c, "清空", new Runnable() {
+            @Override public void run() { clearAll(); }
+        }), tp);
+        tools.addView(toolBtn(c, "格式化", new Runnable() {
+            @Override public void run() { doFormat(); }
+        }), tp);
+        expandBtn = toolBtn(c, "展开", new Runnable() {
+            @Override public void run() { toggleHeight(); }
+        });
+        tools.addView(expandBtn, tp);
+        inner.addView(tools);
+
         ScrollView scroll = new ScrollView(c);
         scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(false);
@@ -173,7 +311,10 @@ public class JsonEditorView extends FrameLayout {
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         scroll.addView(row);
-        addView(scroll);
+        inner.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        addView(inner);
+        applyHeight();
 
         // 背景与圆角（仿代码块）
         setBackground(Ui.round(Ui.CARD2, 10, Ui.LINE, c));

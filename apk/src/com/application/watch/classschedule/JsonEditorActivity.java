@@ -73,28 +73,8 @@ public class JsonEditorActivity extends Activity {
         root.addView(Ui.header(this, title));
         root.addView(Ui.space(this, 8));
 
-        // 顶部操作：复制 / 粘贴 / 格式化
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.addView(Ui.button(this, "复制", false, new View.OnClickListener() {
-            @Override public void onClick(View v) { copyJson(); }
-        }), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        actions.addView(Ui.space(this, 8));
-        actions.addView(Ui.button(this, "粘贴", false, new View.OnClickListener() {
-            @Override public void onClick(View v) { pasteJson(); }
-        }), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        actions.addView(Ui.space(this, 8));
-        actions.addView(Ui.button(this, "格式化", false, new View.OnClickListener() {
-            @Override public void onClick(View v) { formatJson(); }
-        }), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        root.addView(actions);
-        root.addView(Ui.space(this, 8));
-
-        // 编辑器
+        // 编辑器（工具栏内置于组件：复制/粘贴/清空/格式化/高度切换）
         editor = new JsonEditorView(this);
-        // 编辑器给一个合理高度：约 14 行
-        editor.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 14 * 22)));
         root.addView(editor);
         root.addView(Ui.space(this, 6));
 
@@ -144,46 +124,6 @@ public class JsonEditorActivity extends Activity {
             }
         }
         return n;
-    }
-
-    private void copyJson() {
-        try {
-            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("json", editor.getJson()));
-            Toast.makeText(this, "已复制 " + editor.getJson().length() + " 字符",
-                    Toast.LENGTH_SHORT).show();
-        } catch (Throwable t) {
-            Toast.makeText(this, "复制失败", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    /** 剪贴板 → 编辑框（整段替换）；空剪贴板给提示。 */
-    private void pasteJson() {
-        try {
-            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            ClipData clip = cm.getPrimaryClip();
-            String text = (clip != null && clip.getItemCount() > 0)
-                    ? String.valueOf(clip.getItemAt(0).coerceToText(this)) : "";
-            if (text.trim().length() == 0) {
-                Toast.makeText(this, "剪贴板是空的", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            editor.setJson(text);
-            refreshStatus();
-            Toast.makeText(this, "已粘贴 " + text.length() + " 字符", Toast.LENGTH_SHORT).show();
-        } catch (Throwable t) {
-            Toast.makeText(this, "粘贴失败", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void formatJson() {
-        if (editor.format()) {
-            refreshStatus();
-            Toast.makeText(this, "已格式化", Toast.LENGTH_SHORT).show();
-        } else {
-            refreshStatus();
-            Toast.makeText(this, "JSON 不合法，无法格式化", Toast.LENGTH_SHORT).show();
-        }
     }
 
     private void saveAndFinish() {

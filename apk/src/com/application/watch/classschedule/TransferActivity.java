@@ -83,7 +83,7 @@ public class TransferActivity extends Activity {
     private EditText exportBox;
 
     // ---- 导入：粘贴 / 预览 ----
-    private EditText pasteBox;
+    private JsonEditorView importEditor;
     private LinearLayout previewBox, previewCard;
     private final List<CheckBox> courseChecks = new ArrayList<>();
     private JSONArray parsedCourses;
@@ -219,33 +219,21 @@ public class TransferActivity extends Activity {
 
     private void buildImport(LinearLayout root) {
         LinearLayout paste = Ui.card(this);
-        paste.addView(Ui.text(this, "粘贴 JSON（可直接编辑 / 复制）", 12.5f, Ui.TEXT, true));
+        paste.addView(Ui.text(this, "课程 JSON（可直接编辑，工具栏在上方）", 12.5f, Ui.TEXT, true));
         paste.addView(Ui.space(this, 8));
-        pasteBox = new EditText(this);
-        pasteBox.setTextSize(12f);
-        pasteBox.setTextColor(Ui.TEXT);
-        pasteBox.setHintTextColor(Ui.MUTED);
-        pasteBox.setHint("{\"courses\":[{\"name\":\"高等数学\",\"day\":1,\"time\":\"08:00 - 09:40\"}]}");
-        pasteBox.setMinLines(4);
-        pasteBox.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
-        paste.addView(pasteBox);
+        importEditor = new JsonEditorView(this);
+        importEditor.setRows(10);
+        paste.addView(importEditor);
         paste.addView(Ui.space(this, 8));
         paste.addView(Ui.grid(this,
                 Ui.button(this, "解析并预览", true, new View.OnClickListener() {
-                    @Override public void onClick(View v) { parseFromText(pasteBox.getText().toString(), "粘贴内容"); }
+                    @Override public void onClick(View v) { parseFromText(importEditor.getJson(), "粘贴内容"); }
                 }),
                 Ui.button(this, "生成示例课表", false, new View.OnClickListener() {
                     @Override public void onClick(View v) {
-                        pasteBox.setText(randomSampleJson());
-                        parseFromText(pasteBox.getText().toString(), "随机示例");
+                        importEditor.setJson(randomSampleJson());
+                        parseFromText(importEditor.getJson(), "随机示例");
                     }
-                })));
-        paste.addView(Ui.grid(this,
-                Ui.button(this, "粘贴", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { pasteToBox(); }
-                }),
-                Ui.button(this, "复制 JSON", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { copyPaste(); }
                 })));
         paste.addView(Ui.space(this, 8));
         paste.addView(Ui.button(this, "选择文件", false, new View.OnClickListener() {
@@ -643,7 +631,7 @@ public class TransferActivity extends Activity {
                 resultView.setTextColor(Ui.WARN);
                 return;
             }
-            pasteBox.setText(text);
+            importEditor.setJson(text);
             parseFromText(text, "粘贴内容");
         } catch (Throwable t) {
             resultView.setText("粘贴失败");
@@ -707,15 +695,6 @@ public class TransferActivity extends Activity {
 
     // ======================= 导入：粘贴 / 复制 / 示例 =======================
 
-    private void copyPaste() {
-        String text = pasteBox.getText().toString();
-        if (TextUtils.isEmpty(text)) {
-            infoView.setText("文本框是空的，先粘贴或点「生成示例课表」");
-            return;
-        }
-        copyToClipboard(text, "EV课程表");
-    }
-
     /** 生成一份随机示例课表 JSON（格式与 EV import 完全兼容，可直接导入做链路自测） */
     private String randomSampleJson() {
         Random r = new Random();
@@ -770,7 +749,7 @@ public class TransferActivity extends Activity {
             }
             in.close();
             String text = new String(bos.toByteArray(), UTF8);
-            pasteBox.setText(text);
+            importEditor.setJson(text);
             parseFromText(text, uri.getLastPathSegment());
         } catch (Throwable t) {
             infoView.setText("读取文件失败：" + t);
