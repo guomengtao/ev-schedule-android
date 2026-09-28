@@ -210,48 +210,39 @@ public class HomeActivity extends Activity {
         root.addView(Ui.space(this, 6));
         root.addView(Ui.mono(this, "包名 " + getPackageName() + "  ·  v" + version()));
 
-        root.addView(Ui.topBar(this, "Ev课程表"), 0);
+        // 顶栏：居中标题 + 右上角 ⊕ 圆钮（微信式下拉菜单：导出课程/导入课程/呼叫手环）
+        android.widget.FrameLayout header = new android.widget.FrameLayout(this);
+        TextView hTitle = Ui.text(this, "Ev课程表", 17f, Ui.TEXT, true);
+        hTitle.setGravity(android.view.Gravity.CENTER);
+        header.addView(hTitle, new android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+        ImageView plusBtn = new ImageView(this);
+        plusBtn.setImageResource(R.drawable.ic_plus);
+        plusBtn.setColorFilter(Ui.ACCENT);
+        plusBtn.setBackground(Ui.round(Ui.ACCENT_LIGHT, 20, 0, this));
+        plusBtn.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8));
+        plusBtn.setClickable(true);
+        plusBtn.setContentDescription("更多操作");
+        plusBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                showPlusMenu(v);
+            }
+        });
+        android.widget.FrameLayout.LayoutParams pbP = new android.widget.FrameLayout.LayoutParams(
+                Ui.dp(this, 36), Ui.dp(this, 36),
+                android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.END);
+        pbP.rightMargin = Ui.dp(this, 12);
+        header.addView(plusBtn, pbP);
+        root.addView(header, 0);
         setContentView(Ui.wrapWithBottomBar(this, root, 0));
         renderWeek();
     }
 
     private void buildHeader(LinearLayout root) {
-        // topRow: avatar + notification + search icons
-        LinearLayout topRow = new LinearLayout(this);
-        topRow.setOrientation(LinearLayout.HORIZONTAL);
-        topRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-
-        String nick = SyncEngine.get(this).nickname;
-        String initial = (nick != null && nick.length() > 0) ? nick.substring(0, 1) : "E";
-        TextView avatar = Ui.text(this, initial, 18f, 0xFFFFFFFF, true);
-        avatar.setGravity(android.view.Gravity.CENTER);
-        android.graphics.drawable.GradientDrawable avatarBg = new android.graphics.drawable.GradientDrawable(
-                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0xFF5B6CF9, 0xFF9973FA});
-        avatarBg.setCornerRadius(Ui.dp(this, 22));
-        avatar.setBackground(avatarBg);
-        int avatarSize = Ui.dp(this, 44);
-        topRow.addView(avatar, new LinearLayout.LayoutParams(avatarSize, avatarSize));
-
-        TextView spacer = new TextView(this);
-        topRow.addView(spacer, new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-        // 第二行原本是 🔔 + 🔍 两个装饰图标（没有任何功能，点了没反应）→ 按需求删除，
-        // 换成右上角一个「闹钟」入口（上课提醒在设置页里）
-        ImageView alarmIcon = new ImageView(this);
-        alarmIcon.setImageResource(R.drawable.ic_alarm);
-        alarmIcon.setColorFilter(Ui.TEXT);
-        alarmIcon.setContentDescription("上课提醒");
-        alarmIcon.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                startActivity(new Intent(HomeActivity.this, SettingsActivity.class));
-            }
-        });
-        topRow.addView(alarmIcon, new LinearLayout.LayoutParams(Ui.dp(this, 22), Ui.dp(this, 22)));
-
-        root.addView(topRow);
-        root.addView(Ui.space(this, 12));
+        // 旧顶行（字母 E 头像 + 右上角闹钟入口）已按需求整行删除；
+        // 右上角功能入口由顶栏的 ⊕ 圆钮承担（onCreate 里，微信式下拉菜单）
+        root.addView(Ui.space(this, 10));
 
         // titleRow: greeting + page title + week switcher
         LinearLayout titleRow = new LinearLayout(this);
@@ -312,6 +303,69 @@ public class HomeActivity extends Activity {
         titleRow.addView(weekNav);
         root.addView(titleRow);
         root.addView(Ui.space(this, 12));
+    }
+
+    /** 微信式 ⊕ 下拉菜单：深色圆角面板，右缘对齐 ⊕ 圆钮，点面板外自动收起。 */
+    private void showPlusMenu(View anchor) {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(Ui.round(0xF21E1E1E, 14, 0, this));
+        int pad = Ui.dp(this, 6);
+        panel.setPadding(pad, pad, pad, pad);
+
+        final android.widget.PopupWindow pw = new android.widget.PopupWindow(panel,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        pw.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0x00000000));
+        pw.setOutsideTouchable(true);
+
+        addMenuItem(panel, pw, R.drawable.ic_upload, "导出课程", TransferActivity.MODE_EXPORT);
+        addMenuItem(panel, pw, R.drawable.ic_download, "导入课程", TransferActivity.MODE_IMPORT);
+        addMenuItem(panel, pw, R.drawable.ic_bell_ring, "呼叫手环", null);
+
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        int[] loc = new int[2];
+        anchor.getLocationOnScreen(loc);
+        pw.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY,
+                loc[0] + anchor.getWidth() - panel.getMeasuredWidth(),
+                loc[1] + anchor.getHeight() + Ui.dp(this, 6));
+    }
+
+    /** 下拉菜单里的一行：图标 + 文字，白字浅灰图标，整行可点带高亮。 */
+    private void addMenuItem(LinearLayout panel, final android.widget.PopupWindow pw,
+                             int iconRes, String label, final String transferMode) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setClickable(true);
+        row.setForeground(Ui.round(0x22FFFFFF, 10, 0, this));
+        ImageView ic = new ImageView(this);
+        ic.setImageResource(iconRes);
+        ic.setColorFilter(0xFFE0E0E0);
+        row.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 18), Ui.dp(this, 18)));
+        TextView tx = Ui.text(this, label, 14f, 0xFFF2F2F2, false);
+        tx.setPadding(Ui.dp(this, 10), 0, 0, 0);
+        row.addView(tx);
+        panel.addView(row, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 40)));
+        row.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                pw.dismiss();
+                if (transferMode != null) {
+                    Intent it = new Intent(HomeActivity.this, TransferActivity.class);
+                    it.putExtra(TransferActivity.EXTRA_MODE, transferMode);
+                    startActivity(it);
+                } else {
+                    callBand();
+                }
+            }
+        });
+    }
+
+    /** 呼叫手环：与设备卡「呼叫手环」按钮同一条 EV 指令（action=call）——
+     *  手环响铃、震动、亮屏并弹通知提示，结果反馈在首页 mini 状态条上。 */
+    private void callBand() {
+        quickSend("{\"action\":\"call\",\"text\":\"请查看手机\"}", "呼叫手环");
     }
 
     private LinearLayout buildDeviceCard() {
@@ -472,7 +526,11 @@ public class HomeActivity extends Activity {
         if (weekOffset == 0) {
             pageTitleView.setText("本周课表");
             pageTitleView.setTextColor(Ui.TEXT);
-            pageTitleView.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_calendar, 0, 0, 0);
+            // 📅 用 InsetDrawable 顶部垫 3dp：compound drawable 相对 26sp 大字号偏上，视觉居中
+            android.graphics.drawable.Drawable cal = new android.graphics.drawable.InsetDrawable(
+                    getDrawable(R.drawable.ic_calendar), 0, Ui.dp(this, 3), 0, 0);
+            pageTitleView.setCompoundDrawablesWithIntrinsicBounds(cal, null, null, null);
+            pageTitleView.setCompoundDrawablePadding(Ui.dp(this, 8));
             pageTitleView.getCompoundDrawables()[0].setColorFilter(Ui.MUTED, android.graphics.PorterDuff.Mode.SRC_IN);
             pageTitleView.setBackground(null);
             pageTitleView.setClickable(false);
@@ -480,7 +538,11 @@ public class HomeActivity extends Activity {
         } else {
             pageTitleView.setText("回到本周");
             pageTitleView.setTextColor(Ui.ACCENT);
-            pageTitleView.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.ic_corner_up_left, 0);
+            // ↩ 同样垫 3dp 保持视觉居中；与文字间距收到 2dp，紧贴「回到本周」（用户要求不要空格感）
+            android.graphics.drawable.Drawable undo = new android.graphics.drawable.InsetDrawable(
+                    getDrawable(R.drawable.ic_corner_up_left), 0, Ui.dp(this, 3), 0, 0);
+            pageTitleView.setCompoundDrawablesWithIntrinsicBounds(null, null, undo, null);
+            pageTitleView.setCompoundDrawablePadding(Ui.dp(this, 2));
             pageTitleView.getCompoundDrawables()[2].setColorFilter(Ui.ACCENT, android.graphics.PorterDuff.Mode.SRC_IN);
             int rippleColor = (Ui.ACCENT & 0x00FFFFFF) | 0x33000000; // 主色 20% 透明按压反馈
             android.graphics.drawable.GradientDrawable bg = Ui.round(0x00000000, 10, 0, this);

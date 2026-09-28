@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 实心版 Lucide "house"：选中态用（底栏微信式切换：线性→实心）。
+     外轮廓与 ic_tab_home 同一 path，门洞用 evenOdd 镂空，运行时染主色 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M10 21v-8a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v8z"
+        android:fillType="evenOdd"
+        android:fillColor="#FF000000"/>
+</vector>

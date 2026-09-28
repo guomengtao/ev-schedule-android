@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 实心版 Lucide "calendar"：选中态用。外轮廓与 ic_tab_schedule 同一 path，
+     顶部横隔线用 evenOdd 镂空成凹槽，两个装订柱为独立实心块，运行时染主色 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M5,4 L19,4 A2,2 0 0 1 21,6 L21,20 A2,2 0 0 1 19,22 L5,22 A2,2 0 0 1 3,20 L3,6 A2,2 0 0 1 5,4 z M3,9h18v2H3z"
+        android:fillType="evenOdd"
+        android:fillColor="#FF000000"/>
+    <path
+        android:pathData="M7,1.5h2V6H7z"
+        android:fillColor="#FF000000"/>
+    <path
+        android:pathData="M15,1.5h2V6H15z"
+        android:fillColor="#FF000000"/>
+</vector>

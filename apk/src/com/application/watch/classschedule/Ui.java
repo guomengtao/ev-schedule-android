@@ -363,19 +363,21 @@ public final class Ui {
      *  留言从底栏移除（低频功能），改由首页快捷按钮触达。
      *  每个 tab = 图标 + 文字 的竖向布局。
      *  图标：Lucide 规范单色线性图标（res/drawable/ic_tab_*.xml，24×24 描边 2），
-     *  运行时按选中态染色（选中 = 主色，未选中 = 次要色）。 */
+     *  微信式选中态：不加背景块，图标换成实心版（ic_tab_*_filled.xml）+ 主色，文字变主色。 */
     public static LinearLayout bottomBar(final Activity a, int current) {
         final int[] icons = {R.drawable.ic_tab_home, R.drawable.ic_tab_schedule,
                 R.drawable.ic_tab_watch, R.drawable.ic_tab_settings};
+        final int[] iconsFilled = {R.drawable.ic_tab_home_filled, R.drawable.ic_tab_schedule_filled,
+                R.drawable.ic_tab_watch_filled, R.drawable.ic_tab_settings_filled};
         final String[] labels = {"首页", "课程表", "手环", "设置"};
         final Class[] targets = {HomeActivity.class, ScheduleListActivity.class,
                 BandActivity.class, SettingsActivity.class};
 
-        return buildBar(a, current, icons, labels, targets);
+        return buildBar(a, current, icons, iconsFilled, labels, targets);
     }
 
     private static LinearLayout buildBar(final Activity a, int current, int[] icons,
-                                         String[] labels, Class[] targets) {
+                                         int[] iconsFilled, String[] labels, Class[] targets) {
         LinearLayout bar = new LinearLayout(a);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setBackgroundColor(CARD);
@@ -389,14 +391,13 @@ public final class Ui {
             tab.setOrientation(LinearLayout.VERTICAL);
             tab.setGravity(Gravity.CENTER);
             tab.setClickable(true);
-            // 选中态 = 实心填充（主色圆角块 + 白色前景）
-            tab.setBackground(round(active ? ACCENT : 0x00000000, 14, 0, a));
+            // 微信式：选中不加背景块，只靠「图标实心化 + 主色」和文字变色区分（用户定稿）
             ImageView ic = new ImageView(a);
-            ic.setImageResource(icons[i]);
-            ic.setColorFilter(active ? 0xFFFFFFFF : color);
+            ic.setImageResource(active ? iconsFilled[i] : icons[i]);
+            ic.setColorFilter(color);
             int iconSize = dp(a, 22);
             tab.addView(ic, new LinearLayout.LayoutParams(iconSize, iconSize));
-            TextView lb = text(a, labels[i], 10.5f, active ? 0xFFFFFFFF : color, active);
+            TextView lb = text(a, labels[i], 10.5f, color, active);
             lb.setGravity(Gravity.CENTER);
             tab.addView(lb);
             tab.setOnClickListener(new View.OnClickListener() {
