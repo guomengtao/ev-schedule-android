@@ -50,6 +50,28 @@ public class BandActivity extends Activity {
         root.addView(devCard);
         root.addView(Ui.space(this, 10));
 
+        // ===== 快捷操作（原首页设备卡 2×2 搬家至此：连接相关动作集中在设备页） =====
+        LinearLayout quickCard = Ui.card(this);
+        quickCard.addView(Ui.text(this, "快捷操作", 12.5f, Ui.TEXT, true));
+        quickCard.addView(Ui.space(this, 8));
+        quickCard.addView(Ui.grid(this,
+                Ui.button(this, "手环课程同步", true, new View.OnClickListener() {
+                    @Override public void onClick(View v) { manualSync(); }
+                }),
+                Ui.button(this, "呼叫手环", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { callBand(); }
+                })));
+        quickCard.addView(Ui.space(this, 8));
+        quickCard.addView(Ui.grid(this,
+                Ui.button(this, "发消息给手环", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { quickMessage(); }
+                }),
+                Ui.button(this, "连接手环", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { startConnect(); }
+                })));
+        root.addView(quickCard);
+        root.addView(Ui.space(this, 10));
+
         // ===== 昵称（写回手环） =====
         LinearLayout card = Ui.card(this);
         card.addView(Ui.text(this, "当前昵称", 12f, Ui.MUTED, false));
@@ -107,6 +129,156 @@ public class BandActivity extends Activity {
         refresh();
         setContentView(Ui.wrapWithBottomBar(this, root, 2));
         Analytics.pageView(this, "/apk/band");
+    }
+
+    // ======================= 快捷操作（自首页设备卡迁入） =======================
+
+    /** 从手环拉当前课表写入本地多课表存储（先问课表名，失败用兜底名）。 */
+    private void manualSync() {
+        final SyncEngine e = SyncEngine.get(this);
+        if (!e.hasNode()) {
+            resultView.setText("手环未连接，先连接手环");
+            resultView.setTextColor(Ui.WARN);
+            return;
+        }
+        resultView.setText("正在从手环读取课表…");
+        resultView.setTextColor(Ui.ACCENT);
+        e.sendWake("{\"action\":\"export\"}", new SyncEngine.Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    JSONObject o = new JSONObject(json);
+                    JSONObject d = o.optJSONObject("data");
+                    final org.json.JSONArray sch = (d == null) ? null : d.optJSONArray("schedule");
+                    if (sch == null) {
+                        resultView.setText("手环回包里没课表数据");
+                        resultView.setTextColor(Ui.WARN);
+                        return;
+                    }
+                    e.lastExportJson = json;
+                    e.listSchedules(new SyncEngine.Reply() {
+                        @Override public void onReply(String j2) {
+                            String name = "";
+                            try {
+                                JSONObject o2 = new JSONObject(j2);
+                                org.json.JSONArray names = o2.optJSONArray("names");
+                                int cur = o2.optInt("current", 0);
+                                if (names != null && cur >= 0 && cur < names.length()) {
+                                    name = names.optString(cur);
+                                }
+                            } catch (Throwable ignored) {
+                            }
+                            ScheduleStore.upsertFromWatch(BandActivity.this, name, sch);
+                            resultView.setText("课表已同步 ✓" + (name.length() > 0 ? "（" + name + "）" : ""));
+                            resultView.setTextColor(Ui.OK);
+                        }
+                        @Override public void onTimeout(String h) { store(sch); }
+                        @Override public void onError(String m) { store(sch); }
+                    });
+                } catch (Throwable t) {
+                    resultView.setText("同步失败：回包无法解析");
+                    resultView.setTextColor(Ui.ERR);
+                }
+            }
+            @Override public void onTimeout(String hint) {
+                resultView.setText("读取超时：" + hint);
+                resultView.setTextColor(Ui.WARN);
+            }
+            @Override public void onError(String msg) {
+                resultView.setText("同步失败：" + msg);
+                resultView.setTextColor(Ui.ERR);
+            }
+        });
+    }
+
+    private void store(org.json.JSONArray sch) {
+        ScheduleStore.upsertFromWatch(BandActivity.this, "", sch);
+        resultView.setText("课表已同步 ✓（课表名未取到，用默认名）");
+        resultView.setTextColor(Ui.OK);
+    }
+
+    /** 呼叫手环：action=call（响铃+震动+亮屏+通知）。 */
+    private void callBand() {
+        SyncEngine e = SyncEngine.get(this);
+        if (!e.hasNode()) {
+            resultView.setText("手环未连接，无法呼叫");
+            resultView.setTextColor(Ui.WARN);
+            return;
+        }
+        resultView.setText("正在呼叫手环…");
+        resultView.setTextColor(Ui.ACCENT);
+        e.sendWake("{\"action\":\"call\",\"text\":\"请查看手机\"}", new SyncEngine.Reply() {
+            @Override public void onReply(String r) {
+                resultView.setText("呼叫已送达 ✓ 看看手腕吧");
+                resultView.setTextColor(Ui.OK);
+            }
+            @Override public void onTimeout(String h) {
+                resultView.setText("手环无回应。可到「连接调试」拉起 EV 后重试");
+                resultView.setTextColor(Ui.WARN);
+            }
+            @Override public void onError(String msg) {
+                resultView.setText("发送失败：" + msg);
+                resultView.setTextColor(Ui.ERR);
+            }
+        });
+    }
+
+    /** 快速留言：入队，连上后自动补发（与留言页同一份存储）。 */
+    private void quickMessage() {
+        final EditText input = new EditText(this);
+        input.setHint("写一条留言给手环…");
+        input.setTextSize(14f);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("发消息给手环")
+                .setView(input)
+                .setPositiveButton("发送", new android.content.DialogInterface.OnClickListener() {
+                    @Override public void onClick(android.content.DialogInterface d, int w) {
+                        String text = input.getText().toString().trim();
+                        if (text.length() == 0) {
+                            return;
+                        }
+                        MessageActivity.enqueueOutgoing(BandActivity.this, text);
+                        resultView.setText("留言已入队（连上手环后自动补发）");
+                        resultView.setTextColor(Ui.OK);
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    /** 四步连接，进度逐行写进结果区。 */
+    private void startConnect() {
+        final SyncEngine e = SyncEngine.get(this);
+        resultView.setText("连接中…");
+        resultView.setTextColor(Ui.ACCENT);
+        e.connect(new SyncEngine.Steps() {
+            @Override public void onUpdate(String[] labels, int[] states, String[] details) {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < labels.length; i++) {
+                    String mark = states[i] == SyncEngine.OK ? "✅"
+                            : states[i] == SyncEngine.FAIL ? "❌"
+                            : states[i] == SyncEngine.RUNNING ? "⏳" : "·";
+                    sb.append(mark).append(' ').append(labels[i]);
+                    if (details[i] != null && details[i].length() > 0) {
+                        sb.append("：").append(details[i]);
+                    }
+                    sb.append('\n');
+                }
+                resultView.setText(sb.toString().trim());
+                resultView.setTextColor(Ui.TEXT);
+            }
+            @Override public void onFinish(boolean ok, String hint) {
+                if (ok) {
+                    resultView.setText("已连接 " + e.deviceName + " · v" + e.versionName
+                            + " · 课表 " + e.courseCount + " 节");
+                    resultView.setTextColor(Ui.OK);
+                    devStatusView.setText(devText());
+                    refresh();
+                } else {
+                    resultView.setText("连接未完成：" + hint + "\n可到「连接调试」分步排查");
+                    resultView.setTextColor(Ui.ERR);
+                }
+            }
+        });
     }
 
     @Override

@@ -179,10 +179,7 @@ public class HomeActivity extends Activity {
         root.addView(weekBox);
         root.addView(Ui.space(this, 12));
 
-        // ---- 设备卡片 ----
-        deviceCardView = buildDeviceCard();
-        root.addView(deviceCardView);
-        root.addView(Ui.space(this, 10));
+        // ---- 设备卡已移至「手环」页（连接管理集中在设备作用域页；首页只留迷你状态条） ----
 
         // ---- 连接状态迷你条 ----
         LinearLayout bar = Ui.card(this);
@@ -390,81 +387,6 @@ public class HomeActivity extends Activity {
             return;
         }
         quickSend("{\"action\":\"call\",\"text\":\"请查看手机\"}", "呼叫手环");
-    }
-
-    private LinearLayout buildDeviceCard() {
-        LinearLayout card = Ui.cardElevated(this);
-        card.setPadding(Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16));
-
-        // top row: device info + battery
-        LinearLayout top = new LinearLayout(this);
-        top.setOrientation(LinearLayout.HORIZONTAL);
-        top.setGravity(android.view.Gravity.CENTER_VERTICAL);
-
-        // band icon
-        TextView bandIcon = Ui.text(this, "⌚", 24f, 0xFF5B6CF9, false);
-        bandIcon.setGravity(android.view.Gravity.CENTER);
-        bandIcon.setBackground(Ui.round(0x1E5B6CF9, 14, 0, this));
-        int iconSize = Ui.dp(this, 46);
-        top.addView(bandIcon, new LinearLayout.LayoutParams(iconSize, iconSize));
-
-        LinearLayout deviceInfo = new LinearLayout(this);
-        deviceInfo.setOrientation(LinearLayout.VERTICAL);
-        deviceInfo.setPadding(Ui.dp(this, 12), 0, 0, 0);
-        deviceNameView = Ui.text(this, "小米手环 8", 16f, Ui.TEXT, true);
-        deviceInfo.addView(deviceNameView);
-
-        LinearLayout statusRow = new LinearLayout(this);
-        statusRow.setOrientation(LinearLayout.HORIZONTAL);
-        statusRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        View dot = new View(this);
-        dot.setBackground(Ui.round(Ui.OK, 4, 0, this));
-        dot.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, 7), Ui.dp(this, 7)));
-        statusRow.addView(dot);
-        deviceStatusView = Ui.text(this, " 已连接", 12f, Ui.OK, false);
-        statusRow.addView(deviceStatusView);
-        deviceInfo.addView(statusRow);
-
-        LinearLayout leftWrap = new LinearLayout(this);
-        leftWrap.setOrientation(LinearLayout.HORIZONTAL);
-        leftWrap.addView(deviceInfo);
-        top.addView(leftWrap, new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-        // battery section
-        LinearLayout batteryBox = new LinearLayout(this);
-        batteryBox.setOrientation(LinearLayout.VERTICAL);
-        batteryBox.setGravity(android.view.Gravity.CENTER);
-        batteryView = Ui.text(this, "--%", 11f, Ui.TEXT, false);
-        batteryBox.addView(batteryView);
-        top.addView(batteryBox);
-
-        card.addView(top);
-        card.addView(Ui.space(this, 14));
-
-        // action buttons 2x2
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.VERTICAL);
-
-        actions.addView(Ui.grid(this,
-                Ui.button(this, "手环课程同步", true, new View.OnClickListener() {
-                    @Override public void onClick(View v) { manualSync(); }
-                }),
-                Ui.button(this, "呼叫手环", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) {
-                        quickSend("{\"action\":\"call\",\"text\":\"请查看手机\"}", "呼叫手环");
-                    }
-                })));
-        actions.addView(Ui.grid(this,
-                Ui.button(this, "发消息给手环", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { quickMessage(); }
-                }),
-                Ui.button(this, "连接手环", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { startConnect(); }
-                })));
-
-        card.addView(actions);
-        return card;
     }
 
     private void renderDateStrip() {

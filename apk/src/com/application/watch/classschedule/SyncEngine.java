@@ -588,10 +588,16 @@ public final class SyncEngine {
         }
     }
 
-    // 步骤 4：ping 通 EV
+    // 步骤 4：ping 通 EV（EV 冷启动经常超过 6s 超时：无回应自动拉起 EV 再试，最多 3 次）
     private void stepPing(final Steps s, final String[] labels, final int[] states, final String[] details) {
+        stepPingOnce(s, labels, states, details, 3);
+    }
+
+    private void stepPingOnce(final Steps s, final String[] labels, final int[] states,
+                              final String[] details, final int left) {
         states[3] = RUNNING;
-        details[3] = "正在唤醒手环上的 EV 课程表…";
+        details[3] = (left == 3) ? "正在唤醒手环上的 EV 课程表…"
+                : ("EV 没应答，已自动拉起，第 " + (4 - left) + " 次尝试…");
         emit(s, labels, states, details);
         ping(new Reply() {
             @Override public void onReply(String json) {
@@ -619,19 +625,32 @@ public final class SyncEngine {
             }
 
             @Override public void onTimeout(String hint) {
-                states[3] = FAIL;
-                details[3] = "无回应";
-                emit(s, labels, states, details);
-                finish(s, false, hint);
+                retryPing(s, labels, states, details, left, hint);
             }
 
             @Override public void onError(String msg) {
-                states[3] = FAIL;
-                details[3] = msg;
-                emit(s, labels, states, details);
-                finish(s, false, msg);
+                retryPing(s, labels, states, details, left, msg);
             }
         });
+    }
+
+    /** ping 无回应：拉起 EV 等它冷启动后重试；用完次数才判失败。 */
+    private void retryPing(final Steps s, final String[] labels, final int[] states,
+                           final String[] details, final int left, final String why) {
+        if (left <= 1) {
+            states[3] = FAIL;
+            details[3] = "无回应（已自动拉起 EV 重试过）";
+            emit(s, labels, states, details);
+            finish(s, false, why);
+            return;
+        }
+        try {
+            Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx));
+        } catch (Throwable ignored) {
+        }
+        main.postDelayed(new Runnable() {
+            @Override public void run() { stepPingOnce(s, labels, states, details, left - 1); }
+        }, 3500);
     }
 
     // ======================= 单步动作（调试页用） =======================
@@ -705,7 +724,10 @@ public final class SyncEngine {
         }
     }
 
-    public void step4Ping(final Cb cb) {
+    /** 调试页第 4 步：同四步连接一样带「无回应自动拉起 EV 重试」。 */
+    public void step4Ping(final Cb cb) { step4PingN(cb, 3); }
+
+    private void step4PingN(final Cb cb, final int left) {
         if (nodeId == null) {
             cb.on(false, "先执行步骤 2、3");
             return;
@@ -721,8 +743,48 @@ public final class SyncEngine {
                     cb.on(false, json);
                 }
             }
-            @Override public void onTimeout(String hint) { cb.on(false, hint); }
-            @Override public void onError(String msg) { cb.on(false, msg); }
+            @Override public void onTimeout(String hint) { retry4(cb, left, hint); }
+            @Override public void onError(String msg) { retry4(cb, left, msg); }
+        });
+    }
+
+    private void retry4(final Cb cb, final int left, final String why) {
+        if (left <= 1) {
+            cb.on(false, why + "（已自动拉起 EV 重试过；到手环上手动打开一次 EV 课程表再试）");
+            return;
+        }
+        try {
+            Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx));
+        } catch (Throwable ignored) {
+        }
+        main.postDelayed(new Runnable() {
+            @Override public void run() { step4PingN(cb, left - 1); }
+        }, 3500);
+    }
+
+    /**
+     * 通用「发消息 + 无回应自动唤醒」：呼叫手环 / 同步等动作都走这里。
+     * EV 快应用冷启动经常超过 6s 回包窗口，超时后自动 launchWearApp 再试（最多 3 次）。
+     */
+    public void sendWake(final String json, final Reply cb) { sendWakeN(json, cb, 3); }
+
+    private void sendWakeN(final String json, final Reply cb, final int left) {
+        send(json, new Reply() {
+            @Override public void onReply(String r) { cb.onReply(r); }
+            @Override public void onTimeout(String hint) {
+                if (left <= 1) {
+                    cb.onTimeout(hint + "（已自动拉起 EV 重试过）");
+                    return;
+                }
+                try {
+                    Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx));
+                } catch (Throwable ignored) {
+                }
+                main.postDelayed(new Runnable() {
+                    @Override public void run() { sendWakeN(json, cb, left - 1); }
+                }, 3500);
+            }
+            @Override public void onError(String msg) { cb.onError(msg); }
         });
     }
 
