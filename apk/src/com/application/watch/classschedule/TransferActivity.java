@@ -323,12 +323,6 @@ public class TransferActivity extends Activity {
                     int cur = o.optInt("current", 0);
                     selectedIndex = (cur >= 0 && cur < names.length()) ? cur : 0;
                     selectedName = scheduleNames[selectedIndex];
-                    // 清单落本地缓存：断开手环后导出页仍能显示
-                    getSharedPreferences(EXP_PREFS, 0).edit()
-                            .putString("names_json", names.toString())
-                            .putInt("names_current", selectedIndex)
-                            .putLong("names_at", System.currentTimeMillis())
-                            .apply();
                     renderScheduleList();
                     scheduleStatus.setTextColor(Ui.OK);
                     scheduleStatus.setText("共 " + names.length() + " 套，当前激活："
@@ -396,46 +390,44 @@ public class TransferActivity extends Activity {
     }
 
     /**
-     * 未连接手环时用本地缓存还原导出页：清单（只读单选）+ 上次读取的课表 JSON。
-     * 数据来自连接期间的自动落盘（EXP_PREFS），断开不丢失。
+     * 未连接手环时还原导出页。清单与「课程表管理 → 手环课表」**同源**：
+     * 都来自 ScheduleStore 里 source=sync 的课表（连接时自动同步落库的那份），
+     * 不再单独维护一份清单缓存（此前两处会不一致）。课表数据优先用上次
+     * 连接读取的原文缓存（EXP_PREFS），没有则由当前激活的手环课表现生成。
      */
     private void restoreCachedExport() {
-        android.content.SharedPreferences p = getSharedPreferences(EXP_PREFS, 0);
-        String namesJson = p.getString("names_json", null);
-        long namesAt = p.getLong("names_at", 0);
-        String lastJson = p.getString("last_export_json", null);
-        long lastAt = p.getLong("last_export_at", 0);
-        if (namesJson == null && lastJson == null) {
+        List<ScheduleStore.Schedule> watch = new ArrayList<>();
+        for (ScheduleStore.Schedule s : ScheduleStore.list(this)) {
+            if (s.isSync()) {
+                watch.add(s);
+            }
+        }
+        String lastJson = getSharedPreferences(EXP_PREFS, 0).getString("last_export_json", null);
+        long lastAt = getSharedPreferences(EXP_PREFS, 0).getLong("last_export_at", 0);
+        if (watch.isEmpty() && lastJson == null) {
             failSchedules("手环未连接，本地也没有历史缓存。连接手环读取一次后会自动保存到本地");
             return;
         }
-        if (namesJson != null) {
-            try {
-                org.json.JSONArray names = new org.json.JSONArray(namesJson);
-                scheduleNames = new String[names.length()];
-                for (int i = 0; i < names.length(); i++) {
-                    scheduleNames[i] = names.optString(i);
+        if (!watch.isEmpty()) {
+            scheduleNames = new String[watch.size()];
+            String activeId = ScheduleStore.activeId(this);
+            int act = -1;
+            for (int i = 0; i < watch.size(); i++) {
+                scheduleNames[i] = watch.get(i).name;
+                if (watch.get(i).id.equals(activeId)) {
+                    act = i;
                 }
-                selectedIndex = p.getInt("names_current", 0);
-                if (selectedIndex >= scheduleNames.length) {
-                    selectedIndex = -1;
-                }
-                selectedName = (selectedIndex >= 0) ? scheduleNames[selectedIndex] : "";
-                renderScheduleList();
-                scheduleStatus.setTextColor(Ui.MUTED);
-                scheduleStatus.setText("清单为本地缓存"
-                        + (namesAt > 0 ? "（" + fmtTime(namesAt) + " 读取）" : "")
-                        + " · 连接手环后可重新读取");
-            } catch (Throwable ignored) {
             }
+            selectedIndex = act;
+            selectedName = (act >= 0) ? scheduleNames[act] : "";
+            renderScheduleList();
+            scheduleStatus.setTextColor(Ui.MUTED);
+            scheduleStatus.setText("清单与「课程表管理 → 手环课表」一致 · 连接手环后可重新读取");
         }
         if (lastJson != null) {
+            // 优先还原上次从手环读到的原文（含昵称/版本等导出信息）
             lastExportJson = lastJson;
             SyncEngine.get(this).lastExportJson = lastJson;
-            String cachedName = p.getString("last_export_name", "");
-            if (cachedName.length() > 0 && selectedName.length() == 0) {
-                selectedName = cachedName;
-            }
             try {
                 JSONObject o = new JSONObject(lastJson);
                 JSONObject d = o.optJSONObject("data");
@@ -448,11 +440,35 @@ public class TransferActivity extends Activity {
             } catch (Throwable ignored) {
             }
             showSaveButton();
-            infoView.setText("以下为上次连接时读取的本地缓存"
+            infoView.setText("以下为上次连接时读取的手环课表"
                     + (lastAt > 0 ? "（" + fmtTime(lastAt) + "）" : "")
                     + "；连接手环后可重新读取最新数据");
-            resultView.setText("离线缓存模式：数据已保存到本地，不会丢失");
+            resultView.setText("离线模式：数据已保存到本地，不会丢失");
             resultView.setTextColor(Ui.MUTED);
+        } else if (!watch.isEmpty()) {
+            // 没有原文缓存：由当前激活的手环课表生成同样格式的 JSON
+            for (ScheduleStore.Schedule s : watch) {
+                if (s.id.equals(ScheduleStore.activeId(this))) {
+                    try {
+                        org.json.JSONArray flat = new org.json.JSONArray();
+                        for (CourseCache.Course c : s.courses) {
+                            JSONObject co = new JSONObject();
+                            co.put("name", c.name);
+                            co.put("day", c.day + 1);
+                            co.put("time", c.time);
+                            co.put("teacher", c.teacher);
+                            co.put("location", c.location);
+                            flat.put(co);
+                        }
+                        setExportJson(flat);
+                    } catch (Throwable ignored) {
+                    }
+                    infoView.setText("数据来自本地课表库「" + s.name + "」（与课程表管理一致）；"
+                            + "连接手环后可重新读取原文");
+                    showSaveButton();
+                    break;
+                }
+            }
         }
     }
 
