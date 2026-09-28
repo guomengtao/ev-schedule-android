@@ -2,12 +2,10 @@ package com.application.watch.classschedule;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -16,6 +14,8 @@ import android.widget.Toast;
 
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 
@@ -24,16 +24,20 @@ import java.util.ArrayList;
  *
  * 流程：启动静默 GET 服务端 update-&lt;variant&gt;.json（Vercel/静态托管）
  *   → versionCode 对比 → 弹窗 → 下载（镜像优先、直连兜底，边下边算 sha256）
- *   → PackageInstaller 流式安装（零临时文件，系统弹「是否安装」由用户确认）。
+ *   → 写入 getExternalFilesDir → MiniFileProvider + ACTION_VIEW 触发系统安装。
+ *
+ * 安装走传统 ACTION_VIEW 路径而非 PackageInstaller：实测 EMUI 8 会静默丢弃
+ * 第三方 App 的 PackageInstaller.commit（shell 特权正常），而 ACTION_VIEW
+ * 在各 ROM（含华为）都会弹安装确认，兼容性最好。见 docs/自动升级实现方案.md §7。
  *
  * 服务端 JSON 字段：versionCode / versionName / sha256 /
  *   downloadUrlMirror（国内镜像，优先尝试）/ downloadUrlOrigin（GitHub 直链，兜底）/
  *   isForce（弹窗不可取消）/ updateLog（弹窗正文）。
- * 设计依据见 docs/自动升级实现方案.md。
  */
 public final class UpdateChecker {
 
-    private static final int INSTALL_REQ = 7001;
+    private static final String TAG = "EVUpdate";
+    private static final String APK_NAME = "update.apk";
     private static final String IGNORE_PREF = "update_ignored_version";
 
     private UpdateChecker() {
@@ -65,6 +69,8 @@ public final class UpdateChecker {
                     return;
                 }
                 int remote = j.optInt("versionCode", -1);
+                android.util.Log.i(TAG, "check: code=" + code + " remote=" + remote
+                        + " local=" + localCode(a) + " ignored=" + ignoredVersion(a));
                 if (remote <= localCode(a)) {
                     if (manual) {
                         toast(a, "已是最新版本");
@@ -197,7 +203,7 @@ public final class UpdateChecker {
         tryUrl(a, j, urls, 0, sha, pd);
     }
 
-    /** 镜像优先、直连兜底：每个 URL 用一个独立安装 session，失败 abandon 后换下一个。 */
+    /** 镜像优先、直连兜底：每个 URL 重新覆盖下载到本地文件，失败后换下一个。 */
     private static void tryUrl(final Activity a, final JSONObject j, final String[] urls,
                                final int i, final String sha, final ProgressDialog pd) {
         if (a.isFinishing() || a.isDestroyed()) {
@@ -209,12 +215,9 @@ public final class UpdateChecker {
             return;
         }
         try {
-            PackageManager pm = a.getPackageManager();
-            PackageInstaller.SessionParams sp =
-                    new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-            final PackageInstaller.Session s = pm.getPackageInstaller().openSession(
-                    pm.getPackageInstaller().createSession(sp));
-            final OutputStream out = s.openWrite("base.apk", 0, -1);
+            final File apk = apkFile(a);
+            apk.delete(); // 清掉上次可能残留的半包
+            final OutputStream out = new FileOutputStream(apk);
             Net.download(urls[i], out, new Net.DlCb() {
                 @Override public void onProgress(long received, long total) {
                     if (total <= 0) {
@@ -231,20 +234,26 @@ public final class UpdateChecker {
                 }
 
                 @Override public void onDone(boolean ok, String err, String shaHex) {
+                    android.util.Log.i(TAG, "download[" + urls[i] + "] ok=" + ok
+                            + " err=" + err + " sha=" + shaHex);
+                    try {
+                        out.close();
+                    } catch (Throwable ignored) {
+                    }
                     if (!ok || (sha.length() > 0 && !sha.equalsIgnoreCase(shaHex))) {
-                        close(s, out, true);
+                        apk.delete(); // 校验不过的包不能留在盘上
                         toast(a, (i == 0 && urls.length > 1)
                                 ? "镜像下载失败，切换直连重试…" : "下载失败，正在重试…");
                         tryUrl(a, j, urls, i + 1, sha, pd);
                         return;
                     }
-                    close(s, out, false);
                     hide(a, pd);
                     toast(a, "下载完成，请在系统弹窗中确认安装");
-                    commit(a, s);
+                    install(a, apk);
                 }
             });
         } catch (Throwable t) {
+            android.util.Log.e(TAG, "download prepare fail", t);
             tryUrl(a, j, urls, i + 1, sha, pd);
         }
     }
@@ -271,37 +280,28 @@ public final class UpdateChecker {
         });
     }
 
-    private static void close(PackageInstaller.Session s, OutputStream out, boolean abandon) {
-        try {
-            if (!abandon) {
-                s.fsync(out); // 写 session 流必须 fsync，否则 commit 可能拿到不完整数据
-            }
-            out.close();
-            if (abandon) {
-                s.abandon();
-            }
-        } catch (Throwable ignored) {
-        }
+    /** 升级包落盘位置：getExternalFilesDir（App 专属目录，无需任何存储权限，卸载即清） */
+    private static File apkFile(Activity a) {
+        return new File(a.getExternalFilesDir(null), APK_NAME);
     }
 
-    private static void commit(final Activity a, final PackageInstaller.Session s) {
+    /**
+     * 触发系统安装：MiniFileProvider content:// URI + ACTION_VIEW。
+     * EMUI 8 实测：PackageInstaller.commit 被静默拦截（shell 正常），此传统路径
+     * 各 ROM 均会弹安装确认。权限（canRequestPackageInstalls）已在弹窗点击时检查。
+     */
+    private static void install(final Activity a, final File apk) {
         try {
-            Intent done = new Intent(a.getPackageName() + ".INSTALL_DONE")
-                    .setPackage(a.getPackageName());
-            s.commit(PendingIntent.getBroadcast(a, INSTALL_REQ, done,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)
-                    .getIntentSender());
+            Uri uri = Uri.parse("content://" + a.getPackageName() + ".updatefiles/" + apk.getName());
+            Intent i = new Intent(Intent.ACTION_VIEW);
+            i.setDataAndType(uri, "application/vnd.android.package-archive");
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            a.startActivity(i);
+            android.util.Log.i(TAG, "install: 已唤起系统安装器 size=" + apk.length());
         } catch (Throwable t) {
-            try {
-                s.abandon();
-            } catch (Throwable ignored) {
-            }
+            android.util.Log.e(TAG, "install: 唤起失败", t);
             toast(a, "触发安装失败：" + t.getMessage());
-        } finally {
-            try {
-                s.close();
-            } catch (Throwable ignored) {
-            }
         }
     }
 

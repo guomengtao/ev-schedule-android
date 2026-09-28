@@ -58,6 +58,14 @@
         <meta-data android:name="ev.variant" android:value="__VARIANT__" />
         <meta-data android:name="ev.peer_pkg" android:value="__PEER_PKG__" />
 
+        <!-- 自动升级：升级包只读 Provider（androidx.FileProvider 的极简替代，
+             authorities 按变体注入保证唯一；仅映射 getExternalFilesDir 单层文件名 -->
+        <provider
+            android:name="com.application.watch.classschedule.MiniFileProvider"
+            android:authorities="__APP_ID__.updatefiles"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <activity
             android:name="com.application.watch.classschedule.HomeActivity"
             android:exported="true"
@@ -71,6 +79,12 @@
         <!-- 内部页面也 exported=true：方便 adb shell am start 直达做回归/UED 验证
              （无 intent-filter，外部只能按类名显式唤起；自用工具，可接受）。 -->
         <activity android:name="com.application.watch.classschedule.MessageActivity"
+            android:exported="true"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
+        <activity android:name="com.application.watch.classschedule.ScheduleListActivity"
+            android:exported="true"
+            android:windowSoftInputMode="stateAlwaysHidden" />
+        <activity android:name="com.application.watch.classschedule.JsonEditorActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.DebugActivity"

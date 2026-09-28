@@ -114,13 +114,14 @@ sed -e "s|package=\"com.application.watch.classschedule\"|package=\"$APP_ID\"|" 
     -e "s/android:label=\"EV Sync\"/android:label=\"$LABEL_BASE\"/" \
     -e "s|__VARIANT__|$VARIANT|" \
     -e "s|__PEER_PKG__|$PEER_PKG|" \
+    -e "s|__APP_ID__|$APP_ID|" \
   AndroidManifest.xml > out/AndroidManifest.xml
 
 # 自检：包名/占位符没替换干净就直接失败 —— 防止"两个变体其实是同一个包名"的静默错误
 grep -q "package=\"$APP_ID\"" out/AndroidManifest.xml \
   || { echo "清单包名注入失败：期望 $APP_ID"; exit 1; }
-if grep -q "__PEER_PKG__\|__VARIANT__" out/AndroidManifest.xml; then
-  echo "变体占位符未替换干净（__PEER_PKG__ / __VARIANT__）"; exit 1
+if grep -q "__PEER_PKG__\|__VARIANT__\|__APP_ID__" out/AndroidManifest.xml; then
+  echo "变体占位符未替换干净（__PEER_PKG__ / __VARIANT__ / __APP_ID__）"; exit 1
 fi
 
 echo "[1/7] aapt2 compile + link（编译资源与清单，注入版本号）..."
@@ -200,7 +201,7 @@ cp "$OUT" "$OUT_NAME.apk"
 #   双地址：downloadUrlMirror（ghproxy 镜像前缀，App 优先尝试）+ downloadUrlOrigin（GitHub 直链，兜底）。
 #   GH_REPO / GH_PROXY 可用环境变量覆盖；GH_REPO 未设置时 URL 留空，发布时手补。
 GH_REPO="${GH_REPO:-}"                            # 例: yourname/EvCourse
-GH_PROXY="${GH_PROXY:-https://ghproxy.com}"
+GH_PROXY="${GH_PROXY:-https://ghproxy.net}"     # 2026-09-28 实测：ghproxy.com 超时，ghproxy.net 稳定
 UPDATE_LOG="${UPDATE_LOG:-}"                      # 本次更新说明，弹窗正文展示
 SHA256=$(shasum -a 256 "$OUT" | cut -d' ' -f1)
 ORIGIN=""
