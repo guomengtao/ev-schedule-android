@@ -1066,15 +1066,23 @@ public class HomeActivity extends Activity {
             estimateView.setTextColor(Ui.OK);
             actionsView.setVisibility(View.VISIBLE);
         } else {
-            // 连接成功后显示手环课表套数（本地已保存的「来自手环」课表数）
-            int sets = 0;
-            for (ScheduleStore.Schedule ss : ScheduleStore.list(this)) {
-                if (ss.isSync()) {
-                    sets++;
+            // 显示手环真实套数（list_schedules 权威值）；还没读到清单时先报本地镜像数并标注
+            int n = e.bandScheduleCount;
+            String sets;
+            if (n >= 0) {
+                sets = "手环课表 " + n + " 套";
+            } else {
+                int local = 0;
+                for (ScheduleStore.Schedule ss : ScheduleStore.list(this)) {
+                    if (ss.isSync()) {
+                        local++;
+                    }
                 }
+                sets = "本地已存 " + local + " 套（以手环为准）";
             }
             miniStatus("● 已连接 " + e.deviceName + "  ·  v" + e.versionName
-                    + "  ·  手环课表 " + sets + " 套", Ui.OK);
+                    + "  ·  " + sets, Ui.OK);
+            e.refreshBandScheduleCount(); // 清单一到，状态回调会把文案刷成真实套数
             // update device card
             if (deviceNameView != null && e.deviceName != null && e.deviceName.length() > 0) {
                 deviceNameView.setText(e.deviceName);
@@ -1110,6 +1118,21 @@ public class HomeActivity extends Activity {
         }
         miniStatusView.setText(s);
         miniStatusView.setTextColor(color);
+    }
+
+    /** 迷你条按引擎状态刷新（状态回调驱动；与 ConnectionBar 同一数据源）。 */
+    private void refreshMiniFromEngine() {
+        SyncEngine e = SyncEngine.get(this);
+        if (e.connected()) {
+            int n = e.bandScheduleCount;
+            String sets = (n >= 0) ? ("手环课表 " + n + " 套") : ("课表 " + e.courseCount + " 节");
+            if (miniStatusView != null && miniStatusView.getText().toString().contains("已连接")) {
+                miniStatus("● 已连接 " + e.deviceName + "  ·  v" + e.versionName + "  ·  " + sets, Ui.OK);
+            }
+        } else if (e.autoRetryRunning()) {
+            String p = e.connectProgress();
+            miniStatus("● " + (p.length() > 0 ? p : "重连中…"), Ui.ACCENT);
+        }
     }
 
     private void launchEv() {
@@ -1148,6 +1171,10 @@ public class HomeActivity extends Activity {
         if (!legacy) {
             // 从课程表管理页切换回来 → 刷新周视图
             renderWeek();
+            // 注册状态回调：真实套数读到后 / 连接状态变化时，迷你条自动刷新
+            SyncEngine.get(this).setStatusCallback(new Runnable() {
+                @Override public void run() { refreshMiniFromEngine(); }
+            });
             return;
         }
         SyncEngine e = SyncEngine.get(this);

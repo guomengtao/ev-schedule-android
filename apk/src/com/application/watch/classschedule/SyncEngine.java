@@ -416,6 +416,8 @@ public final class SyncEngine {
     private java.lang.ref.WeakReference<Runnable> statusCb;
     private boolean autoRetryRunning;
     private volatile String connectProgress = "";
+    /** 手环上真实的课程表套数（list_schedules 的 names.length；-1=未知）。 */
+    public int bandScheduleCount = -1;
 
     /** 注册状态条刷新回调；连接进度 / 心跳结果都会触发（主线程）。 */
     public void setStatusCallback(Runnable r) {
@@ -494,6 +496,9 @@ public final class SyncEngine {
                                 if (names != null && cur >= 0 && cur < names.length()) {
                                     name = names.optString(cur);
                                 }
+                                if (names != null) {
+                                    bandScheduleCount = names.length(); // 手环真实套数
+                                }
                             } catch (Throwable ignored) {
                             }
                             ScheduleStore.upsertFromWatch(c, name, sch);
@@ -508,6 +513,28 @@ public final class SyncEngine {
             }
             @Override public void onTimeout(String hint) { notifyStatus(); }
             @Override public void onError(String msg) { notifyStatus(); }
+        });
+    }
+
+    /** 向手环要一次清单，刷新真实套数（静默，结果经状态回调通知）。 */
+    public void refreshBandScheduleCount() {
+        if (nodeId == null) {
+            return;
+        }
+        listSchedules(new Reply() {
+            @Override public void onReply(String j) {
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(j);
+                    org.json.JSONArray names = o.optJSONArray("names");
+                    if (names != null) {
+                        bandScheduleCount = names.length();
+                    }
+                } catch (Throwable ignored) {
+                }
+                notifyStatus();
+            }
+            @Override public void onTimeout(String h) { }
+            @Override public void onError(String m) { }
         });
     }
 
