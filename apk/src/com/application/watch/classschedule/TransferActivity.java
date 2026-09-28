@@ -110,7 +110,9 @@ public class TransferActivity extends Activity {
                 MODE_IMPORT.equals(mode) ? "导入课程表" : "导出课程表");
         titleView = (TextView) headerBar.getTag(); // 升级结果页会动态改标题
         root.addView(headerBar);
-        root.addView(Ui.space(this, 12));
+        root.addView(Ui.space(this, 8));
+        ConnectionBar.attach(this, root);
+        root.addView(Ui.space(this, 8));
 
         if (MODE_IMPORT.equals(mode)) {
             buildImport(root);

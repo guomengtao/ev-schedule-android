@@ -384,7 +384,11 @@ public final class SyncEngine {
                     return;
                 }
                 boolean idle = (System.currentTimeMillis() - lastSendAt) > 30 * 1000;
-                if (nodeId != null && pending == null && idle) {
+                if (!connected()) {
+                    // 离线自愈：心跳发现没连上（或连接中断）→ 自动重连一轮
+                    android.util.Log.d("EVProbe", "keepalive: offline → autoReconnect");
+                    autoReconnect();
+                } else if (nodeId != null && pending == null && idle) {
                     android.util.Log.d("EVProbe", "keepalive: ping");
                     ping(new Reply() {
                         @Override public void onReply(String json) { /* 通道活着，什么都不做 */ }
@@ -405,6 +409,55 @@ public final class SyncEngine {
             }
         };
         main.postDelayed(keepaliveTick, delay);
+    }
+
+    // ======================= 状态条回调 + 离线自动重连 =======================
+    // 供各页面的 ConnectionBar 使用：弱引用持有回调（页面销毁自动失效，不泄漏 Activity）。
+    private java.lang.ref.WeakReference<Runnable> statusCb;
+    private boolean autoRetryRunning;
+
+    /** 注册状态条刷新回调；连接进度 / 心跳结果都会触发（主线程）。 */
+    public void setStatusCallback(Runnable r) {
+        statusCb = (r == null) ? null : new java.lang.ref.WeakReference<>(r);
+        notifyStatus();
+    }
+
+    private void notifyStatus() {
+        main.post(new Runnable() {
+            @Override public void run() {
+                Runnable r = (statusCb == null) ? null : statusCb.get();
+                if (r != null) {
+                    try {
+                        r.run();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        });
+    }
+
+    /** 离线时自动重连一轮。四步连接内层已带「自动拉起 EV ×3」，外层不再叠次数——
+     *  一轮失败后状态条转「去连接调试」，心跳每 60s 会自动再触发新一轮。单例锁防多页面打架。 */
+    public void autoReconnect() {
+        if (autoRetryRunning || connected()) {
+            return;
+        }
+        autoRetryRunning = true;
+        notifyStatus();
+        connect(new Steps() {
+            @Override public void onUpdate(String[] labels, int[] st, String[] details) {
+                notifyStatus();
+            }
+            @Override public void onFinish(boolean ok, String hint) {
+                autoRetryRunning = false;
+                notifyStatus();
+            }
+        });
+    }
+
+    /** 状态条用：是否正处于自动重连中。 */
+    public boolean autoRetryRunning() {
+        return autoRetryRunning;
     }
 
     // ======================= 四步连接 =======================
@@ -444,6 +497,7 @@ public final class SyncEngine {
                 }
             }
         });
+        notifyStatus();
     }
 
     private void finish(final Steps s, final boolean ok, final String hint) {
@@ -458,6 +512,7 @@ public final class SyncEngine {
                 }
             }
         });
+        notifyStatus();
     }
 
     // ======================= 异常翻译 =======================

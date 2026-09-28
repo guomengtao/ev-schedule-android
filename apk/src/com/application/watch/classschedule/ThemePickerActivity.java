@@ -37,6 +37,8 @@ public class ThemePickerActivity extends Activity {
         LinearLayout root = Ui.screen(this);
         root.addView(Ui.header(this, "主题外观"));
         root.addView(Ui.space(this, 4));
+        ConnectionBar.attach(this, root);
+        root.addView(Ui.space(this, 8));
         root.addView(Ui.text(this, "10 套主题 · 选择后整个 App 立即生效，无需手环",
                 11.5f, Ui.MUTED, false));
         root.addView(Ui.space(this, 10));
