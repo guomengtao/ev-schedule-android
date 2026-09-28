@@ -533,6 +533,10 @@ public class HomeActivity extends Activity {
         if (greetingView != null) {
             greetingView.setText("Hi，" + displayName);
         }
+        // 明确显示当前展示的是哪套课表（切换课表后这里会跟着变）
+        TextView nameLine = Ui.text(this, "课表：" + s.name, 12f, Ui.TEXT, true);
+        nameLine.setPadding(0, 0, 0, Ui.dp(this, 2));
+        weekBox.addView(nameLine);
         weekBox.addView(weekGridWithTime(s.courses));
         String note = s.sub() + "　·　更新于 " + CourseCache.ago(
                 s.isSync() ? s.syncedAt : s.createdAt);

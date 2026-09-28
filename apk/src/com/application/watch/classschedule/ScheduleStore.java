@@ -186,7 +186,13 @@ public final class ScheduleStore {
         s.courses.clear();
         s.courses.addAll(CourseCache.flatten(dayGrouped));
         upsert(c, s);
-        setActive(c, id);
+        // 激活策略（不能无条件抢占，否则用户刚切换的课表会被下一次同步"一晃换掉"）：
+        //   当前激活的也是手环同步课表 → 跟随切换到最新同步的这套（保持"跟随手环"语义）；
+        //   当前激活的是本机课表 → 只更新数据，不抢激活（用户明确选了本地的）。
+        Schedule cur = active(c);
+        if (cur == null || cur.isSync()) {
+            setActive(c, id);
+        }
         return id;
     }
 
