@@ -39,17 +39,18 @@ public class BandActivity extends Activity {
 
         // ===== 设备头部（参考小米运动健康样式）：左表盘视觉 + 右名称▼/状态/信息 + 同步胶囊 =====
         LinearLayout hero = Ui.card(this);
+        hero.setBackground(null); // 大框不显示背景与边框，融入页面
         hero.setPadding(Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16));
 
         LinearLayout hRow = new LinearLayout(this);
         hRow.setOrientation(LinearLayout.HORIZONTAL);
         hRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
-        // 左：手环视觉（线框图标、无背景、放大一倍）
+        // 左：手环视觉（线框图标、无背景，1.5 倍）
         ImageView watchIv = new ImageView(this);
         watchIv.setImageResource(R.drawable.ic_tab_watch);
         watchIv.setColorFilter(Ui.ACCENT);
-        hRow.addView(watchIv, new LinearLayout.LayoutParams(Ui.dp(this, 112), Ui.dp(this, 112)));
+        hRow.addView(watchIv, new LinearLayout.LayoutParams(Ui.dp(this, 168), Ui.dp(this, 168)));
 
         // 右：名称 ▼ / 状态 / 信息
         LinearLayout info = new LinearLayout(this);
@@ -99,8 +100,8 @@ public class BandActivity extends Activity {
         heroActionBtn.setBackground(Ui.round((Ui.ACCENT & 0x00FFFFFF) | 0x2E000000, 22, 0, this));
         heroActionBtn.setPadding(0, 0, 0, 0);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
-                Ui.dp(this, 128), Ui.dp(this, 44));
-        sp.leftMargin = Ui.dp(this, 128);
+                Ui.dp(this, 104), Ui.dp(this, 44));
+        sp.leftMargin = Ui.dp(this, 184);
         hero.addView(heroActionBtn, sp);
         root.addView(hero);
         root.addView(Ui.space(this, 10));
@@ -125,14 +126,18 @@ public class BandActivity extends Activity {
         nickView = new EditText(this);
         nickView.setTextSize(14f);
         nickView.setTextColor(Ui.TEXT);
+        nickView.setHintTextColor(Ui.MUTED);
         nickView.setHint("请输入昵称");
         nickRow.addView(nickView, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        nickRow.addView(Ui.space(this, 8));
-        nickRow.addView(Ui.button(this, "修改", true, new View.OnClickListener() {
+        // ⚠️ 横向行内不能用 Ui.space（MATCH_PARENT 宽会把「修改」挤出屏幕，点不到）
+        android.widget.Button nickBtn = Ui.button(this, "修改", true, new View.OnClickListener() {
             @Override public void onClick(View v) { save(); }
-        }), new LinearLayout.LayoutParams(Ui.dp(this, 88),
-                LinearLayout.LayoutParams.WRAP_CONTENT));
+        });
+        LinearLayout.LayoutParams nbp = new LinearLayout.LayoutParams(
+                Ui.dp(this, 88), LinearLayout.LayoutParams.WRAP_CONTENT);
+        nbp.leftMargin = Ui.dp(this, 8);
+        nickRow.addView(nickBtn, nbp);
         nickCard.addView(nickRow);
         root.addView(nickCard);
         root.addView(Ui.space(this, 10));
