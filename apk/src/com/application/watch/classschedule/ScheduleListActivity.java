@@ -132,7 +132,7 @@ public class ScheduleListActivity extends Activity {
                 }
             }
             listBox.addView(sectionHead("手环课表 · 手环上共 " + bandNames.length
-                    + " 套 · 本地已存 " + localMirror + " 套", bandNames.length));
+                    + " 套 · 本地已存 " + localMirror + " 套"));
             for (int i = 0; i < bandNames.length; i++) {
                 ScheduleStore.Schedule mirror = ScheduleStore.find(this, "ev_watch_" + bandNames[i]);
                 if (mirror != null) {
@@ -208,6 +208,13 @@ public class ScheduleListActivity extends Activity {
     /** 分组小标题：名称 + 数量 */
     private View sectionHead(String label, int n) {
         TextView t = Ui.text(this, label + " · " + n + " 套", 11.5f, Ui.MUTED, true);
+        t.setPadding(Ui.dp(this, 2), 0, 0, Ui.dp(this, 6));
+        return t;
+    }
+
+    /** 分组小标题（数量已含在 label 里，不重复追加） */
+    private View sectionHead(String label) {
+        TextView t = Ui.text(this, label, 11.5f, Ui.MUTED, true);
         t.setPadding(Ui.dp(this, 2), 0, 0, Ui.dp(this, 6));
         return t;
     }
