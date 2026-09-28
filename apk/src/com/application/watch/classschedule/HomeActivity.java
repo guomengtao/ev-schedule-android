@@ -560,11 +560,21 @@ public class HomeActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         headerRow.addView(timeSpacer);
 
+        // 每列对应的日期（含 weekOffset），用于假期 / 调休判定
+        java.util.Calendar gridMon = java.util.Calendar.getInstance();
+        gridMon.add(java.util.Calendar.DAY_OF_MONTH, -CourseCache.todayIndex() + weekOffset * 7);
+
         boolean thisWeek = (weekOffset == 0);
         for (int d = 0; d < 7; d++) {
             boolean isToday = thisWeek && d == today;
-            TextView hl = Ui.text(this, heads[d], 9f, isToday ? Ui.ACCENT : Ui.MUTED,
-                    isToday);
+            java.util.Calendar day = (java.util.Calendar) gridMon.clone();
+            day.add(java.util.Calendar.DAY_OF_MONTH, d);
+            String badge = Holiday.badge(this, day);
+            String head = heads[d] + badge;
+            int headColor = isToday ? Ui.ACCENT
+                    : ("休".equals(badge) ? 0xFF16A34A : ("班".equals(badge) ? 0xFFD97706 : Ui.MUTED));
+            TextView hl = Ui.text(this, head, 9f, headColor,
+                    isToday || badge.length() > 0);
             hl.setGravity(android.view.Gravity.CENTER);
             headerRow.addView(hl, new LinearLayout.LayoutParams(
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -588,7 +598,7 @@ public class HomeActivity extends Activity {
         }
         body.addView(timeCol);
 
-        // 7 day columns
+        // 7 day columns（假期列清空；调休列按目标星期几的课表显示）
         for (int d = 0; d < 7; d++) {
             LinearLayout dayCol = new LinearLayout(this);
             dayCol.setOrientation(LinearLayout.VERTICAL);
@@ -597,8 +607,16 @@ public class HomeActivity extends Activity {
             }
             dayCol.setPadding(Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2));
 
+            java.util.Calendar day = (java.util.Calendar) gridMon.clone();
+            day.add(java.util.Calendar.DAY_OF_MONTH, d);
+            int override = Holiday.resolveDay(this, day);
+            // 假期列整列清空（EV 语义：假期日 currentClasses = []）；调休列按目标星期几取课
+            java.util.List<CourseCache.Course> dayList = (override == Holiday.HOLIDAY)
+                    ? new java.util.ArrayList<CourseCache.Course>()
+                    : CourseCache.coursesOfDay(all, override >= 0 ? override : d);
+
             java.util.Map<String, CourseCache.Course> map = new java.util.LinkedHashMap<>();
-            for (CourseCache.Course c : CourseCache.coursesOfDay(all, d)) {
+            for (CourseCache.Course c : dayList) {
                 String key = CourseCache.shortTime(c.time);
                 map.put(key, c);
             }

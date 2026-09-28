@@ -9,31 +9,36 @@ import android.content.Intent;
 import android.view.View;
 import android.widget.RemoteViews;
 
-import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
- * 4×2「本周课表」桌面插件：周一 ~ 周日每天一行摘要。
+ * 4x2「本周课表」桌面插件：时间列 + 周一~周日 7 列的网格（与首页的周课表同构）。
  *
  * 数据：只读 CourseCache（手机本地课表缓存），不连手环也能显示。
- * 假期 / 调休：当天是假期 → 摘要显示「假期名 · 休息」；是调休 → 显示「班」+ 按目标周几的课。
- * 高亮：今天那一行用主色加粗。
+ * 行 = 该周出现的时间段（去重排序，最多 5 行）；列 = 星期，格子按时间段对齐，底色 = 课程区分色。
+ * 假期 / 调休：假期列清空（表头带「休」）；调休列显示目标星期几的课（表头带「班」）。
  * 刷新：系统每 30 分钟 + App 打开/课表更新时主动 refreshAll。
  */
 public class WeekWidgetProvider extends AppWidgetProvider {
 
-    private static final int[] ROW = {R.id.wrow1, R.id.wrow2, R.id.wrow3, R.id.wrow4,
-            R.id.wrow5, R.id.wrow6, R.id.wrow7};
-    private static final int[] BAR = {R.id.wbar1, R.id.wbar2, R.id.wbar3, R.id.wbar4,
-            R.id.wbar5, R.id.wbar6, R.id.wbar7};
-    private static final int[] DAY = {R.id.wday1, R.id.wday2, R.id.wday3, R.id.wday4,
-            R.id.wday5, R.id.wday6, R.id.wday7};
-    private static final int[] DATE = {R.id.wdate1, R.id.wdate2, R.id.wdate3, R.id.wdate4,
-            R.id.wdate5, R.id.wdate6, R.id.wdate7};
-    private static final int[] SUM = {R.id.wsum1, R.id.wsum2, R.id.wsum3, R.id.wsum4,
-            R.id.wsum5, R.id.wsum6, R.id.wsum7};
+    private static final int GRID_ROWS = 5;
+    private static final int[] WHDR = {R.id.whdr1, R.id.whdr2, R.id.whdr3, R.id.whdr4,
+            R.id.whdr5, R.id.whdr6, R.id.whdr7};
+    private static final int[] WTIME = {R.id.wtime1, R.id.wtime2, R.id.wtime3, R.id.wtime4,
+            R.id.wtime5};
+
+    /** wcellRxC 的 id（R = 行时间段，C = 列星期，1 = 周一） */
+    private static int cellId(int row, int day) {
+        try {
+            return R.id.class.getField("wc" + row + "x" + day).getInt(null);
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
 
     @Override
     public void onUpdate(Context ctx, AppWidgetManager mgr, int[] ids) {
@@ -70,63 +75,90 @@ public class WeekWidgetProvider extends AppWidgetProvider {
 
         List<CourseCache.Course> all = CourseCache.load(ctx);
         int today = CourseCache.todayIndex();
-        SimpleDateFormat df = new SimpleDateFormat("M.d", Locale.CHINA);
 
+        // 本周 7 天的日期（含假期 / 调休覆盖）
+        Calendar[] days = new Calendar[7];
+        int[] override = new int[7];
         Calendar mon = Calendar.getInstance();
         mon.add(Calendar.DAY_OF_MONTH, -today);
-
         for (int d = 0; d < 7; d++) {
-            Calendar day = (Calendar) mon.clone();
-            day.add(Calendar.DAY_OF_MONTH, d);
+            days[d] = (Calendar) mon.clone();
+            days[d].add(Calendar.DAY_OF_MONTH, d);
+            override[d] = Holiday.resolveDay(ctx, days[d]);
+        }
 
+        // 表头：假期列「休」（绿）、调休列「班」（琥珀）、今天主色
+        String[] heads = {"一", "二", "三", "四", "五", "六", "日"};
+        for (int d = 0; d < 7; d++) {
+            String badge = Holiday.badge(ctx, days[d]);
             boolean isToday = (d == today);
-            String badge = Holiday.badge(ctx, day);
-            int override = Holiday.resolveDay(ctx, day);
+            String label = heads[d] + badge;
+            int color = isToday ? Ui.ACCENT
+                    : ("休".equals(badge) ? 0xFF16A34A : ("班".equals(badge) ? 0xFFD97706 : Ui.MUTED));
+            rv.setTextViewText(WHDR[d], label);
+            rv.setTextColor(WHDR[d], color);
+        }
 
-            rv.setViewVisibility(ROW[d], View.VISIBLE);
-            rv.setTextViewText(DAY[d], CourseCache.WEEK[d].substring(0, 1));
-            rv.setTextViewText(DATE[d], df.format(day.getTime()) + (badge.length() > 0 ? " " + badge : ""));
+        // 该周出现的时间段：去重 + 按开始时间排序，最多 GRID_ROWS 行
+        Map<Integer, String> slotMap = new TreeMap<>();
+        for (CourseCache.Course c : all) {
+            if (c.time == null || c.time.length() == 0) {
+                continue;
+            }
+            String s = CourseCache.shortTime(c.time);
+            int[] m = CourseCache.minutes(c.time);
+            slotMap.put(m != null ? m[0] : 0, s);
+        }
+        List<String> slots = new ArrayList<>(slotMap.values());
+        while (slots.size() < GRID_ROWS) {
+            slots.add("");
+        }
 
-            String sum;
-            int sumColor = Ui.TEXT;
-            if (override == Holiday.HOLIDAY) {
-                String name = Holiday.holidayName(ctx, day);
-                sum = (name.length() > 0 ? name : "假期") + " · 休息";
-                sumColor = Ui.OK;
-            } else {
-                List<CourseCache.Course> list = CourseCache.coursesOfDay(all,
-                        override >= 0 ? override : d);
-                if (override >= 0) {
-                    rv.setTextViewText(DATE[d], df.format(day.getTime()) + " 班");
+        // 每列的课（假期列空，调休列用目标星期几的课）
+        List<List<CourseCache.Course>> byDay = new ArrayList<>();
+        for (int d = 0; d < 7; d++) {
+            int idx = override[d] >= 0 ? override[d] : d;
+            byDay.add(override[d] == Holiday.HOLIDAY ? new ArrayList<CourseCache.Course>()
+                    : CourseCache.coursesOfDay(all, idx));
+        }
+
+        // 网格：行 = 时间段，列 = 星期；底色 = 课程区分色，假期列整列留空
+        for (int r = 0; r < GRID_ROWS; r++) {
+            String slot = r < slots.size() ? slots.get(r) : "";
+            rv.setTextViewText(WTIME[r], slot);
+            for (int d = 0; d < 7; d++) {
+                int id = cellId(r + 1, d + 1);
+                if (id == 0) {
+                    continue;
                 }
-                if (list.isEmpty()) {
-                    sum = "无课";
-                    sumColor = Ui.MUTED;
-                } else {
-                    StringBuilder sb = new StringBuilder();
-                    int shown = Math.min(3, list.size());
-                    for (int i = 0; i < shown; i++) {
-                        if (i > 0) {
-                            sb.append(" · ");
+                CourseCache.Course hit = null;
+                if (slot.length() > 0) {
+                    for (CourseCache.Course c : byDay.get(d)) {
+                        if (slot.equals(CourseCache.shortTime(c.time))) {
+                            hit = c;
+                            break;
                         }
-                        sb.append(list.get(i).name);
                     }
-                    if (list.size() > shown) {
-                        sb.append(" 等").append(list.size()).append("门");
-                    }
-                    sum = sb.toString();
+                }
+                if (hit == null) {
+                    rv.setTextViewText(id, "");
+                    rv.setInt(id, "setBackgroundColor", 0x00000000);
+                } else {
+                    rv.setTextViewText(id, hit.name);
+                    rv.setInt(id, "setBackgroundColor", Ui.courseColor(hit.name));
+                    rv.setTextColor(id, 0xFFFFFFFF);
                 }
             }
-
-            rv.setTextViewText(SUM[d], sum);
-            rv.setTextColor(SUM[d], isToday ? Ui.ACCENT : sumColor);
-            rv.setInt(BAR[d], "setBackgroundColor", isToday ? Ui.ACCENT : Ui.LINE);
         }
 
         long at = CourseCache.savedAt(ctx);
-        rv.setTextViewText(R.id.widget_week_foot, at > 0
-                ? "更新于 " + CourseCache.ago(at)
-                : "连接手环后自动更新");
+        String foot = at > 0 ? "更新于 " + CourseCache.ago(at) : "连接手环后自动更新";
+        rv.setTextViewText(R.id.widget_week_foot, foot);
+        Calendar sun = (Calendar) mon.clone();
+        sun.add(Calendar.DAY_OF_MONTH, 6);
+        rv.setTextViewText(R.id.widget_week_date,
+                (mon.get(Calendar.MONTH) + 1) + "." + mon.get(Calendar.DAY_OF_MONTH) + "-"
+                        + (sun.get(Calendar.MONTH) + 1) + "." + sun.get(Calendar.DAY_OF_MONTH));
 
         rv.setOnClickPendingIntent(R.id.widget_root, TodayWidgetProvider.openApp(ctx));
         return rv;

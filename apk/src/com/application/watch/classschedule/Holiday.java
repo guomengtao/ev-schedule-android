@@ -113,21 +113,22 @@ public final class Holiday {
 
     // ---------------- 开关 ----------------
 
-    /** 假期模式是否开启。默认 true（每张课表默认都开，与 EV 一致） */
+    /**
+     * 假期模式是否开启。**真源在课程表 JSON 的 holiday 字段**（每张课表各自一个，默认 true），
+     * 没有激活课表时也按开启处理。
+     */
     public static boolean enabled(Context c) {
         try {
-            return c.getApplicationContext()
-                    .getSharedPreferences(PREF, Context.MODE_PRIVATE)
-                    .getBoolean(KEY_ENABLED, true);
+            return ScheduleStore.holidayEnabled(c);
         } catch (Throwable t) {
             return true;
         }
     }
 
+    /** 开/关当前激活课表的假期模式（设置页的开关） */
     public static void setEnabled(Context c, boolean on) {
         try {
-            c.getApplicationContext().getSharedPreferences(PREF, Context.MODE_PRIVATE)
-                    .edit().putBoolean(KEY_ENABLED, on).apply();
+            ScheduleStore.setHolidayEnabled(c, on);
         } catch (Throwable ignored) {
         }
     }

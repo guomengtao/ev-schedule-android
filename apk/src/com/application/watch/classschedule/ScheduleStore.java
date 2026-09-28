@@ -46,6 +46,8 @@ public final class ScheduleStore {
         public String source = SOURCE_LOCAL; // local | sync
         public long createdAt = 0;
         public long syncedAt = 0;
+        /** 假期模式：true = 假期日不排课、调休日按目标星期几换课。**默认开启**（JSON 缺字段也按 true） */
+        public boolean holiday = true;
         public final List<CourseCache.Course> courses = new ArrayList<>();
 
         public boolean isSync() {
@@ -383,6 +385,22 @@ public final class ScheduleStore {
         }
     }
 
+    /** 当前激活课表的假期模式开关（存在课程表 JSON 的 holiday 字段里，默认 true） */
+    public static boolean holidayEnabled(Context c) {
+        Schedule s = active(c);
+        return s == null || s.holiday;
+    }
+
+    /** 开/关当前激活课表的假期模式（设置页的开关写这里） */
+    public static void setHolidayEnabled(Context c, boolean on) {
+        Schedule s = active(c);
+        if (s == null || s.holiday == on) {
+            return;
+        }
+        s.holiday = on;
+        upsert(c, s);
+    }
+
     private static JSONObject root(Context c) {
         try {
             SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
@@ -449,6 +467,7 @@ public final class ScheduleStore {
             o.put("source", s.source);
             o.put("createdAt", s.createdAt);
             o.put("syncedAt", s.syncedAt);
+            o.put("holiday", s.holiday);
             JSONArray cs = new JSONArray();
             for (CourseCache.Course co : s.courses) {
                 cs.put(CourseCache.toJson(co));
@@ -467,6 +486,8 @@ public final class ScheduleStore {
             s.source = o.optString("source", SOURCE_LOCAL);
             s.createdAt = o.optLong("createdAt", 0);
             s.syncedAt = o.optLong("syncedAt", 0);
+            // 假期模式默认开启：旧 JSON / 导入的 JSON 没有这个字段也按 true
+            s.holiday = o.optBoolean("holiday", true);
             JSONArray cs = o.optJSONArray("courses");
             if (cs != null) {
                 for (int i = 0; i < cs.length(); i++) {
