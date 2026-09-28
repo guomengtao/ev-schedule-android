@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4×2「本周课表」桌面插件：周一~周日 7 行，每天一行摘要（假期/调休会标注）。
+     文字颜色由 WeekWidgetProvider 按当前主题（浅/深）动态覆盖。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg_light"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="9dp"
+    android:paddingBottom="7dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="本周课表"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#0F172A"/>
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:id="@+id/widget_week_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="10sp"
+            android:textColor="#64748B"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginTop="3dp">
+
+        <LinearLayout android:id="@+id/wrow1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="2dp" android:visibility="gone">
+            <TextView android:id="@+id/wbar1" android:layout_width="3dp" android:layout_height="14dp" android:background="#3B82F6"/>
+            <TextView android:id="@+id/wday1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textSize="10sp" android:textStyle="bold" android:textColor="#0F172A"/>
+            <TextView android:id="@+id/wdate1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:textSize="9sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/wsum1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" android:textSize="11sp" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/wrow2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="2dp" android:visibility="gone">
+            <TextView android:id="@+id/wbar2" android:layout_width="3dp" android:layout_height="14dp" android:background="#3B82F6"/>
+            <TextView android:id="@+id/wday2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textSize="10sp" android:textStyle="bold" android:textColor="#0F172A"/>
+            <TextView android:id="@+id/wdate2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:textSize="9sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/wsum2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" android:textSize="11sp" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/wrow3" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="2dp" android:visibility="gone">
+            <TextView android:id="@+id/wbar3" android:layout_width="3dp" android:layout_height="14dp" android:background="#3B82F6"/>
+            <TextView android:id="@+id/wday3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textSize="10sp" android:textStyle="bold" android:textColor="#0F172A"/>
+            <TextView android:id="@+id/wdate3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:textSize="9sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/wsum3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" android:textSize="11sp" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/wrow4" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="2dp" android:visibility="gone">
+            <TextView android:id="@+id/wbar4" android:layout_width="3dp" android:layout_height="14dp" android:background="#3B82F6"/>
+            <TextView android:id="@+id/wday4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textSize="10sp" android:textStyle="bold" android:textColor="#0F172A"/>
+            <TextView android:id="@+id/wdate4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:textSize="9sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/wsum4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" android:textSize="11sp" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/wrow5" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="2dp" android:visibility="gone">
+            <TextView android:id="@+id/wbar5" android:layout_width="3dp" android:layout_height="14dp" android:background="#3B82F6"/>
+            <TextView android:id="@+id/wday5" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textSize="10sp" android:textStyle="bold" android:textColor="#0F172A"/>
+            <TextView android:id="@+id/wdate5" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:textSize="9sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/wsum5" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" android:textSize="11sp" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/wrow6" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="2dp" android:visibility="gone">
+            <TextView android:id="@+id/wbar6" android:layout_width="3dp" android:layout_height="14dp" android:background="#3B82F6"/>
+            <TextView android:id="@+id/wday6" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textSize="10sp" android:textStyle="bold" android:textColor="#0F172A"/>
+            <TextView android:id="@+id/wdate6" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:textSize="9sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/wsum6" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" android:textSize="11sp" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end"/>
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/wrow7" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="2dp" android:visibility="gone">
+            <TextView android:id="@+id/wbar7" android:layout_width="3dp" android:layout_height="14dp" android:background="#3B82F6"/>
+            <TextView android:id="@+id/wday7" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textSize="10sp" android:textStyle="bold" android:textColor="#0F172A"/>
+            <TextView android:id="@+id/wdate7" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:textSize="9sp" android:textColor="#64748B"/>
+            <TextView android:id="@+id/wsum7" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" android:textSize="11sp" android:textColor="#0F172A" android:maxLines="1" android:ellipsize="end"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_week_foot"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="9sp"
+        android:textColor="#64748B"
+        android:maxLines="1"
+        android:ellipsize="end"/>
+</LinearLayout>

@@ -78,11 +78,58 @@ public final class CourseCache {
      * @return 实际存下的课程数
      */
     public static int save(Context c, JSONArray schedule, String scheduleName) {
-        if (c == null || schedule == null || schedule.length() == 0) {
-            return 0; // 空数据不覆盖旧缓存：宁可显示上次的数据，也不要把课表清成空白
+        List<Course> flat = flatten(schedule);
+        return saveFlat(c, flat, scheduleName);
+    }
+
+    /**
+     * 把扁平课程列表写入缓存（多课表切换 active 时的直写通道）。
+     * 空数据不覆盖旧缓存：宁可显示上次的数据，也不要把课表清成空白。
+     *
+     * @return 实际存下的课程数
+     */
+    public static int saveFlat(Context c, List<Course> flat, String scheduleName) {
+        if (c == null || flat == null || flat.isEmpty()) {
+            return 0;
         }
         try {
-            JSONArray flat = new JSONArray();
+            JSONArray arr = new JSONArray();
+            for (Course co : flat) {
+                if (co != null) {
+                    arr.put(toJson(co));
+                }
+            }
+            if (arr.length() == 0) {
+                return 0;
+            }
+            SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+            sp.edit()
+                    .putString(KEY_ITEMS, arr.toString())
+                    .putLong(KEY_AT, System.currentTimeMillis())
+                    .putString(KEY_NAME, scheduleName == null ? "" : scheduleName)
+                    .apply();
+            // 桌面上的插件跟着刷新（未添加插件时这两句是 no-op）
+            TodayWidgetProvider.refreshAll(c);
+            NextWidgetProvider.refreshAll(c);
+            WeekWidgetProvider.refreshAll(c);
+            // 课表变了，上课提醒也要重排
+            Reminders.reschedule(c);
+            return arr.length();
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    /**
+     * 手环 export 的 data.schedule（按天分组）→ 扁平课程列表。
+     * 容错：null / 空 / 格式异常都返回空列表，不抛异常。
+     */
+    public static List<Course> flatten(JSONArray schedule) {
+        List<Course> out = new ArrayList<>();
+        if (schedule == null) {
+            return out;
+        }
+        try {
             for (int i = 0; i < schedule.length(); i++) {
                 JSONObject day = schedule.optJSONObject(i);
                 if (day == null) {
@@ -103,27 +150,12 @@ public final class CourseCache {
                     co.teacher = src.optString("teacher");
                     co.location = src.optString("location");
                     co.day = dayIndex(day.opt("day"));
-                    flat.put(toJson(co));
+                    out.add(co);
                 }
             }
-            if (flat.length() == 0) {
-                return 0;
-            }
-            SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
-            sp.edit()
-                    .putString(KEY_ITEMS, flat.toString())
-                    .putLong(KEY_AT, System.currentTimeMillis())
-                    .putString(KEY_NAME, scheduleName == null ? "" : scheduleName)
-                    .apply();
-            // 桌面上的插件跟着刷新（未添加插件时这两句是 no-op）
-            TodayWidgetProvider.refreshAll(c);
-            NextWidgetProvider.refreshAll(c);
-            // 课表变了，上课提醒也要重排
-            Reminders.reschedule(c);
-            return flat.length();
-        } catch (Throwable t) {
-            return 0;
+        } catch (Throwable ignored) {
         }
+        return out;
     }
 
     public static void clear(Context c) {
@@ -153,13 +185,7 @@ public final class CourseCache {
                 if (o == null) {
                     continue;
                 }
-                Course co = new Course();
-                co.name = o.optString("name");
-                co.time = o.optString("time");
-                co.teacher = o.optString("teacher");
-                co.location = o.optString("location");
-                co.day = o.optInt("day", -1);
-                out.add(co);
+                out.add(fromJson(o));
             }
         } catch (Throwable ignored) {
         }
@@ -381,7 +407,7 @@ public final class CourseCache {
 
     // ======================= JSON 转换 =======================
 
-    private static JSONObject toJson(Course c) {
+    public static JSONObject toJson(Course c) {
         JSONObject o = new JSONObject();
         try {
             o.put("name", c.name);
@@ -392,5 +418,21 @@ public final class CourseCache {
         } catch (Throwable ignored) {
         }
         return o;
+    }
+
+    public static Course fromJson(JSONObject o) {
+        Course co = new Course();
+        if (o == null) {
+            return co;
+        }
+        try {
+            co.name = o.optString("name");
+            co.time = o.optString("time");
+            co.teacher = o.optString("teacher");
+            co.location = o.optString("location");
+            co.day = o.optInt("day", -1);
+        } catch (Throwable ignored) {
+        }
+        return co;
     }
 }

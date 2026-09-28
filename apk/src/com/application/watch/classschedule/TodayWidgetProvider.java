@@ -63,13 +63,26 @@ public class TodayWidgetProvider extends AppWidgetProvider {
         rv.setTextColor(R.id.widget_foot, Ui.MUTED);
 
         int today = CourseCache.todayIndex();
-        List<CourseCache.Course> day = CourseCache.coursesOfDay(CourseCache.load(ctx), today);
+        // 假期 / 调休（移植自 EV）：假期 → 显示假期卡片；调休 → 按目标周几的课表
+        int override = Holiday.resolveToday(ctx);
+        boolean holiday = (override == Holiday.HOLIDAY);
+        List<CourseCache.Course> day = CourseCache.coursesOfDay(CourseCache.load(ctx),
+                override >= 0 ? override : today);
         int now = CourseCache.nowMinutes();
 
         SimpleDateFormat df = new SimpleDateFormat("M月d日", Locale.CHINA);
-        rv.setTextViewText(R.id.widget_date, df.format(new Date()) + " " + CourseCache.WEEK[today]);
+        if (holiday) {
+            String name = Holiday.holidayName(ctx, java.util.Calendar.getInstance());
+            rv.setTextViewText(R.id.widget_title, "假期中");
+            rv.setTextViewText(R.id.widget_date,
+                    df.format(new Date()) + " " + (name.length() > 0 ? name : "假期") + " · 今天没课");
+        } else {
+            rv.setTextViewText(R.id.widget_date, df.format(new Date()) + " "
+                    + CourseCache.WEEK[override >= 0 ? override : today]
+                    + (override >= 0 ? " (调休)" : ""));
+        }
 
-        int shown = Math.min(ROW.length, day.size());
+        int shown = holiday ? 0 : Math.min(ROW.length, day.size());
         for (int i = 0; i < ROW.length; i++) {
             if (i >= shown) {
                 rv.setViewVisibility(ROW[i], View.GONE);

@@ -13,7 +13,7 @@ public class SettingsActivity extends Activity {
 
     private int lastThemeVersion = 0;
 
-    private TextView resultView, bgStatusView, remindStatusView;
+    private TextView resultView, bgStatusView, remindStatusView, holidayStatusView;
     private Button remindToggleBtn, remindLeadBtn, remindPushBtn;
 
     @Override
@@ -141,11 +141,34 @@ public class SettingsActivity extends Activity {
                 "基于本地课表缓存 + 系统闹钟，不依赖手环连接；课表更新/开机后自动重排"));
         root.addView(remindCard);
 
+        // ======================= 假期 / 调休（移植自 EV，默认开启） =======================
+        root.addView(Ui.space(this, 10));
+        LinearLayout holidayCard = Ui.card(this);
+        holidayCard.addView(Ui.text(this, "假期 / 调休", 12.5f, Ui.TEXT, true));
+        holidayStatusView = Ui.text(this, "", 11.5f, Ui.MUTED, false);
+        holidayStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
+        holidayCard.addView(holidayStatusView);
+        holidayCard.addView(Ui.button(this, "", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                Holiday.setEnabled(SettingsActivity.this, !Holiday.enabled(SettingsActivity.this));
+                refreshHoliday();
+                // 插件上的假期/调休展示也要跟着变
+                TodayWidgetProvider.refreshAll(SettingsActivity.this);
+                NextWidgetProvider.refreshAll(SettingsActivity.this);
+                WeekWidgetProvider.refreshAll(SettingsActivity.this);
+            }
+        }));
+        holidayCard.addView(Ui.space(this, 6));
+        holidayCard.addView(Ui.mono(this,
+                "内置 2026 年国务院放假安排：假期当天不排课，调休日按对应星期几的课表显示"));
+        root.addView(holidayCard);
+
         root.addView(Ui.space(this, 8));
         root.addView(Ui.mono(this, "本机 v" + version()));
 
         root.addView(Ui.space(this, 6));
         refreshRemind();
+        refreshHoliday();
         setContentView(Ui.wrapWithBottomBar(this, root, 3));
         Analytics.pageView(this, "/apk/settings");
     }
@@ -231,5 +254,20 @@ public class SettingsActivity extends Activity {
         remindToggleBtn.setText(Reminders.enabled(this) ? "关闭提醒" : "开启提醒");
         remindLeadBtn.setText("提前 " + Reminders.leadMinutes(this) + " 分钟");
         remindPushBtn.setText("推手环：" + (Reminders.pushWatch(this) ? "开" : "关"));
+    }
+
+    private void refreshHoliday() {
+        boolean on = Holiday.enabled(this);
+        String when = "";
+        int ov = Holiday.resolveToday(this);
+        if (ov == Holiday.HOLIDAY) {
+            when = "今天放假，不排课";
+        } else if (ov >= 0) {
+            when = "今天调休，按" + CourseCache.WEEK[ov] + "课表";
+        } else {
+            when = "今天按正常星期课表";
+        }
+        holidayStatusView.setText((on ? "已开启" : "已关闭") + " · " + when);
+        holidayStatusView.setTextColor(on ? Ui.OK : Ui.MUTED);
     }
 }

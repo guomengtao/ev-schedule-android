@@ -40,6 +40,7 @@ public class HomeActivity extends Activity {
     // ---- EV 新首页视图 ----
     private TextView scheduleNameView, miniStatusView;
     private LinearLayout weekBox, errorCard, quickBox;
+    private android.widget.Button backToWeekBtn;
     private TextView hintView;
     private int phase = PHASE_CONNECT;
 
@@ -209,7 +210,7 @@ public class HomeActivity extends Activity {
         root.addView(Ui.space(this, 6));
         root.addView(Ui.mono(this, "包名 " + getPackageName() + "  ·  v" + version()));
 
-        root.addView(Ui.topBar(this, "首页"), 0);
+        root.addView(Ui.topBar(this, "Ev课程表"), 0);
         setContentView(Ui.wrapWithBottomBar(this, root, 0));
         renderWeek();
     }
@@ -236,17 +237,18 @@ public class HomeActivity extends Activity {
         topRow.addView(spacer, new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
-        // notification icon
-        ImageView notifIcon = new ImageView(this);
-        notifIcon.setImageResource(R.drawable.ic_bell);
-        notifIcon.setColorFilter(Ui.TEXT);
-        topRow.addView(notifIcon, new LinearLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20)));
-        topRow.addView(Ui.space(this, 18));
-        // search icon（Lucide search）
-        ImageView searchIcon = new ImageView(this);
-        searchIcon.setImageResource(R.drawable.ic_search);
-        searchIcon.setColorFilter(Ui.TEXT);
-        topRow.addView(searchIcon, new LinearLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20)));
+        // 第二行原本是 🔔 + 🔍 两个装饰图标（没有任何功能，点了没反应）→ 按需求删除，
+        // 换成右上角一个「闹钟」入口（上课提醒在设置页里）
+        ImageView alarmIcon = new ImageView(this);
+        alarmIcon.setImageResource(R.drawable.ic_alarm);
+        alarmIcon.setColorFilter(Ui.TEXT);
+        alarmIcon.setContentDescription("上课提醒");
+        alarmIcon.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(HomeActivity.this, SettingsActivity.class));
+            }
+        });
+        topRow.addView(alarmIcon, new LinearLayout.LayoutParams(Ui.dp(this, 22), Ui.dp(this, 22)));
 
         root.addView(topRow);
         root.addView(Ui.space(this, 12));
@@ -265,15 +267,30 @@ public class HomeActivity extends Activity {
         titleRow.addView(greetingBlock,
                 new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
+        // 「回到本周」：翻到别的周之后一键回到当前周（weekOffset != 0 时才显示）
+        backToWeekBtn = Ui.button(this, "回到本周", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (weekOffset != 0) {
+                    weekOffset = 0;
+                    renderWeek();
+                }
+            }
+        });
+        backToWeekBtn.setVisibility(View.GONE);
+        LinearLayout.LayoutParams backP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        backP.setMargins(0, 0, Ui.dp(this, 8), 0);
+        titleRow.addView(backToWeekBtn, backP);
+
         // week switcher
         LinearLayout weekNav = new LinearLayout(this);
         weekNav.setOrientation(LinearLayout.HORIZONTAL);
         weekNav.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
-        TextView prevBtn = Ui.text(this, "‹", 22f, Ui.TEXT, true);
+        TextView prevBtn = Ui.text(this, "‹", 30f, Ui.TEXT, true);
         prevBtn.setGravity(android.view.Gravity.CENTER);
         prevBtn.setBackground(Ui.round(Ui.CARD, 17, Ui.LINE, this));
-        int btnSize = Ui.dp(this, 34);
+        int btnSize = Ui.dp(this, 44);
         prevBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { weekOffset--; renderWeek(); }
         });
@@ -286,7 +303,7 @@ public class HomeActivity extends Activity {
         });
         weekNav.addView(weekLabelView);
 
-        TextView nextBtn = Ui.text(this, "›", 22f, Ui.TEXT, true);
+        TextView nextBtn = Ui.text(this, "›", 30f, Ui.TEXT, true);
         nextBtn.setGravity(android.view.Gravity.CENTER);
         nextBtn.setBackground(Ui.round(Ui.CARD, 17, Ui.LINE, this));
         nextBtn.setOnClickListener(new View.OnClickListener() {
@@ -392,22 +409,28 @@ public class HomeActivity extends Activity {
             int cellH = Ui.dp(this, 62);
             boolean sel = (d == selectedDay);
 
+            // 假期 / 调休角标：「休」= 放假，「班」= 调休补课
+            java.util.Calendar dayCal = (java.util.Calendar) cal.clone();
+            String badge = Holiday.badge(this, dayCal);
+            String dayLabel = weekLabels[d] + (badge.length() > 0 ? " " + badge : "");
+
+            // 文字水平居中（之前 Ui.text 默认靠左，视觉上歪）
+            TextView wv = Ui.text(this, dayLabel, 11f, sel ? 0xFFFFFFFF : Ui.MUTED,
+                    badge.length() > 0);
+            wv.setGravity(android.view.Gravity.CENTER);
+            TextView dd = Ui.text(this, String.valueOf(cal.get(java.util.Calendar.DAY_OF_MONTH)),
+                    15f, sel ? 0xFFFFFFFF : Ui.TEXT, true);
+            dd.setGravity(android.view.Gravity.CENTER);
+            dd.setPadding(0, Ui.dp(this, 1), 0, 0);
+
             if (sel) {
                 cell.setBackground(Ui.round(Ui.ACCENT, 14, 0, this));
-                cell.addView(Ui.text(this, weekLabels[d], 11f, 0xFFFFFFFF, false));
-                TextView dd = Ui.text(this, String.valueOf(cal.get(java.util.Calendar.DAY_OF_MONTH)),
-                        15f, 0xFFFFFFFF, true);
-                dd.setPadding(0, Ui.dp(this, 1), 0, 0);
-                cell.addView(dd);
             } else {
                 cell.setBackground(Ui.round(Ui.CARD, 14, 0, this));
                 cell.setElevation(Ui.dp(this, 4));
-                cell.addView(Ui.text(this, weekLabels[d], 11f, Ui.MUTED, false));
-                TextView dd = Ui.text(this, String.valueOf(cal.get(java.util.Calendar.DAY_OF_MONTH)),
-                        15f, Ui.TEXT, true);
-                dd.setPadding(0, Ui.dp(this, 1), 0, 0);
-                cell.addView(dd);
             }
+            cell.addView(wv);
+            cell.addView(dd);
 
             final int dayIndex = d;
             cell.setOnClickListener(new View.OnClickListener() {
@@ -446,7 +469,31 @@ public class HomeActivity extends Activity {
         }
         renderDateStrip();
 
+        if (backToWeekBtn != null) {
+            backToWeekBtn.setVisibility(weekOffset == 0 ? View.GONE : View.VISIBLE);
+        }
+
         weekBox.removeAllViews();
+
+        // ── 假期 / 调休提示（移植自 EV 首页的祝福卡 + 调休提示条）──
+        int overrideToday = Holiday.resolveToday(this);
+        if (overrideToday == Holiday.HOLIDAY) {
+            String name = Holiday.holidayName(this, java.util.Calendar.getInstance());
+            TextView b = Ui.text(this, (name.length() > 0 ? name : "假期") + " · 今天休息，没有课",
+                    12.5f, 0xFF166534, false);
+            b.setPadding(Ui.dp(this, 10), Ui.dp(this, 8), Ui.dp(this, 10), Ui.dp(this, 8));
+            b.setBackground(Ui.round(0x2E22C55E, 10, 0, this));
+            weekBox.addView(b);
+            weekBox.addView(Ui.space(this, 8));
+        } else if (overrideToday >= 0) {
+            TextView b = Ui.text(this, "今天调休，按" + CourseCache.WEEK[overrideToday] + "课表",
+                    12.5f, 0xFF92400E, false);
+            b.setPadding(Ui.dp(this, 10), Ui.dp(this, 8), Ui.dp(this, 10), Ui.dp(this, 8));
+            b.setBackground(Ui.round(0x40FDE68A, 10, 0, this));
+            weekBox.addView(b);
+            weekBox.addView(Ui.space(this, 8));
+        }
+
         ScheduleStore.Schedule s = ScheduleStore.active(this);
         if (s == null) {
             if (greetingView != null) {

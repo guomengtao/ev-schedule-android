@@ -53,7 +53,14 @@ public class NextWidgetProvider extends AppWidgetProvider {
         rv.setTextColor(R.id.next_sub, Ui.MUTED);
 
         int today = CourseCache.todayIndex();
-        List<CourseCache.Course> day = CourseCache.coursesOfDay(CourseCache.load(ctx), today);
+        // 假期 / 调休（移植自 EV）：假期 → 显示「假期中」；调休 → 按目标周几的课表找下一节
+        int override = Holiday.resolveToday(ctx);
+        boolean holiday = (override == Holiday.HOLIDAY);
+        List<CourseCache.Course> day = CourseCache.coursesOfDay(CourseCache.load(ctx),
+                override >= 0 ? override : today);
+        if (holiday) {
+            day = new java.util.ArrayList<>();
+        }
         int now = CourseCache.nowMinutes();
 
         CourseCache.Course hit = null;
@@ -78,7 +85,12 @@ public class NextWidgetProvider extends AppWidgetProvider {
         }
 
         if (hit == null) {
-            rv.setTextViewText(R.id.next_name, day.isEmpty() ? "今天没课" : "今天的课都结束了");
+            String noClass = day.isEmpty()
+                    ? (holiday ? (Holiday.holidayName(ctx, java.util.Calendar.getInstance()) + " · 今天没课")
+                               : "今天没课")
+                    : "今天的课都结束了";
+            rv.setTextViewText(R.id.next_label, holiday ? "假期中" : "休息");
+            rv.setTextViewText(R.id.next_name, noClass);
             rv.setTextViewText(R.id.next_room, "");
             rv.setTextViewText(R.id.next_time, "");
             rv.setTextViewText(R.id.next_sub, "");
