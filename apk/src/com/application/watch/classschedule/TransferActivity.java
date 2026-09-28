@@ -241,12 +241,16 @@ public class TransferActivity extends Activity {
                     }
                 })));
         paste.addView(Ui.grid(this,
+                Ui.button(this, "粘贴", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { pasteToBox(); }
+                }),
                 Ui.button(this, "复制 JSON", false, new View.OnClickListener() {
                     @Override public void onClick(View v) { copyPaste(); }
-                }),
-                Ui.button(this, "选择文件", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { pickFile(); }
                 })));
+        paste.addView(Ui.space(this, 8));
+        paste.addView(Ui.button(this, "选择文件", false, new View.OnClickListener() {
+            @Override public void onClick(View v) { pickFile(); }
+        }));
         root.addView(paste);
         root.addView(Ui.space(this, 10));
 
@@ -624,6 +628,26 @@ public class TransferActivity extends Activity {
         } catch (Throwable t) {
             infoView.setText("复制失败：" + t);
             infoView.setTextColor(Ui.ERR);
+        }
+    }
+
+    /** 剪贴板 → 粘贴框，并自动解析预览（与 JSON 编辑器的粘贴同款行为）。 */
+    private void pasteToBox() {
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            ClipData clip = cm.getPrimaryClip();
+            String text = (clip != null && clip.getItemCount() > 0)
+                    ? String.valueOf(clip.getItemAt(0).coerceToText(this)) : "";
+            if (text.trim().length() == 0) {
+                resultView.setText("剪贴板是空的");
+                resultView.setTextColor(Ui.WARN);
+                return;
+            }
+            pasteBox.setText(text);
+            parseFromText(text, "粘贴内容");
+        } catch (Throwable t) {
+            resultView.setText("粘贴失败");
+            resultView.setTextColor(Ui.ERR);
         }
     }
 

@@ -107,34 +107,63 @@ public class ScheduleListActivity extends Activity {
             listBox.addView(Ui.text(this, "还没有课表，点下方按钮新建", 12.5f, Ui.MUTED, false));
             return;
         }
-        for (int i = 0; i < all.size(); i++) {
-            if (i > 0) {
+        // 分组：来自手环（连接时已自动同步保存到本地）在上，本机课表在下，中间分割线
+        List<ScheduleStore.Schedule> fromWatch = new ArrayList<>();
+        List<ScheduleStore.Schedule> local = new ArrayList<>();
+        for (ScheduleStore.Schedule s : all) {
+            (s.isSync() ? fromWatch : local).add(s);
+        }
+        if (!fromWatch.isEmpty()) {
+            listBox.addView(sectionHead("手环课表（已自动同步保存到本地）", fromWatch.size()));
+            for (ScheduleStore.Schedule s : fromWatch) {
+                listBox.addView(scheduleCard(s, activeId));
                 listBox.addView(Ui.space(this, 8));
             }
-            listBox.addView(scheduleCard(all.get(i), activeId));
         }
+        if (!local.isEmpty()) {
+            if (!fromWatch.isEmpty()) {
+                listBox.addView(divider());
+            }
+            listBox.addView(sectionHead("本机课表", local.size()));
+            for (ScheduleStore.Schedule s : local) {
+                listBox.addView(scheduleCard(s, activeId));
+                listBox.addView(Ui.space(this, 8));
+            }
+        }
+    }
+
+    /** 分组小标题：名称 + 数量 */
+    private View sectionHead(String label, int n) {
+        TextView t = Ui.text(this, label + " · " + n + " 套", 11.5f, Ui.MUTED, true);
+        t.setPadding(Ui.dp(this, 2), 0, 0, Ui.dp(this, 6));
+        return t;
+    }
+
+    /** 组间分割线 */
+    private View divider() {
+        View v = new View(this);
+        v.setBackgroundColor(Ui.LINE);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 1)));
+        p.setMargins(0, Ui.dp(this, 6), 0, Ui.dp(this, 10));
+        v.setLayoutParams(p);
+        return v;
     }
 
     private View scheduleCard(final ScheduleStore.Schedule s, final String activeId) {
         final boolean active = s.id.equals(activeId);
         LinearLayout card = Ui.card(this);
 
-        // 第一行：标题 + 右侧图标操作
+        // 第一行：标题 + 右侧图标操作（同步/编辑/删除）
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
-        StringBuilder title = new StringBuilder();
-        title.append(s.name);
-        if (active) {
-            title.append("  ✓");
-        }
-        TextView titleView = Ui.text(this, title.toString(), 14.5f,
+        TextView titleView = Ui.text(this, s.name, 14.5f,
                 active ? Ui.ACCENT : Ui.TEXT, true);
         head.addView(titleView,
                 new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
-        // 右侧图标行
         LinearLayout icons = new LinearLayout(this);
         icons.setOrientation(LinearLayout.HORIZONTAL);
         if (!s.isSync()) {
@@ -151,23 +180,33 @@ public class ScheduleListActivity extends Activity {
         head.addView(icons);
         card.addView(head);
 
+        // 第二行：副信息 + 右侧「当前」勾选框（替代原第三行「切换为此 →」）
+        LinearLayout row2 = new LinearLayout(this);
+        row2.setOrientation(LinearLayout.HORIZONTAL);
+        row2.setGravity(android.view.Gravity.CENTER_VERTICAL);
         TextView sub = Ui.text(this, s.sub(), 11.5f, Ui.MUTED, false);
-        sub.setPadding(0, Ui.dp(this, 4), 0, 0);
-        card.addView(sub);
+        row2.addView(sub, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
-        // 非激活：右下角「切换为此」文字链
-        if (!active) {
-            TextView switchLink = Ui.text(this, "切换为此 →", 12f, Ui.ACCENT, true);
-            switchLink.setPadding(0, Ui.dp(this, 6), 0, 0);
-            switchLink.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) {
+        final android.widget.CheckBox cur = new android.widget.CheckBox(this);
+        cur.setText("当前");
+        cur.setTextSize(12f);
+        cur.setTextColor(active ? Ui.ACCENT : Ui.MUTED);
+        cur.setChecked(active);
+        cur.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean isChecked) {
+                if (isChecked && !s.id.equals(ScheduleStore.activeId(ScheduleListActivity.this))) {
                     ScheduleStore.setActive(ScheduleListActivity.this, s.id);
                     status("已切换到「" + s.name + "」", Ui.OK);
                     render();
+                } else if (!isChecked && s.id.equals(ScheduleStore.activeId(ScheduleListActivity.this))) {
+                    // 当前课表不能取消勾选（要先勾选别的课表）
+                    b.setChecked(true);
                 }
-            });
-            card.addView(switchLink);
-        }
+            }
+        });
+        row2.addView(cur);
+        card.addView(row2);
         return card;
     }
 
@@ -239,38 +278,42 @@ public class ScheduleListActivity extends Activity {
     // ======================= 操作：删除 =======================
 
     private void deleteSchedule(final ScheduleStore.Schedule s) {
-        if (s.isSync()) {
-            // 已同步课表：仅删本地（手环删除本期不可用）
-            String msg = "确定仅从本机删除「" + s.name + "」？\n\n"
-                    + "手环上仍保留这套课表，下次连接手环同步时会重新拉取到本机。\n\n"
-                    + "（彻底从手环删除需手环端支持，暂未开放）";
-            new AlertDialog.Builder(this)
-                    .setTitle("删除课表")
-                    .setMessage(msg)
-                    .setPositiveButton("仅删本地", new DialogInterface.OnClickListener() {
-                        @Override public void onClick(DialogInterface d, int w) {
-                            ScheduleStore.remove(ScheduleListActivity.this, s.id);
-                            status("已从本机删除「" + s.name + "」（手环仍保留）", Ui.OK);
-                            render();
-                        }
-                    })
-                    .setNegativeButton("取消", null)
-                    .show();
-        } else {
-            // 本地课表：直接删
-            new AlertDialog.Builder(this)
-                    .setTitle("删除课表")
-                    .setMessage("确定删除「" + s.name + "」？此操作不可撤销。")
-                    .setPositiveButton("删除", new DialogInterface.OnClickListener() {
-                        @Override public void onClick(DialogInterface d, int w) {
-                            ScheduleStore.remove(ScheduleListActivity.this, s.id);
-                            status("已删除「" + s.name + "」", Ui.OK);
-                            render();
-                        }
-                    })
-                    .setNegativeButton("取消", null)
-                    .show();
+        final boolean syncOnly = s.isSync();
+        // 自定义弹窗视图：课表名 + 副信息 + 后果说明（红色），按钮也用危险色
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = Ui.dp(this, 20);
+        box.setPadding(pad, Ui.dp(this, 14), pad, Ui.dp(this, 2));
+        box.addView(Ui.text(this, s.name, 16f, Ui.TEXT, true));
+        TextView meta = Ui.text(this, s.sub(), 11.5f, Ui.MUTED, false);
+        meta.setPadding(0, Ui.dp(this, 2), 0, 0);
+        box.addView(meta);
+        TextView warn = Ui.text(this, syncOnly
+                        ? "仅从本机删除；手环上仍保留，下次连接同步时会重新拉回本机。"
+                        : "此操作不可撤销，删除后无法恢复。",
+                12f, Ui.ERR, false);
+        warn.setPadding(0, Ui.dp(this, 10), 0, 0);
+        box.addView(warn);
+        if (syncOnly) {
+            TextView extra = Ui.text(this, "彻底从手环删除需手环端支持，暂未开放", 10.5f, Ui.MUTED, false);
+            extra.setPadding(0, Ui.dp(this, 4), 0, 0);
+            box.addView(extra);
         }
+        AlertDialog dlg = new AlertDialog.Builder(this)
+                .setTitle(syncOnly ? "从本机移除课表" : "删除课表")
+                .setView(box)
+                .setPositiveButton(syncOnly ? "仅删本地" : "删除", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        ScheduleStore.remove(ScheduleListActivity.this, s.id);
+                        status(syncOnly ? "已从本机删除「" + s.name + "」（手环仍保留）"
+                                : "已删除「" + s.name + "」", Ui.OK);
+                        render();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+        dlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Ui.ERR);
+        dlg.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Ui.MUTED);
     }
 
     // ======================= 操作：同步到手环 =======================

@@ -501,6 +501,13 @@ public final class SyncEngine {
     }
 
     private void finish(final Steps s, final boolean ok, final String hint) {
+        if (!ok) {
+            // 连接失败：清掉上一轮缓存的连接痕迹。否则版本号还是旧值，
+            // connected() 恒为 true，状态条会拿着死链数据谎报「已连接」（用户实测踩过）。
+            versionName = "";
+            versionCode = 0;
+            courseCount = 0;
+        }
         try {
             Stats.connectEnd(ctx, ok, failStep, failStep > 0 ? failDetail : hint);
         } catch (Throwable ignored) {
