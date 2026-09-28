@@ -317,7 +317,7 @@ public final class Ui {
      */
     public static ViewGroup header(final Activity a, String title) {
         FrameLayout h = new FrameLayout(a);
-        h.setMinimumHeight(dp(a, 34));
+        h.setMinimumHeight(dp(a, 52));
         // 标题绝对居中
         TextView t = text(a, title, 18f, TEXT, true);
         t.setGravity(Gravity.CENTER);
@@ -325,7 +325,7 @@ public final class Ui {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.CENTER);
         h.addView(t, tp);
-        // 返回键固定居左
+        // 返回键固定居左。28dp 的点击区太小（用户反馈"有点小，加大至少 1 倍"）→ 56dp
         ImageView back = new ImageView(a);
         back.setImageResource(R.drawable.ic_chevron_left);
         back.setColorFilter(TEXT);
@@ -338,7 +338,7 @@ public final class Ui {
             }
         });
         FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(
-                dp(a, 28), dp(a, 28), Gravity.CENTER_VERTICAL);
+                dp(a, 56), dp(a, 56), Gravity.CENTER_VERTICAL);
         h.addView(back, bp);
         h.setTag(t);
         return h;
