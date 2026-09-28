@@ -50,12 +50,13 @@ public class BandActivity extends Activity {
         ImageView watchIv = new ImageView(this);
         watchIv.setImageResource(R.drawable.ic_tab_watch);
         watchIv.setColorFilter(Ui.ACCENT);
-        hRow.addView(watchIv, new LinearLayout.LayoutParams(Ui.dp(this, 168), Ui.dp(this, 168)));
+        // 左右分配 2:3（右侧信息列占五分之三）；图标在列内自适应缩放
+        hRow.addView(watchIv, new LinearLayout.LayoutParams(0, Ui.dp(this, 150), 2f));
 
         // 右：名称 ▼ / 状态 / 信息
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
-        info.setPadding(Ui.dp(this, 16), 0, 0, 0);
+        info.setPadding(Ui.dp(this, 12), 0, 0, 0);
 
         LinearLayout nameRow = new LinearLayout(this);
         nameRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -86,12 +87,8 @@ public class BandActivity extends Activity {
         heroInfoView.setPadding(0, Ui.dp(this, 2), 0, 0);
         info.addView(heroInfoView);
 
-        hRow.addView(info, new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        hero.addView(hRow);
-
-        hero.addView(Ui.space(this, 14));
-        // 胶囊按钮：未连接 = 同步（拉课表）；已连接 = 呼叫手环（响铃+震动+通知）
+        // 胶囊按钮放进信息列：天然与文字左对齐（未连接 = 同步；已连接 = 呼叫手环）
+        info.addView(Ui.space(this, 10));
         heroActionBtn = Ui.button(this, "同步", false, new View.OnClickListener() {
             @Override public void onClick(View v) { manualSync(); }
         });
@@ -99,10 +96,13 @@ public class BandActivity extends Activity {
         heroActionBtn.setTextColor(Ui.ACCENT);
         heroActionBtn.setBackground(Ui.round((Ui.ACCENT & 0x00FFFFFF) | 0x2E000000, 22, 0, this));
         heroActionBtn.setPadding(0, 0, 0, 0);
-        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
-                Ui.dp(this, 104), Ui.dp(this, 44));
-        sp.leftMargin = Ui.dp(this, 184);
-        hero.addView(heroActionBtn, sp);
+        info.addView(heroActionBtn, new LinearLayout.LayoutParams(
+                Ui.dp(this, 128), Ui.dp(this, 44)));
+
+        // 左右 2:3（右侧信息列占五分之三）
+        hRow.addView(info, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 3f));
+        hero.addView(hRow);
         root.addView(hero);
         root.addView(Ui.space(this, 10));
         updateHero();
