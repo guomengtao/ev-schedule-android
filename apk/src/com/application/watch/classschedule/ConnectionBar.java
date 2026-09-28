@@ -24,6 +24,7 @@ public final class ConnectionBar {
     /** 构建状态条并加入 parent；进页面若离线会自动触发一轮重连。 */
     public static void attach(final Activity a, LinearLayout parent) {
         LinearLayout bar = Ui.card(a);
+        bar.setOrientation(LinearLayout.HORIZONTAL); // Ui.card 默认纵向：图标+文字会占两行
         bar.setPadding(Ui.dp(a, 12), Ui.dp(a, 8), Ui.dp(a, 12), Ui.dp(a, 8));
         bar.setGravity(android.view.Gravity.CENTER_VERTICAL);
 

@@ -794,11 +794,28 @@ public final class SyncEngine {
         }
     }
 
+    /** 步骤 2：查已连接设备。⚠️ 必须带超时——小米运动健康偶尔不回调（蓝牙断/手环 USB 调试模式），
+     *  不加超时会永远「卡在第二步」。 */
     public void step2Nodes(final Cb cb) {
+        final boolean[] done = {false};
+        final Runnable timeout = new Runnable() {
+            @Override public void run() {
+                if (!done[0]) {
+                    done[0] = true;
+                    cb.on(false, "查找设备超时：小米运动健康无响应。检查手环蓝牙是否连接（手环插着 USB 调试线时也可能这样），稍后重试");
+                }
+            }
+        };
+        main.postDelayed(timeout, 10000);
         try {
             Wearable.getNodeApi(ctx).getConnectedNodes()
                     .addOnSuccessListener(new OnSuccessListener<List<Node>>() {
                         @Override public void onSuccess(List<Node> nodes) {
+                            if (done[0]) {
+                                return;
+                            }
+                            done[0] = true;
+                            main.removeCallbacks(timeout);
                             if (nodes == null || nodes.isEmpty()) {
                                 cb.on(false, "没有已连接设备");
                                 return;
@@ -819,9 +836,20 @@ public final class SyncEngine {
                         }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override public void onFailure(Exception e) { cb.on(false, humanize(e)); }
+                        @Override public void onFailure(Exception e) {
+                            if (done[0]) {
+                                return;
+                            }
+                            done[0] = true;
+                            main.removeCallbacks(timeout);
+                            cb.on(false, humanize(e));
+                        }
                     });
         } catch (Throwable t) {
+            if (!done[0]) {
+                done[0] = true;
+                main.removeCallbacks(timeout);
+            }
             cb.on(false, humanize(t));
         }
     }
