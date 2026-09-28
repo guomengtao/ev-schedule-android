@@ -7,6 +7,7 @@ import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -23,7 +24,7 @@ public class BandActivity extends Activity {
 
     private int lastThemeVersion = 0;
 
-    private TextView currentView, resultView, devStatusView;
+    private TextView currentView, resultView, devStatusView, heroNameView, heroInfoView;
     private EditText nickView;
 
     @Override
@@ -31,24 +32,81 @@ public class BandActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.topBar(this, "手环"));
+        root.addView(Ui.topBar(this, "穿戴设备"));
         root.addView(Ui.space(this, 12));
 
-        // ===== 设备头部：连接管理（多手环时在此查看/重置记忆） =====
-        LinearLayout devCard = Ui.card(this);
-        devStatusView = Ui.text(this, devText(), 12.5f, Ui.MUTED, false);
-        devStatusView.setPadding(0, Ui.dp(this, 2), 0, Ui.dp(this, 10));
-        devCard.addView(devStatusView);
-        devCard.addView(Ui.button(this, "重新选择设备", false, new View.OnClickListener() {
+        // ===== 设备头部（参考小米运动健康样式）：左表盘视觉 + 右名称▼/状态/信息 + 同步胶囊 =====
+        LinearLayout hero = Ui.card(this);
+        hero.setPadding(Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16));
+
+        LinearLayout hRow = new LinearLayout(this);
+        hRow.setOrientation(LinearLayout.HORIZONTAL);
+        hRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+        // 左：手环视觉（填充手表图标 + 浅色圆角底）
+        LinearLayout vis = new LinearLayout(this);
+        vis.setGravity(android.view.Gravity.CENTER);
+        vis.setBackground(Ui.round(Ui.CARD2, 24, 0, this));
+        ImageView watchIv = new ImageView(this);
+        watchIv.setImageResource(R.drawable.ic_tab_watch_filled);
+        watchIv.setColorFilter(Ui.ACCENT);
+        vis.addView(watchIv, new LinearLayout.LayoutParams(Ui.dp(this, 56), Ui.dp(this, 56)));
+        hRow.addView(vis, new LinearLayout.LayoutParams(Ui.dp(this, 104), Ui.dp(this, 120)));
+
+        // 右：名称 ▼ / 状态 / 信息
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        info.setPadding(Ui.dp(this, 16), 0, 0, 0);
+
+        LinearLayout nameRow = new LinearLayout(this);
+        nameRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        heroNameView = Ui.text(this, "未连接手环", 17f, Ui.TEXT, true);
+        nameRow.addView(heroNameView, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView caret = Ui.text(this, "▼", 11f, Ui.MUTED, false);
+        caret.setPadding(Ui.dp(this, 6), 0, 0, 0);
+        caret.setClickable(true);
+        caret.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
+                // ▼ = 清除设备记忆并重连（多手环时会重新询问选哪台）
                 SyncEngine.get(BandActivity.this).setPreferredNodeId("");
-                devStatusView.setText(devText());
-                resultView.setText("已清除记忆，下次连接会重新询问");
+                SyncEngine.get(BandActivity.this).autoReconnect();
+                resultView.setText("已清除设备记忆，正在重新连接…");
                 resultView.setTextColor(Ui.OK);
+                updateHero();
             }
-        }));
-        root.addView(devCard);
+        });
+        nameRow.addView(caret);
+        info.addView(nameRow);
+
+        devStatusView = Ui.text(this, "未连接", 13.5f, Ui.ERR, false);
+        devStatusView.setPadding(0, Ui.dp(this, 4), 0, 0);
+        info.addView(devStatusView);
+
+        heroInfoView = Ui.text(this, "打开小米运动健康连接手环", 12f, Ui.MUTED, false);
+        heroInfoView.setPadding(0, Ui.dp(this, 2), 0, 0);
+        info.addView(heroInfoView);
+
+        hRow.addView(info, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        hero.addView(hRow);
+
+        hero.addView(Ui.space(this, 14));
+        // 同步胶囊（浅主题色底 + 主题色字），对齐右侧信息列
+        android.widget.Button syncPill = Ui.button(this, "同步", false, new View.OnClickListener() {
+            @Override public void onClick(View v) { manualSync(); }
+        });
+        syncPill.setTextSize(15f);
+        syncPill.setTextColor(Ui.ACCENT);
+        syncPill.setBackground(Ui.round((Ui.ACCENT & 0x00FFFFFF) | 0x2E000000, 22, 0, this));
+        syncPill.setPadding(0, 0, 0, 0);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
+                Ui.dp(this, 104), Ui.dp(this, 44));
+        sp.leftMargin = Ui.dp(this, 120);
+        hero.addView(syncPill, sp);
+        root.addView(hero);
         root.addView(Ui.space(this, 10));
+        updateHero();
 
         // ===== 快捷操作（原首页设备卡 2×2 搬家至此：连接相关动作集中在设备页） =====
         LinearLayout quickCard = Ui.card(this);
@@ -290,7 +348,7 @@ public class BandActivity extends Activity {
                     resultView.setText("已连接 " + e.deviceName + " · v" + e.versionName
                             + " · 课表 " + e.courseCount + " 节");
                     resultView.setTextColor(Ui.OK);
-                    devStatusView.setText(devText());
+                    updateHero();
                     refresh();
                 } else {
                     resultView.setText("连接未完成：" + hint + "\n可到「连接调试」分步排查");
@@ -309,17 +367,27 @@ public class BandActivity extends Activity {
         }
         lastThemeVersion = Ui.themeVersion;
         refresh();
-        devStatusView.setText(devText());
+        updateHero();
     }
 
-    private String devText() {
+    /** 头部设备卡按连接状态刷新（名称/状态/信息三行）。 */
+    private void updateHero() {
         SyncEngine e = SyncEngine.get(this);
         if (e.connected()) {
             String name = (e.deviceName == null || e.deviceName.length() == 0)
                     ? "手环" : e.deviceName;
-            return "● 已连接：" + name + "  ·  EV " + e.versionName;
+            heroNameView.setText(name);
+            devStatusView.setText("已连接");
+            devStatusView.setTextColor(Ui.OK);
+            heroInfoView.setText("EV " + e.versionName + " · 课表 " + e.courseCount + " 节");
+            heroInfoView.setTextColor(Ui.MUTED);
+        } else {
+            heroNameView.setText("未连接手环");
+            devStatusView.setText("未连接");
+            devStatusView.setTextColor(Ui.ERR);
+            heroInfoView.setText("打开小米运动健康连接手环，或点下方「连接手环」");
+            heroInfoView.setTextColor(Ui.MUTED);
         }
-        return "○ 未连接：打开首页会自动连接手环；如有多台设备，连接时会询问选哪台";
     }
 
     private void refresh() {
