@@ -52,7 +52,17 @@ public class BandActivity extends Activity {
 
         // ===== 快捷操作（原首页设备卡 2×2 搬家至此：连接相关动作集中在设备页） =====
         LinearLayout quickCard = Ui.card(this);
-        quickCard.addView(Ui.text(this, "快捷操作", 12.5f, Ui.TEXT, true));
+        // 标题行带 ⌚ 图标块（自首页设备卡迁来的视觉元素，颜色随主题）
+        LinearLayout quickHead = new LinearLayout(this);
+        quickHead.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView qIcon = Ui.text(this, "⌚", 20f, Ui.ACCENT, false);
+        qIcon.setGravity(android.view.Gravity.CENTER);
+        qIcon.setBackground(Ui.round((Ui.ACCENT & 0x00FFFFFF) | 0x1E000000, 12, 0, this));
+        quickHead.addView(qIcon, new LinearLayout.LayoutParams(Ui.dp(this, 38), Ui.dp(this, 38)));
+        TextView qTitle = Ui.text(this, "快捷操作", 12.5f, Ui.TEXT, true);
+        qTitle.setPadding(Ui.dp(this, 10), 0, 0, 0);
+        quickHead.addView(qTitle);
+        quickCard.addView(quickHead);
         quickCard.addView(Ui.space(this, 8));
         quickCard.addView(Ui.grid(this,
                 Ui.button(this, "手环课程同步", true, new View.OnClickListener() {
