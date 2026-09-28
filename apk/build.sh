@@ -201,6 +201,7 @@ cp "$OUT" "$OUT_NAME.apk"
 #   GH_REPO / GH_PROXY 可用环境变量覆盖；GH_REPO 未设置时 URL 留空，发布时手补。
 GH_REPO="${GH_REPO:-}"                            # 例: yourname/EvCourse
 GH_PROXY="${GH_PROXY:-https://ghproxy.com}"
+UPDATE_LOG="${UPDATE_LOG:-}"                      # 本次更新说明，弹窗正文展示
 SHA256=$(shasum -a 256 "$OUT" | cut -d' ' -f1)
 ORIGIN=""
 if [ -n "$GH_REPO" ]; then
@@ -209,7 +210,7 @@ fi
 cat > "dist/update-${VARIANT}.json" <<EOF
 {"versionCode":$VERSION_CODE,"versionName":"$VERSION_NAME","sha256":"$SHA256",
  "downloadUrlMirror":"${GH_PROXY:+$GH_PROXY/}$ORIGIN","downloadUrlOrigin":"$ORIGIN",
- "isForce":false,"updateLog":""}
+ "isForce":false,"updateLog":"$UPDATE_LOG"}
 EOF
 
 echo
