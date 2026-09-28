@@ -118,6 +118,15 @@ public class BandActivity extends Activity {
                     }
                 }));
 
+        // ===== 工具箱（找手机/状态/静音/倒计时） =====
+        root.addView(Ui.space(this, 6));
+        root.addView(Ui.row(this, "工具箱", "找手机 / 手机状态 / 静音 / 倒计时", Ui.TEXT,
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        startActivity(new Intent(BandActivity.this, ToolboxActivity.class));
+                    }
+                }));
+
         // ===== 留言（原底栏入口取消后的固定去处） =====
         root.addView(Ui.space(this, 6));
         root.addView(Ui.row(this, "留言", "给手环发消息 / 查看手环发来的留言", Ui.TEXT,

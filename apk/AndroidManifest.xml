@@ -91,6 +91,9 @@
         <activity android:name="com.application.watch.classschedule.DebugActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
+        <activity android:name="com.application.watch.classschedule.ToolboxActivity"
+            android:exported="true"
+            android:windowSoftInputMode="stateAlwaysHidden" />
         <activity android:name="com.application.watch.classschedule.BandActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
@@ -159,6 +162,10 @@
         </receiver>
 
         <!-- 上课提醒：闹钟触发 + 开机/应用更新后补排（闹钟不跨重启存活） -->
+        <!-- 工具箱：找手机停止 / 倒计时到点（闹钟跨进程重启可达） -->
+        <receiver
+            android:name="com.application.watch.classschedule.ToolboxReceiver"
+            android:exported="false" />
         <receiver
             android:name="com.application.watch.classschedule.ReminderReceiver"
             android:exported="false" />

