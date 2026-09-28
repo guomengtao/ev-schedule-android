@@ -503,6 +503,7 @@ public final class SyncEngine {
                 autoRetryRunning = false;
                 if (ok) {
                     pullAndStore(ctx);
+                    requestBattery(); // EV 支持就显示电量，不支持静默
                 }
                 notifyStatus();
             }
@@ -605,6 +606,36 @@ public final class SyncEngine {
             }
             @Override public void onTimeout(String hint) { pullNextMissing(c, i + 1); }
             @Override public void onError(String msg) { pullNextMissing(c, i + 1); }
+        });
+    }
+
+    /** 手环电量（0=未知；小米穿戴 SDK 无电量接口，只能由手环侧 EV 上报）。 */
+    public int batteryPercent = 0;
+    public int batteryDays = 0;
+
+    /**
+     * 向手环 EV 要电量（前向兼容：EV 侧暂不支持 → 超时静默失败，界面不显示，绝不给假数据）。
+     * EV 以后支持 {"action":"get_battery"} 回 {ok,battery,days} 即可自动显示。
+     */
+    public void requestBattery() {
+        if (nodeId == null) {
+            return;
+        }
+        send("{\"action\":\"get_battery\"}", new Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(json);
+                    int p = o.optInt("battery", o.optInt("percent", 0));
+                    if (p > 0) {
+                        batteryPercent = p;
+                        batteryDays = o.optInt("days", o.optInt("lastFullDays", 0));
+                        notifyStatus();
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            @Override public void onTimeout(String h) { }
+            @Override public void onError(String m) { }
         });
     }
 

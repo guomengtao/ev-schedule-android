@@ -25,6 +25,8 @@ public class BandActivity extends Activity {
     private int lastThemeVersion = 0;
 
     private TextView currentView, resultView, devStatusView, heroNameView, heroInfoView;
+    private android.widget.Button heroActionBtn;
+    private Runnable heroTick;
     private EditText nickView;
 
     @Override
@@ -43,15 +45,11 @@ public class BandActivity extends Activity {
         hRow.setOrientation(LinearLayout.HORIZONTAL);
         hRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
-        // 左：手环视觉（填充手表图标 + 浅色圆角底）
-        LinearLayout vis = new LinearLayout(this);
-        vis.setGravity(android.view.Gravity.CENTER);
-        vis.setBackground(Ui.round(Ui.CARD2, 24, 0, this));
+        // 左：手环视觉（线框图标、无背景、放大一倍）
         ImageView watchIv = new ImageView(this);
-        watchIv.setImageResource(R.drawable.ic_tab_watch_filled);
+        watchIv.setImageResource(R.drawable.ic_tab_watch);
         watchIv.setColorFilter(Ui.ACCENT);
-        vis.addView(watchIv, new LinearLayout.LayoutParams(Ui.dp(this, 56), Ui.dp(this, 56)));
-        hRow.addView(vis, new LinearLayout.LayoutParams(Ui.dp(this, 104), Ui.dp(this, 120)));
+        hRow.addView(watchIv, new LinearLayout.LayoutParams(Ui.dp(this, 112), Ui.dp(this, 112)));
 
         // 右：名称 ▼ / 状态 / 信息
         LinearLayout info = new LinearLayout(this);
@@ -92,76 +90,51 @@ public class BandActivity extends Activity {
         hero.addView(hRow);
 
         hero.addView(Ui.space(this, 14));
-        // 同步胶囊（浅主题色底 + 主题色字），对齐右侧信息列
-        android.widget.Button syncPill = Ui.button(this, "同步", false, new View.OnClickListener() {
+        // 胶囊按钮：未连接 = 同步（拉课表）；已连接 = 呼叫手环（响铃+震动+通知）
+        heroActionBtn = Ui.button(this, "同步", false, new View.OnClickListener() {
             @Override public void onClick(View v) { manualSync(); }
         });
-        syncPill.setTextSize(15f);
-        syncPill.setTextColor(Ui.ACCENT);
-        syncPill.setBackground(Ui.round((Ui.ACCENT & 0x00FFFFFF) | 0x2E000000, 22, 0, this));
-        syncPill.setPadding(0, 0, 0, 0);
+        heroActionBtn.setTextSize(15f);
+        heroActionBtn.setTextColor(Ui.ACCENT);
+        heroActionBtn.setBackground(Ui.round((Ui.ACCENT & 0x00FFFFFF) | 0x2E000000, 22, 0, this));
+        heroActionBtn.setPadding(0, 0, 0, 0);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
-                Ui.dp(this, 104), Ui.dp(this, 44));
-        sp.leftMargin = Ui.dp(this, 120);
-        hero.addView(syncPill, sp);
+                Ui.dp(this, 128), Ui.dp(this, 44));
+        sp.leftMargin = Ui.dp(this, 128);
+        hero.addView(heroActionBtn, sp);
         root.addView(hero);
         root.addView(Ui.space(this, 10));
         updateHero();
+        // 状态回调（电量/连接变化）刷新头部；heroTick 作为字段保持强引用，避免弱引用被回收
+        heroTick = new Runnable() {
+            @Override public void run() { updateHero(); }
+        };
+        SyncEngine.get(this).addStatusCallback(heroTick);
 
-        // ===== 快捷操作（原首页设备卡 2×2 搬家至此：连接相关动作集中在设备页） =====
-        LinearLayout quickCard = Ui.card(this);
-        // 标题行带 ⌚ 图标块（自首页设备卡迁来的视觉元素，颜色随主题）
-        LinearLayout quickHead = new LinearLayout(this);
-        quickHead.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        TextView qIcon = Ui.text(this, "⌚", 20f, Ui.ACCENT, false);
-        qIcon.setGravity(android.view.Gravity.CENTER);
-        qIcon.setBackground(Ui.round((Ui.ACCENT & 0x00FFFFFF) | 0x1E000000, 12, 0, this));
-        quickHead.addView(qIcon, new LinearLayout.LayoutParams(Ui.dp(this, 38), Ui.dp(this, 38)));
-        TextView qTitle = Ui.text(this, "快捷操作", 12.5f, Ui.TEXT, true);
-        qTitle.setPadding(Ui.dp(this, 10), 0, 0, 0);
-        quickHead.addView(qTitle);
-        quickCard.addView(quickHead);
-        quickCard.addView(Ui.space(this, 8));
-        quickCard.addView(Ui.grid(this,
-                Ui.button(this, "手环课程同步", true, new View.OnClickListener() {
-                    @Override public void onClick(View v) { manualSync(); }
-                }),
-                Ui.button(this, "呼叫手环", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { callBand(); }
-                })));
-        quickCard.addView(Ui.space(this, 8));
-        quickCard.addView(Ui.grid(this,
-                Ui.button(this, "发消息给手环", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { quickMessage(); }
-                }),
-                Ui.button(this, "连接手环", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { startConnect(); }
-                })));
-        root.addView(quickCard);
-        root.addView(Ui.space(this, 10));
+        // ===== 昵称（当前值 + 输入框 + 修改按钮，一行内完成） =====
+        LinearLayout nickCard = Ui.card(this);
+        nickCard.addView(Ui.text(this, "昵称（会写入手环）", 12.5f, Ui.TEXT, true));
+        nickCard.addView(Ui.space(this, 6));
+        currentView = Ui.text(this, "—", 17f, Ui.TEXT, true);
+        nickCard.addView(currentView);
+        nickCard.addView(Ui.space(this, 10));
 
-        // ===== 昵称（写回手环） =====
-        LinearLayout card = Ui.card(this);
-        card.addView(Ui.text(this, "当前昵称", 12f, Ui.MUTED, false));
-        currentView = Ui.text(this, "—", 18f, Ui.TEXT, true);
-        currentView.setPadding(0, Ui.dp(this, 4), 0, 0);
-        card.addView(currentView);
-        root.addView(card);
-        root.addView(Ui.space(this, 10));
-
-        LinearLayout edit = Ui.card(this);
-        edit.addView(Ui.text(this, "修改昵称（会写入手环）", 12.5f, Ui.TEXT, true));
-        edit.addView(Ui.space(this, 8));
+        LinearLayout nickRow = new LinearLayout(this);
+        nickRow.setOrientation(LinearLayout.HORIZONTAL);
+        nickRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         nickView = new EditText(this);
         nickView.setTextSize(14f);
         nickView.setTextColor(Ui.TEXT);
         nickView.setHint("请输入昵称");
-        edit.addView(nickView);
-        edit.addView(Ui.space(this, 10));
-        edit.addView(Ui.button(this, "保存到手环", true, new View.OnClickListener() {
+        nickRow.addView(nickView, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        nickRow.addView(Ui.space(this, 8));
+        nickRow.addView(Ui.button(this, "修改", true, new View.OnClickListener() {
             @Override public void onClick(View v) { save(); }
-        }));
-        root.addView(edit);
+        }), new LinearLayout.LayoutParams(Ui.dp(this, 88),
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        nickCard.addView(nickRow);
+        root.addView(nickCard);
         root.addView(Ui.space(this, 10));
 
         resultView = Ui.text(this, "", 12.5f, Ui.MUTED, false);
@@ -368,9 +341,13 @@ public class BandActivity extends Activity {
         lastThemeVersion = Ui.themeVersion;
         refresh();
         updateHero();
+        SyncEngine e = SyncEngine.get(this);
+        if (e.connected()) {
+            e.requestBattery(); // 有结果会经状态回调刷新头部
+        }
     }
 
-    /** 头部设备卡按连接状态刷新（名称/状态/信息三行）。 */
+    /** 头部设备卡按连接状态刷新（名称/状态/信息三行 + 胶囊按钮语义）。 */
     private void updateHero() {
         SyncEngine e = SyncEngine.get(this);
         if (e.connected()) {
@@ -379,14 +356,27 @@ public class BandActivity extends Activity {
             heroNameView.setText(name);
             devStatusView.setText("已连接");
             devStatusView.setTextColor(Ui.OK);
-            heroInfoView.setText("EV " + e.versionName + " · 课表 " + e.courseCount + " 节");
+            // 电量：EV 侧支持才显示（SDK 无电量接口，读不到就不显示，绝不给假数据）
+            String bat = (e.batteryPercent > 0)
+                    ? ("电量 " + e.batteryPercent + "%"
+                        + (e.batteryDays > 0 ? " · 距上次充满已 " + e.batteryDays + " 天" : "") + "　·　")
+                    : "";
+            heroInfoView.setText(bat + "EV " + e.versionName + " · 课表 " + e.courseCount + " 节");
             heroInfoView.setTextColor(Ui.MUTED);
+            heroActionBtn.setText("呼叫手环");
+            heroActionBtn.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { callBand(); }
+            });
         } else {
             heroNameView.setText("未连接手环");
             devStatusView.setText("未连接");
             devStatusView.setTextColor(Ui.ERR);
-            heroInfoView.setText("打开小米运动健康连接手环，或点下方「连接手环」");
+            heroInfoView.setText("打开小米运动健康连接手环，再点「同步」读取手环课表");
             heroInfoView.setTextColor(Ui.MUTED);
+            heroActionBtn.setText("同步");
+            heroActionBtn.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { manualSync(); }
+            });
         }
     }
 
