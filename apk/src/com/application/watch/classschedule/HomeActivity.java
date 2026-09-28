@@ -40,7 +40,6 @@ public class HomeActivity extends Activity {
     // ---- EV 新首页视图 ----
     private TextView scheduleNameView, miniStatusView;
     private LinearLayout weekBox, errorCard, quickBox;
-    private android.widget.Button backToWeekBtn;
     private TextView hintView;
     private int phase = PHASE_CONNECT;
 
@@ -264,12 +263,12 @@ public class HomeActivity extends Activity {
         greetingView = Ui.text(this, "Hi，同学", 14f, Ui.MUTED, false);
         greetingBlock.addView(greetingView);
         pageTitleView = Ui.text(this, "本周课表", 26f, Ui.TEXT, true);
-        greetingBlock.addView(pageTitleView);
-        titleRow.addView(greetingBlock,
-                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-        // 「回到本周」：翻到别的周之后一键回到当前周（weekOffset != 0 时才显示）
-        backToWeekBtn = Ui.button(this, "回到本周", false, new View.OnClickListener() {
+        // 标题位复用为「状态/操作」双态切换（显隐在 renderWeek 里控制）：
+        // 当前周 = 「📅 本周课表」普通标题（图标仅装饰、中性色、不可点）；
+        // 非当前周 = 「回到本周 ↩」可点操作（主题色 + 按压水波纹）。
+        // 两种状态都是「图标 + 4 字」，宽度稳定，右侧周导航不会左右晃。
+        pageTitleView.setCompoundDrawablePadding(Ui.dp(this, 8));
+        pageTitleView.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (weekOffset != 0) {
                     weekOffset = 0;
@@ -277,11 +276,9 @@ public class HomeActivity extends Activity {
                 }
             }
         });
-        backToWeekBtn.setVisibility(View.GONE);
-        LinearLayout.LayoutParams backP = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        backP.setMargins(0, 0, Ui.dp(this, 8), 0);
-        titleRow.addView(backToWeekBtn, backP);
+        greetingBlock.addView(pageTitleView);
+        titleRow.addView(greetingBlock,
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         // week switcher
         LinearLayout weekNav = new LinearLayout(this);
@@ -469,8 +466,28 @@ public class HomeActivity extends Activity {
         }
         renderDateStrip();
 
-        if (backToWeekBtn != null) {
-            backToWeekBtn.setVisibility(weekOffset == 0 ? View.GONE : View.VISIBLE);
+        // 标题位双态：当前周=普通标题（📅 中性色，不可点、无按压态）；非当前周=「回到本周 ↩」
+        // （主题色 + 水波纹按压，整块可点，语义 contentDescription=回到今天所在周）。
+        // 周范围标签（weekLabelView）始终显示，翻到别的周也能看到当前看的是哪一周。
+        if (weekOffset == 0) {
+            pageTitleView.setText("本周课表");
+            pageTitleView.setTextColor(Ui.TEXT);
+            pageTitleView.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_calendar, 0, 0, 0);
+            pageTitleView.getCompoundDrawables()[0].setColorFilter(Ui.MUTED, android.graphics.PorterDuff.Mode.SRC_IN);
+            pageTitleView.setBackground(null);
+            pageTitleView.setClickable(false);
+            pageTitleView.setContentDescription(null);
+        } else {
+            pageTitleView.setText("回到本周");
+            pageTitleView.setTextColor(Ui.ACCENT);
+            pageTitleView.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.ic_corner_up_left, 0);
+            pageTitleView.getCompoundDrawables()[2].setColorFilter(Ui.ACCENT, android.graphics.PorterDuff.Mode.SRC_IN);
+            int rippleColor = (Ui.ACCENT & 0x00FFFFFF) | 0x33000000; // 主色 20% 透明按压反馈
+            android.graphics.drawable.GradientDrawable bg = Ui.round(0x00000000, 10, 0, this);
+            pageTitleView.setBackground(new android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(rippleColor), bg, null));
+            pageTitleView.setClickable(true);
+            pageTitleView.setContentDescription("回到今天所在周");
         }
 
         weekBox.removeAllViews();
