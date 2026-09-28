@@ -46,6 +46,8 @@ public final class Analytics {
         if (!enabled || ctx == null) {
             return;
         }
+        // 兜底初始化（正常路径已由 EvApp.onCreate 调过；这里保证埋点一定拿到统计值）
+        Stats.onProcessStart(ctx);
         boolean connected = false;
         String nickname = "";
         String nodeId = "";
@@ -71,7 +73,7 @@ public final class Analytics {
             body.put("deviceId", nodeId);
             body.put("device", deviceInfo());
             body.put("app", appInfo(ctx));
-            body.put("watch", watchInfo(connected, watchName, evVersion, evCode, nodeId));
+            body.put("watch", watchInfo(ctx, connected, watchName, evVersion, evCode, nodeId));
         } catch (Throwable ignored) {
         }
         Net.postJson(Net.BASE + "/api/activate?section=visitor-track", body.toString(), null);
@@ -157,6 +159,8 @@ public final class Analytics {
             // first_install / last_update 让服务端能算出「装机时长」和「是否升级过」
             a.put("first_install", pi.firstInstallTime / 1000);
             a.put("last_update", pi.lastUpdateTime / 1000);
+            // 本机累计：升级次数 / 打开次数 / 前台时长（见 Stats）
+            Stats.fillApp(ctx, a);
         } catch (Throwable ignored) {
         }
         return a;
@@ -164,7 +168,7 @@ public final class Analytics {
 
     // ---------------- 手环 / EV 快应用 ----------------
 
-    private static JSONObject watchInfo(boolean connected, String model, String evVersion, int evCode, String nodeId) {
+    private static JSONObject watchInfo(Context ctx, boolean connected, String model, String evVersion, int evCode, String nodeId) {
         JSONObject w = new JSONObject();
         try {
             w.put("connected", connected);
@@ -172,6 +176,8 @@ public final class Analytics {
             w.put("ev_version", safe(evVersion));
             w.put("ev_code", evCode);
             w.put("node_id", safe(nodeId));
+            // 连接次数 / 成功率 / 失败步与原因（见 Stats + SyncEngine）
+            Stats.fillWatch(ctx, w);
         } catch (Throwable ignored) {
         }
         return w;

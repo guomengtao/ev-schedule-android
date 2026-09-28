@@ -105,6 +105,10 @@ public final class SyncEngine {
     private String[] pendingLabels, pendingDetails;
     private int[] pendingStates;
 
+    // 埋点统计：本次连接第一个失败步（1-4，0=没失败）与详情，供 Stats.connectEnd 落盘
+    private int failStep;
+    private String failDetail = "";
+
     public void setNodeChooser(NodeChooser c) {
         chooser = c;
     }
@@ -179,6 +183,7 @@ public final class SyncEngine {
 
     public boolean sdkReady() { return api != null; }
     public boolean hasNode() { return nodeId != null; }
+    public String getNodeId() { return nodeId; }
     public boolean connected() { return hasNode() && versionName.length() > 0; }
 
     private final OnMessageReceivedListener rx = new OnMessageReceivedListener() {
@@ -204,10 +209,31 @@ public final class SyncEngine {
                         } catch (Throwable ignored) {
                         }
                     }
+                    // 消息投递追踪：收到来自后台的推送时，自动回 ACK
+                    ackIfNeeded(text);
                 }
             });
         }
     };
+
+    /** 如果消息体含 messageId，则回 ACK 到后台用于投递追踪 */
+    private void ackIfNeeded(String text) {
+        try {
+            if (text == null || text.isEmpty()) {
+                return;
+            }
+            org.json.JSONObject msg = new org.json.JSONObject(text);
+            String messageId = msg.optString("messageId", null);
+            if (messageId == null || messageId.isEmpty()) {
+                return;
+            }
+            org.json.JSONObject ack = new org.json.JSONObject();
+            ack.put("messageId", messageId);
+            ack.put("deviceId", nodeId != null ? nodeId : "");
+            Net.postJson(Net.BASE + "/api/notify/ack", ack.toString(), null);
+        } catch (Throwable ignored) {
+        }
+    }
 
     private Observer observer;
 
@@ -321,6 +347,9 @@ public final class SyncEngine {
         // 重新连接：清掉上一次"等待用户选设备"的残留状态
         pendingDevices = null;
         pendingSteps = null;
+        failStep = 0;
+        failDetail = "";
+        Stats.connectStart(ctx);
         final String[] labels = {"初始化穿戴服务", "查找已连接设备", "申请设备权限", "连接 EV 课程表"};
         final int[] states = {RUNNING, PENDING, PENDING, PENDING};
         final String[] details = {"", "", "", ""};
@@ -329,6 +358,19 @@ public final class SyncEngine {
     }
 
     private void emit(final Steps s, final String[] labels, final int[] states, final String[] details) {
+        // 顺手记下本次连接「第一个失败步」及其详情（finish 拿不到 states，埋点统计在这里采集）
+        try {
+            if (failStep == 0) {
+                for (int i = 0; i < states.length; i++) {
+                    if (states[i] == FAIL) {
+                        failStep = i + 1;
+                        failDetail = details[i] == null ? "" : details[i];
+                        break;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
         main.post(new Runnable() {
             @Override public void run() {
                 if (s != null) {
@@ -339,6 +381,10 @@ public final class SyncEngine {
     }
 
     private void finish(final Steps s, final boolean ok, final String hint) {
+        try {
+            Stats.connectEnd(ctx, ok, failStep, failStep > 0 ? failDetail : hint);
+        } catch (Throwable ignored) {
+        }
         main.post(new Runnable() {
             @Override public void run() {
                 if (s != null) {

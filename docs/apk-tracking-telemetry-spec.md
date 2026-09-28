@@ -47,8 +47,10 @@ APK Analytics.pageView()                                    ┌─▶ visitor_lo
 | `variant` | `Variant.name()` = `ev` / `evbox` | 同一套源码两个包名，必须区分 | ★ |
 | `first_install` | `PackageInfo.firstInstallTime` | 装机时间、"装机多久了还没激活" | ★ |
 | `last_update` | `PackageInfo.lastUpdateTime` | 与 `first_install` 不等 → 至少升级过一次 | ★ |
-| 升级次数 | 本地计数器（见 §6.1） | 升级率 | ☆ |
-| 使用次数 / 使用时长 | 前台生命周期累计（见 §6.2） | 活跃度、真实留存 | ☆ |
+| `upgrade_count` | 本地计数器：`versionCode` 变大即 +1（`Stats`） | 升级率 | ★ |
+| `open_count` | 进程启动次数（= 用户打开 App 的次数） | 活跃度 | ★ |
+| `foreground_ms` | Activity 前台时长累计（`EvApp` 生命周期回调） | 真实使用时长 | ★ |
+| `last_open_ms` | 最近一次打开时间 | 活跃度、流失判断 | ★ |
 | 下载渠道 | 打包注入或服务端重定向（见 §6.4） | 分渠道转化 | ☆ |
 
 ### 2.3 手环 / EV 快应用（`body.watch`）
@@ -60,7 +62,9 @@ APK Analytics.pageView()                                    ┌─▶ visitor_lo
 | `ev_version` / `ev_code` | `SyncEngine.versionName` / `versionCode` | EV 快应用版本（`list_schedules` 需 ≥1.6.139 这类判断靠它） | ★ |
 | `node_id` | `SyncEngine.getNodeId()` | 定位具体设备；排查"配对的是哪台手环" | ★ |
 | `nickname` | `SyncEngine.nickname` | 手环端昵称 | ★ |
-| 连接次数 / 各步耗时 / 失败原因 | SyncEngine 四步回调（见 §6.3） | 连接成功率、卡在第几步 | ☆ |
+| `connect_total` / `connect_ok` / `connect_fail` | SyncEngine 四步状态机钩子（`Stats`） | 连接成功率 | ★ |
+| `connect_last_ms` | 上一次「成功连接」耗时 | 连接慢不慢 | ★ |
+| `connect_last_fail_step` / `connect_last_fail_reason` | 第一个失败步（1 初始化服务 / 2 查找设备 / 3 申请权限 / 4 ping EV）+ 详情文案 | **直接回答"卡在第几步"** | ★ |
 
 ### 2.4 页面与位置（服务端补齐）
 
@@ -88,10 +92,13 @@ APK Analytics.pageView()                                    ┌─▶ visitor_lo
 {
   "model": "PGT-AN00", "brand": "HUAWEI", "manufacturer": "HUAWEI",
   "os": "12", "sdk": 31, "os_brand": "harmony",
-  "app_version": "0.5.44", "app_code": 45, "app_variant": "ev",
+  "app_version": "0.5.45", "app_code": 46, "app_variant": "ev",
   "first_install": 1758000000, "last_update": 1758900000,
+  "app_upgrade_count": 3, "app_open_count": 27, "app_foreground_ms": 5025000, "app_last_open": 1759000000,
   "watch_model": "小米手环 10 Pro", "watch_ev_version": "1.6.145", "watch_ev_code": 974,
-  "watch_connected": true, "watch_node_id": "2137618976", "nickname": "小明"
+  "watch_connected": true, "watch_node_id": "2137618976", "nickname": "小明",
+  "watch_connect_total": 9, "watch_connect_ok": 7, "watch_connect_fail": 2,
+  "watch_connect_last_ms": 4200, "watch_last_fail_step": 4, "watch_last_fail_reason": "无回应（超时）"
 }
 ```
 
@@ -127,6 +134,9 @@ APK Analytics.pageView()                                    ┌─▶ visitor_lo
 | 仓 | 文件 | 改了什么 |
 |---|---|---|
 | 本仓 | `apk/src/com/application/watch/classschedule/Analytics.java` | `pageView()` 增加 `device` / `app` / `watch` 三段；新增 `osBrand()` 鸿蒙判定 |
+| 本仓 | `apk/src/.../Stats.java`（新） | 本机累计统计：升级次数 / 打开次数 / 前台时长 / 连接统计，存 `SharedPreferences("ev_stats")` |
+| 本仓 | `apk/src/.../EvApp.java`（新）+ `AndroidManifest.xml` | `Application` + `ActivityLifecycleCallbacks` → 前台时长；manifest `<application>` 加 `android:name=".EvApp"` |
+| 本仓 | `apk/src/.../SyncEngine.java` | `connect()` 记开始、`emit()` 记第一个失败步、`finish()` 落结果（不动四步逻辑） |
 | app-auth | `lib/visitor-log.js` | `visitor_logs` 加 4 列；`logVisit()` 收 `entry.device` 落库；`listRecent()` 带出设备字段 |
 | app-auth | `api/activate.js` | `sanitizeDevice()` 白名单解析；写入 `visitor_logs`；`page_visit` 推送带设备字段 |
 | app-auth | `api/admin/health.js` | `handleVisitorRecent2` 透传 `deviceModel/osVersion/osBrand/device` |
@@ -142,31 +152,32 @@ APK Analytics.pageView()                                    ┌─▶ visitor_lo
 
 ---
 
-## 六、第二期：需要本地计数器的字段
+## 六、本地计数器（已实现）
 
-这些字段**设备端一次算不出来**，必须在 APK 侧累积计数器（`SharedPreferences`），再随埋点一起上报。
+这些字段**设备端一次算不出来**，需要在 APK 侧累积计数器，再随埋点一起上报。
+统一实现点在 `Stats.java`（存 `SharedPreferences("ev_stats")`），**所有方法都不抛异常**——统计坏掉绝不能影响主流程。
 
-### 6.1 升级次数（低成本，先做）
+### 6.1 升级次数（`app.upgrade_count`）
 
-- **推荐**：本地存 `last_seen_version_code`；启动时若 `PackageInfo.versionCode` 与它不同 → `upgrade_count += 1` 并回写。
-- **辅助**：`first_install` / `last_update` 已上报，服务端也能算「是否升级过」与装机时长，两套互相校验。
-- **上报**：`app.upgrade_count`。
+- 本地存 `seen_code`；每次进程启动比对 `PackageInfo.versionCode`：首装只记起点，之后**变大即 `upgrade_count += 1`**。
+- 服务端另有 `first_install` / `last_update` 可反推「是否升级过」，两套互相校验。
 
-### 6.2 APK 使用次数 / 使用时长
+### 6.2 打开次数 / 使用时长（`app.open_count`、`app.foreground_ms`、`app.last_open_ms`）
 
-- **做法**：在 `Application` 里注册 `ActivityLifecycleCallbacks`，统计 `onStart`（进入前台）→ 累计一次「使用次数」；`onStop` 时把前台时长累加到 `foreground_ms`。
-- **注意**：`onStop` 不一定被调用（进程被杀）→ 用「进入前台时先补记上一次会话的时长」的写法，避免丢。
-- **上报**：`app.usage_count`、`app.foreground_ms`（累计值，不是增量，服务端只存最新快照 + 时间戳）。
-- **隐私**：只统计本机累计时长与次数，**不含任何操作内容**。
+- **打开次数** = 进程启动次数（`EvApp.onCreate` → `Stats.onProcessStart`），即用户"打开 App"的次数。
+- **使用时长** = `ActivityLifecycleCallbacks`：第一个 Activity `onStart` 起计时，全部 Activity `onStop`（App 退到后台）时累加一次到 `foreground_ms`。
+- ⚠️ 已知近似：进程被系统直接杀掉不会回调 `onStop`，那一小段尾巴会丢；另对「单次 > 24 小时」的异常时长（系统时间被改）不收账。
+- 上报的是**累计值**，服务端只存最新快照 + 时间戳，不做累加（避免重复上报导致虚增）。
 
-### 6.3 EV 连接次数 / 各步耗时 / 失败原因
+### 6.3 手环连接次数 / 失败步（`watch.connect_*`）
 
-- `SyncEngine.connect()` 已经是四步状态机（初始化穿戴服务 → 查找设备 → 申请权限 → ping EV），每步都有 `OK/FAIL` 与 `details` 文案。
-- **做法**：在四步回调里落本地计数器：`connect_ok`、`connect_fail_step<N>`、每步耗时 ms；`humanize(e)` 的失败原因一并记录。
-- **上报**：`watch.connect_total` / `connect_ok` / `last_fail_step` / `last_fail_reason`。
-- **价值**：能直接回答"用户到底卡在第几步"，配合 `os_brand=harmony` 判定是否环境问题。
+- `SyncEngine.connect()` 已是四步状态机（初始化穿戴服务 → 查找设备 → 申请权限 → ping EV），钩子集中放在三个地方，**不改四步逻辑**：
+  - `connect()` 开头 → `Stats.connectStart()`（次数 +1、开始计时）；
+  - `emit()` → 扫描 `states[]`，记下本次**第一个 FAIL 的步号**与 `details[]` 文案；
+  - `finish()` → `Stats.connectEnd(ok, failStep, reason)`（成功记耗时，失败记步号与原因）。
+- **价值**：能直接回答"用户到底卡在第几步"，配合 `os_brand=harmony` 区分是环境问题还是版本/签名问题。
 
-### 6.4 下载渠道（快应用那套在 APK 上不成立）
+### 6.4 下载渠道（☆ 待做；快应用那套在 APK 上不成立）
 
 **快应用（手环）怎么做的**：靠 URL 参数 `?c=<渠道>`（激活页提取 `c` → 服务端落库 → 通知里显示）。因为快应用每次都是打开一个 URL，参数一直在。
 
@@ -215,5 +226,5 @@ APK Analytics.pageView()                                    ┌─▶ visitor_lo
 | 期 | 内容 | 状态 |
 |---|---|---|
 | **P0** | 手机型号/系统/鸿蒙 + APK 版本/变体/装机时间 + 手环连接/型号/EV 版本 + 落库 + 播报「安卓<机型>」+ 面板展示 | ✅ 2026-09-28 |
-| **P1** | 升级次数、使用次数、使用时长、EV 连接次数与失败步（§6.1–6.3） | ☆ |
+| **P1** | 升级次数、打开次数、使用时长、EV 连接次数与失败步（§6.1–6.3） | ✅ 2026-09-28 |
 | **P2** | 下载渠道（§6.4 路线 B → A）、渠道漏斗报表、按机型/系统的聚合看板 | ☆ |

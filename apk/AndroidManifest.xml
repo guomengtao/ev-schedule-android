@@ -47,6 +47,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
+        android:name=".EvApp"
         android:label="EV Sync"
         android:icon="@drawable/ic_launcher"
         android:allowBackup="false"
