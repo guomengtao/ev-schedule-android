@@ -415,6 +415,7 @@ public final class SyncEngine {
     // 供各页面的 ConnectionBar 使用：弱引用持有回调（页面销毁自动失效，不泄漏 Activity）。
     private java.lang.ref.WeakReference<Runnable> statusCb;
     private boolean autoRetryRunning;
+    private volatile String connectProgress = "";
 
     /** 注册状态条刷新回调；连接进度 / 心跳结果都会触发（主线程）。 */
     public void setStatusCallback(Runnable r) {
@@ -437,7 +438,8 @@ public final class SyncEngine {
     }
 
     /** 离线时自动重连一轮。四步连接内层已带「自动拉起 EV ×3」，外层不再叠次数——
-     *  一轮失败后状态条转「去连接调试」，心跳每 60s 会自动再触发新一轮。单例锁防多页面打架。 */
+     *  一轮失败后状态条转「去连接调试」，心跳每 60s 会自动再触发新一轮。单例锁防多页面打架。
+     *  重连成功后与首页一样：顺手把手环课表拉回本地保存。 */
     public void autoReconnect() {
         if (autoRetryRunning || connected()) {
             return;
@@ -450,6 +452,9 @@ public final class SyncEngine {
             }
             @Override public void onFinish(boolean ok, String hint) {
                 autoRetryRunning = false;
+                if (ok) {
+                    pullAndStore(ctx);
+                }
                 notifyStatus();
             }
         });
@@ -458,6 +463,60 @@ public final class SyncEngine {
     /** 状态条用：是否正处于自动重连中。 */
     public boolean autoRetryRunning() {
         return autoRetryRunning;
+    }
+
+    /** 状态条用：最近一次连接进度文案（如「连接中（2/4）：查找已连接设备」）。 */
+    public String connectProgress() {
+        return connectProgress;
+    }
+
+    /** 连接成功后把手环当前课表拉回本地保存（与首页连接成功后的动作一致）。
+     *  静默版：结果只刷新状态回调，不弹 UI。 */
+    public void pullAndStore(final Context c) {
+        export(new Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(json);
+                    org.json.JSONObject d = o.optJSONObject("data");
+                    final org.json.JSONArray sch = (d == null) ? null : d.optJSONArray("schedule");
+                    if (sch == null) {
+                        notifyStatus();
+                        return;
+                    }
+                    lastExportJson = json;
+                    listSchedules(new Reply() {
+                        @Override public void onReply(String j2) {
+                            String name = "";
+                            try {
+                                org.json.JSONObject o2 = new org.json.JSONObject(j2);
+                                org.json.JSONArray names = o2.optJSONArray("names");
+                                int cur = o2.optInt("current", 0);
+                                if (names != null && cur >= 0 && cur < names.length()) {
+                                    name = names.optString(cur);
+                                }
+                            } catch (Throwable ignored) {
+                            }
+                            ScheduleStore.upsertFromWatch(c, name, sch);
+                            notifyStatus();
+                        }
+                        @Override public void onTimeout(String h) { storeQuietly(c, sch); }
+                        @Override public void onError(String m) { storeQuietly(c, sch); }
+                    });
+                } catch (Throwable t) {
+                    notifyStatus();
+                }
+            }
+            @Override public void onTimeout(String hint) { notifyStatus(); }
+            @Override public void onError(String msg) { notifyStatus(); }
+        });
+    }
+
+    private void storeQuietly(Context c, org.json.JSONArray sch) {
+        try {
+            ScheduleStore.upsertFromWatch(c, "", sch);
+        } catch (Throwable ignored) {
+        }
+        notifyStatus();
     }
 
     // ======================= 四步连接 =======================
@@ -497,6 +556,17 @@ public final class SyncEngine {
                 }
             }
         });
+        // 记录最近连接进度（状态条与首页迷你条共用同一份文案）
+        String running = null;
+        for (int i = 0; i < states.length; i++) {
+            if (states[i] == RUNNING) {
+                running = "连接中（" + (i + 1) + "/" + states.length + "）：" + labels[i];
+                break;
+            }
+        }
+        if (running != null) {
+            connectProgress = running;
+        }
         notifyStatus();
     }
 
@@ -507,6 +577,9 @@ public final class SyncEngine {
             versionName = "";
             versionCode = 0;
             courseCount = 0;
+            connectProgress = "连接失败：" + hint;
+        } else {
+            connectProgress = "已连接 · " + versionName;
         }
         try {
             Stats.connectEnd(ctx, ok, failStep, failStep > 0 ? failDetail : hint);

@@ -73,7 +73,9 @@ public final class ConnectionBar {
         } else if (e.autoRetryRunning()) {
             icon.setImageResource(R.drawable.ic_refresh_cw);
             icon.setColorFilter(Ui.ACCENT);
-            tv.setText("重连中…（自动拉起手环 EV，无需操作）");
+            // 与首页连接进度同款文案（连接中（n/4）：步骤名）
+            String p = e.connectProgress();
+            tv.setText(p.length() > 0 ? "重连中：" + p : "重连中…（自动拉起手环 EV）");
             tv.setTextColor(Ui.ACCENT);
         } else {
             icon.setImageResource(R.drawable.ic_unlink);

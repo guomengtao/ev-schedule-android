@@ -1066,8 +1066,15 @@ public class HomeActivity extends Activity {
             estimateView.setTextColor(Ui.OK);
             actionsView.setVisibility(View.VISIBLE);
         } else {
+            // 连接成功后显示手环课表套数（本地已保存的「来自手环」课表数）
+            int sets = 0;
+            for (ScheduleStore.Schedule ss : ScheduleStore.list(this)) {
+                if (ss.isSync()) {
+                    sets++;
+                }
+            }
             miniStatus("● 已连接 " + e.deviceName + "  ·  v" + e.versionName
-                    + "  ·  课表 " + e.courseCount + " 节", Ui.OK);
+                    + "  ·  手环课表 " + sets + " 套", Ui.OK);
             // update device card
             if (deviceNameView != null && e.deviceName != null && e.deviceName.length() > 0) {
                 deviceNameView.setText(e.deviceName);
