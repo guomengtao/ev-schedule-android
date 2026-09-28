@@ -1,0 +1,14 @@
+{
+  "id": "ev_local_default",
+  "name": "示例课表（本地）",
+  "source": "local",
+  "courses": [
+    {"name": "高等数学", "time": "08:00 - 09:35", "teacher": "", "location": "教学楼A301", "day": 0},
+    {"name": "大学英语", "time": "10:00 - 11:35", "teacher": "", "location": "教学楼B102", "day": 0},
+    {"name": "数据结构", "time": "08:00 - 09:35", "teacher": "", "location": "实验楼201", "day": 1},
+    {"name": "体育",     "time": "14:00 - 15:35", "teacher": "", "location": "体育馆",     "day": 1},
+    {"name": "线性代数", "time": "10:00 - 11:35", "teacher": "", "location": "教学楼C203", "day": 2},
+    {"name": "大学物理", "time": "14:00 - 15:35", "teacher": "", "location": "物理楼301",  "day": 3},
+    {"name": "程序设计", "time": "08:00 - 09:35", "teacher": "", "location": "机房D101",   "day": 4}
+  ]
+}
