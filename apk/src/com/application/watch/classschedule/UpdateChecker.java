@@ -6,6 +6,7 @@ import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -33,6 +34,7 @@ import java.util.ArrayList;
 public final class UpdateChecker {
 
     private static final int INSTALL_REQ = 7001;
+    private static final String IGNORE_PREF = "update_ignored_version";
 
     private UpdateChecker() {
     }
@@ -42,11 +44,16 @@ public final class UpdateChecker {
         check(a, false);
     }
 
+    /** 手动检查（设置页入口调用）：失败、无更新、有更新均有提示。 */
+    public static void checkManual(final Activity a) {
+        check(a, true);
+    }
+
     /**
-     * 检查更新。manual=true 时（设置页手动入口，M2 接）无更新/失败均给提示；
+     * 检查更新。manual=true 时（设置页手动入口）无更新/失败均给提示；
      * manual=false 时仅发现新版本才弹窗。
      */
-    public static void check(final Activity a, final boolean manual) {
+    static void check(final Activity a, final boolean manual) {
         // JSON 按变体分文件（ev / evbox 各一条版本线），变体名运行期从清单 meta-data 读
         Net.get(Net.BASE + "/ev/update-" + Variant.name(a) + ".json", new Net.Cb() {
             @Override public void on(int code, String body) {
@@ -62,6 +69,10 @@ public final class UpdateChecker {
                     if (manual) {
                         toast(a, "已是最新版本");
                     }
+                    return;
+                }
+                // 「忽略此版本」：静默检查时如果此版本已被用户忽略，不再弹窗
+                if (!manual && remote == ignoredVersion(a)) {
                     return;
                 }
                 show(a, j);
@@ -86,6 +97,16 @@ public final class UpdateChecker {
         } catch (Throwable t) {
             return 0;
         }
+    }
+
+    private static int ignoredVersion(Activity a) {
+        return a.getSharedPreferences(IGNORE_PREF, android.content.Context.MODE_PRIVATE)
+                .getInt("code", -1);
+    }
+
+    private static void ignoreVersion(Activity a, int code) {
+        a.getSharedPreferences(IGNORE_PREF, android.content.Context.MODE_PRIVATE)
+                .edit().putInt("code", code).apply();
     }
 
     private static void show(final Activity a, final JSONObject j) {
@@ -114,6 +135,12 @@ public final class UpdateChecker {
                         });
                 if (!force) {
                     b.setNegativeButton("稍后再说", null);
+                    b.setNeutralButton("忽略此版本", new DialogInterface.OnClickListener() {
+                        @Override public void onClick(DialogInterface d, int w) {
+                            ignoreVersion(a, j.optInt("versionCode", -1));
+                            toast(a, "已忽略此版本，不再提醒");
+                        }
+                    });
                 }
                 b.show();
             }
@@ -167,18 +194,18 @@ public final class UpdateChecker {
                     });
         }
         pd.show();
-        tryUrl(a, urls, 0, sha, pd);
+        tryUrl(a, j, urls, 0, sha, pd);
     }
 
     /** 镜像优先、直连兜底：每个 URL 用一个独立安装 session，失败 abandon 后换下一个。 */
-    private static void tryUrl(final Activity a, final String[] urls, final int i,
-                               final String sha, final ProgressDialog pd) {
+    private static void tryUrl(final Activity a, final JSONObject j, final String[] urls,
+                               final int i, final String sha, final ProgressDialog pd) {
         if (a.isFinishing() || a.isDestroyed()) {
             return;
         }
         if (i >= urls.length) {
             hide(a, pd);
-            toast(a, "下载失败：镜像与直连均不可用，请稍后重试");
+            showRetry(a, j);
             return;
         }
         try {
@@ -208,7 +235,7 @@ public final class UpdateChecker {
                         close(s, out, true);
                         toast(a, (i == 0 && urls.length > 1)
                                 ? "镜像下载失败，切换直连重试…" : "下载失败，正在重试…");
-                        tryUrl(a, urls, i + 1, sha, pd);
+                        tryUrl(a, j, urls, i + 1, sha, pd);
                         return;
                     }
                     close(s, out, false);
@@ -218,8 +245,30 @@ public final class UpdateChecker {
                 }
             });
         } catch (Throwable t) {
-            tryUrl(a, urls, i + 1, sha, pd);
+            tryUrl(a, j, urls, i + 1, sha, pd);
         }
+    }
+
+    /** 所有源都失败（或 sha 校验不过）→ 弹「重试」而不是只 toast，让用户一键重来。 */
+    private static void showRetry(final Activity a, final JSONObject j) {
+        a.runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (a.isFinishing() || a.isDestroyed()) {
+                    return;
+                }
+                new AlertDialog.Builder(a)
+                        .setTitle("下载失败")
+                        .setMessage("镜像与直连均未成功（或文件校验不过），请检查网络后重试。")
+                        .setCancelable(true)
+                        .setPositiveButton("重试", new DialogInterface.OnClickListener() {
+                            @Override public void onClick(DialogInterface d, int w) {
+                                downloadAndInstall(a, j);
+                            }
+                        })
+                        .setNegativeButton("取消", null)
+                        .show();
+            }
+        });
     }
 
     private static void close(PackageInstaller.Session s, OutputStream out, boolean abandon) {
