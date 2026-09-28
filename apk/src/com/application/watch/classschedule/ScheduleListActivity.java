@@ -35,6 +35,7 @@ public class ScheduleListActivity extends Activity {
     private LinearLayout listBox;
     private TextView statusView;
     private String editingId;
+    private long lastPullAt = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,8 +47,11 @@ public class ScheduleListActivity extends Activity {
         SyncEngine.get(this).addStatusCallback(new Runnable() {
             @Override public void run() {
                 render();
+                // 自动补齐节流：30s 一次即可，避免频繁重建列表影响点击
                 SyncEngine e = SyncEngine.get(ScheduleListActivity.this);
-                if (e.hasNode()) {
+                long now = System.currentTimeMillis();
+                if (e.hasNode() && now - lastPullAt > 30000) {
+                    lastPullAt = now;
                     e.pullMissingFromWatch(ScheduleListActivity.this);
                 }
             }

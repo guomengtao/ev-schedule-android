@@ -449,6 +449,7 @@ public final class SyncEngine {
     public String[] bandScheduleNames = null;
     public int bandCurrent = -1;
     private boolean pullingMissing = false;
+    private int pulledCount = 0;
 
     /** 注册状态刷新回调；连接进度 / 心跳 / 套数刷新都会触发（主线程）。重复注册会重复回调。 */
     public void addStatusCallback(Runnable r) {
@@ -569,13 +570,18 @@ public final class SyncEngine {
             return;
         }
         pullingMissing = true;
+        pulledCount = 0;
         pullNextMissing(c, 0);
     }
 
     private void pullNextMissing(final Context c, final int i) {
         if (i >= bandScheduleNames.length) {
             pullingMissing = false;
-            notifyStatus();
+            // ⚠️ 只在真的拉到课表时才 notify：否则「通知 → 回调 → 再补齐（瞬间完成）」会
+            // 形成主线程死循环，界面直接卡死、所有按钮失灵。
+            if (pulledCount > 0) {
+                notifyStatus();
+            }
             return;
         }
         final String name = bandScheduleNames[i];
@@ -591,6 +597,7 @@ public final class SyncEngine {
                     org.json.JSONArray sch = (d == null) ? null : d.optJSONArray("schedule");
                     if (sch != null) {
                         ScheduleStore.upsertFromWatch(c, name, sch); // 标记为手环课程
+                        pulledCount++;
                     }
                 } catch (Throwable ignored) {
                 }
