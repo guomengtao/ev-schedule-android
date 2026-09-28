@@ -200,8 +200,15 @@ cp "$OUT" "$OUT_NAME.apk"
 #   发布物共两件：本 JSON → 上传 Vercel/静态服务器；APK → 上传 GitHub Release。
 #   双地址：downloadUrlMirror（ghproxy 镜像前缀，App 优先尝试）+ downloadUrlOrigin（GitHub 直链，兜底）。
 #   GH_REPO / GH_PROXY 可用环境变量覆盖；GH_REPO 未设置时 URL 留空，发布时手补。
-GH_REPO="${GH_REPO:-}"                            # 例: yourname/EvCourse
+GH_REPO="${GH_REPO:-}"
 GH_PROXY="${GH_PROXY:-https://ghproxy.net}"     # 2026-09-28 实测：ghproxy.com 超时，ghproxy.net 稳定
+# 未显式指定 GH_REPO 时，从本仓库 git remote 自动解析 owner/repo（APK 托管在源码仓库自己的 Release）
+if [ -z "$GH_REPO" ]; then
+  RU="$(git -C "$HERE" config --get remote.origin.url 2>/dev/null || true)"
+  case "$RU" in
+    *github.com*) GH_REPO="$(echo "$RU" | sed -E 's#.*github\.com[:/]##; s#\.git$##')" ;;
+  esac
+fi
 UPDATE_LOG="${UPDATE_LOG:-}"                      # 本次更新说明，弹窗正文展示
 SHA256=$(shasum -a 256 "$OUT" | cut -d' ' -f1)
 ORIGIN=""
