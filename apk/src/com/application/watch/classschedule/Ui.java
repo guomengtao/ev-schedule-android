@@ -315,10 +315,17 @@ public final class Ui {
      * 仅非 tab 页使用；底部导航的三个主页（首页/课程表/设置）保持裸标题。
      * 需要动态改标题的页面：((TextView) header.getTag()).setText(...)
      */
-    public static LinearLayout header(final Activity a, String title) {
-        LinearLayout h = new LinearLayout(a);
-        h.setOrientation(LinearLayout.HORIZONTAL);
-        h.setGravity(Gravity.CENTER_VERTICAL);
+    public static ViewGroup header(final Activity a, String title) {
+        FrameLayout h = new FrameLayout(a);
+        h.setMinimumHeight(dp(a, 34));
+        // 标题绝对居中
+        TextView t = text(a, title, 18f, TEXT, true);
+        t.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER);
+        h.addView(t, tp);
+        // 返回键固定居左
         ImageView back = new ImageView(a);
         back.setImageResource(R.drawable.ic_chevron_left);
         back.setColorFilter(TEXT);
@@ -330,11 +337,20 @@ public final class Ui {
                 a.finish();
             }
         });
-        h.addView(back, new LinearLayout.LayoutParams(dp(a, 28), dp(a, 28)));
-        TextView t = text(a, title, 18f, TEXT, true);
-        h.addView(t);
+        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(
+                dp(a, 28), dp(a, 28), Gravity.CENTER_VERTICAL);
+        h.addView(back, bp);
         h.setTag(t);
         return h;
+    }
+
+    /** tab 主页表头：标题水平居中（无返回键），颜色随主题 token */
+    public static View topBar(Context c, String title) {
+        TextView t = text(c, title, 17f, TEXT, true);
+        t.setGravity(Gravity.CENTER);
+        t.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(c, 32)));
+        return t;
     }
 
     /**
@@ -350,36 +366,20 @@ public final class Ui {
      *  运行时按选中态染色（选中 = 主色，未选中 = 次要色）。 */
     public static LinearLayout bottomBar(final Activity a, int current) {
         final int[] icons = {R.drawable.ic_tab_home, R.drawable.ic_tab_schedule,
-                R.drawable.ic_tab_settings};
-        final String[] labels = {"首页", "课程表", "设置"};
-        final Class[] targets = {HomeActivity.class, ScheduleListActivity.class, SettingsActivity.class};
+                R.drawable.ic_tab_watch, R.drawable.ic_tab_settings};
+        final String[] labels = {"首页", "课程表", "手环", "设置"};
+        final Class[] targets = {HomeActivity.class, ScheduleListActivity.class,
+                BandActivity.class, SettingsActivity.class};
 
-        return buildBar(a, current, icons, labels, targets, false);
-    }
-
-    /** Pill 胶囊式底部导航（4 tab）：课表 / 周视图 / 消息 / 设置 */
-    public static LinearLayout pillBar(final Activity a, int current) {
-        final int[] icons = {R.drawable.ic_tab_schedule, R.drawable.ic_tab_home,
-                R.drawable.ic_tab_message, R.drawable.ic_tab_settings};
-        final String[] labels = {"课表", "周视图", "消息", "设置"};
-        final Class[] targets = {ScheduleListActivity.class, HomeActivity.class,
-                MessageActivity.class, SettingsActivity.class};
-
-        return buildBar(a, current, icons, labels, targets, true);
+        return buildBar(a, current, icons, labels, targets);
     }
 
     private static LinearLayout buildBar(final Activity a, int current, int[] icons,
-                                         String[] labels, Class[] targets, boolean pill) {
+                                         String[] labels, Class[] targets) {
         LinearLayout bar = new LinearLayout(a);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        if (pill) {
-            bar.setBackground(round(CARD, 36, LINE, a));
-            bar.setPadding(dp(a, 4), dp(a, 4), dp(a, 4), dp(a, 4));
-            bar.setElevation(dp(a, 8));
-        } else {
-            bar.setBackgroundColor(CARD);
-            bar.setPadding(dp(a, 4), dp(a, 6), dp(a, 4), dp(a, 6));
-        }
+        bar.setBackgroundColor(CARD);
+        bar.setPadding(dp(a, 4), dp(a, 6), dp(a, 4), dp(a, 6));
 
         for (int i = 0; i < icons.length; i++) {
             final int idx = i;
@@ -389,13 +389,14 @@ public final class Ui {
             tab.setOrientation(LinearLayout.VERTICAL);
             tab.setGravity(Gravity.CENTER);
             tab.setClickable(true);
-            // 选中态只靠图标/文字颜色区分（ACCENT），不加任何背景高亮
+            // 选中态 = 实心填充（主色圆角块 + 白色前景）
+            tab.setBackground(round(active ? ACCENT : 0x00000000, 14, 0, a));
             ImageView ic = new ImageView(a);
             ic.setImageResource(icons[i]);
-            ic.setColorFilter(color);
-            int iconSize = pill ? dp(a, 20) : dp(a, 22);
+            ic.setColorFilter(active ? 0xFFFFFFFF : color);
+            int iconSize = dp(a, 22);
             tab.addView(ic, new LinearLayout.LayoutParams(iconSize, iconSize));
-            TextView lb = text(a, labels[i], pill ? 10f : 10.5f, color, active);
+            TextView lb = text(a, labels[i], 10.5f, active ? 0xFFFFFFFF : color, active);
             lb.setGravity(Gravity.CENTER);
             tab.addView(lb);
             tab.setOnClickListener(new View.OnClickListener() {
@@ -457,14 +458,6 @@ public final class Ui {
      */
     public static ViewGroup fixedWithBottomBar(Activity a, LinearLayout contentRoot, int currentTab) {
         return fixedWithBar(a, contentRoot, bottomBar(a, currentTab));
-    }
-
-    public static ViewGroup wrapWithPillBar(Activity a, LinearLayout contentRoot, int currentTab) {
-        return wrapWithBar(a, contentRoot, pillBar(a, currentTab));
-    }
-
-    public static ViewGroup fixedWithPillBar(Activity a, LinearLayout contentRoot, int currentTab) {
-        return fixedWithBar(a, contentRoot, pillBar(a, currentTab));
     }
 
     private static ViewGroup wrapWithBar(Activity a, LinearLayout contentRoot, final LinearLayout bar) {

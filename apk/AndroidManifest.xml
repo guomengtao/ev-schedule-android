@@ -91,6 +91,9 @@
         <activity android:name="com.application.watch.classschedule.DebugActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
+        <activity android:name="com.application.watch.classschedule.BandActivity"
+            android:exported="true"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.SettingsActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />

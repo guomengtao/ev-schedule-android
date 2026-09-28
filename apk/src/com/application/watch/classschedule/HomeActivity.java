@@ -209,7 +209,8 @@ public class HomeActivity extends Activity {
         root.addView(Ui.space(this, 6));
         root.addView(Ui.mono(this, "包名 " + getPackageName() + "  ·  v" + version()));
 
-        setContentView(Ui.wrapWithPillBar(this, root, 1));
+        root.addView(Ui.topBar(this, "首页"), 0);
+        setContentView(Ui.wrapWithBottomBar(this, root, 0));
         renderWeek();
     }
 
@@ -704,7 +705,7 @@ public class HomeActivity extends Activity {
         actionsView = new LinearLayout(this);
         actionsView.setOrientation(LinearLayout.VERTICAL);
         actionsView.addView(Ui.grid(this,
-                Ui.button(this, "设置（昵称）", false, new View.OnClickListener() {
+                Ui.button(this, "设置", false, new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         startActivity(new Intent(HomeActivity.this, SettingsActivity.class));
                     }

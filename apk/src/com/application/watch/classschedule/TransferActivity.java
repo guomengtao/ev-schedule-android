@@ -104,7 +104,7 @@ public class TransferActivity extends Activity {
         }
 
         LinearLayout root = Ui.screen(this);
-        LinearLayout headerBar = Ui.header(this,
+        ViewGroup headerBar = Ui.header(this,
                 MODE_IMPORT.equals(mode) ? "导入课程表" : "导出课程表");
         titleView = (TextView) headerBar.getTag(); // 升级结果页会动态改标题
         root.addView(headerBar);

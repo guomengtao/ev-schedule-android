@@ -57,7 +57,7 @@ public class ScheduleListActivity extends Activity {
 
     private void buildUi() {
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.title(this, "课程表管理"));
+        root.addView(Ui.topBar(this, "课程表管理"));
         root.addView(Ui.space(this, 4));
         root.addView(Ui.text(this, "本机保存的全部课表：可切换、编辑、同步到手环",
                 11.5f, Ui.MUTED, false));
