@@ -50,6 +50,8 @@ public class TransferActivity extends Activity {
     public static final String MODE_EXPORT = "export";
 
     private static final int REQ_PICK = 1001;
+    /** 导出页离线缓存（清单 + 上次读取的课表原文）：连接时写入，断开也能显示。 */
+    private static final String EXP_PREFS = "ev_export_cache";
     private static final Charset UTF8 = Charset.forName("UTF-8");
     private static final SimpleDateFormat FN =
             new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US);
@@ -130,7 +132,12 @@ public class TransferActivity extends Activity {
         if (!MODE_IMPORT.equals(mode)) {
             loadSchedules();
         } else {
-            loadKnownNames();
+            if (SyncEngine.get(this).hasNode()) {
+                loadKnownNames();
+            } else {
+                // 未连接：直接用本地缓存还原导出页（连接时读取的数据已自动落盘）
+                restoreCachedExport();
+            }
         }
     }
 
@@ -322,6 +329,12 @@ public class TransferActivity extends Activity {
                     int cur = o.optInt("current", 0);
                     selectedIndex = (cur >= 0 && cur < names.length()) ? cur : 0;
                     selectedName = scheduleNames[selectedIndex];
+                    // 清单落本地缓存：断开手环后导出页仍能显示
+                    getSharedPreferences(EXP_PREFS, 0).edit()
+                            .putString("names_json", names.toString())
+                            .putInt("names_current", selectedIndex)
+                            .putLong("names_at", System.currentTimeMillis())
+                            .apply();
                     renderScheduleList();
                     scheduleStatus.setTextColor(Ui.OK);
                     scheduleStatus.setText("共 " + names.length() + " 套，当前激活："
@@ -331,10 +344,18 @@ public class TransferActivity extends Activity {
                 }
             }
             @Override public void onTimeout(String hint) {
-                failSchedules("读取清单超时。请确认手环已连接，且手环上的 EV 课程表已升级到 1.6.139 及以上");
+                if (!SyncEngine.get(TransferActivity.this).hasNode()) {
+                    restoreCachedExport();
+                } else {
+                    failSchedules("读取清单超时。请确认手环已连接，且手环上的 EV 课程表已升级到 1.6.139 及以上");
+                }
             }
             @Override public void onError(String msg) {
-                failSchedules("读取清单失败：" + msg);
+                if (!SyncEngine.get(TransferActivity.this).hasNode()) {
+                    restoreCachedExport();
+                } else {
+                    failSchedules("读取清单失败：" + msg);
+                }
             }
         });
     }
@@ -380,6 +401,71 @@ public class TransferActivity extends Activity {
         scheduleStatus.setText("可点「读取当前课表」先导出当前这一套");
     }
 
+    /**
+     * 未连接手环时用本地缓存还原导出页：清单（只读单选）+ 上次读取的课表 JSON。
+     * 数据来自连接期间的自动落盘（EXP_PREFS），断开不丢失。
+     */
+    private void restoreCachedExport() {
+        android.content.SharedPreferences p = getSharedPreferences(EXP_PREFS, 0);
+        String namesJson = p.getString("names_json", null);
+        long namesAt = p.getLong("names_at", 0);
+        String lastJson = p.getString("last_export_json", null);
+        long lastAt = p.getLong("last_export_at", 0);
+        if (namesJson == null && lastJson == null) {
+            failSchedules("手环未连接，本地也没有历史缓存。连接手环读取一次后会自动保存到本地");
+            return;
+        }
+        if (namesJson != null) {
+            try {
+                org.json.JSONArray names = new org.json.JSONArray(namesJson);
+                scheduleNames = new String[names.length()];
+                for (int i = 0; i < names.length(); i++) {
+                    scheduleNames[i] = names.optString(i);
+                }
+                selectedIndex = p.getInt("names_current", 0);
+                if (selectedIndex >= scheduleNames.length) {
+                    selectedIndex = -1;
+                }
+                selectedName = (selectedIndex >= 0) ? scheduleNames[selectedIndex] : "";
+                renderScheduleList();
+                scheduleStatus.setTextColor(Ui.MUTED);
+                scheduleStatus.setText("清单为本地缓存"
+                        + (namesAt > 0 ? "（" + fmtTime(namesAt) + " 读取）" : "")
+                        + " · 连接手环后可重新读取");
+            } catch (Throwable ignored) {
+            }
+        }
+        if (lastJson != null) {
+            lastExportJson = lastJson;
+            SyncEngine.get(this).lastExportJson = lastJson;
+            String cachedName = p.getString("last_export_name", "");
+            if (cachedName.length() > 0 && selectedName.length() == 0) {
+                selectedName = cachedName;
+            }
+            try {
+                JSONObject o = new JSONObject(lastJson);
+                JSONObject d = o.optJSONObject("data");
+                if (d != null) {
+                    org.json.JSONArray sch = d.optJSONArray("schedule");
+                    if (sch != null) {
+                        setExportJson(flattenFormatA(sch));
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            showSaveButton();
+            infoView.setText("以下为上次连接时读取的本地缓存"
+                    + (lastAt > 0 ? "（" + fmtTime(lastAt) + "）" : "")
+                    + "；连接手环后可重新读取最新数据");
+            resultView.setText("离线缓存模式：数据已保存到本地，不会丢失");
+            resultView.setTextColor(Ui.MUTED);
+        }
+    }
+
+    private static String fmtTime(long ms) {
+        return new SimpleDateFormat("MM-dd HH:mm", Locale.US).format(new Date(ms));
+    }
+
     private static String shortJson(String json) {
         if (json == null) {
             return "null";
@@ -394,6 +480,22 @@ public class TransferActivity extends Activity {
             @Override public void onReply(String json) {
                 lastExportJson = json;
                 SyncEngine.get(TransferActivity.this).lastExportJson = json;
+                // 连上就读到本地：课程写进多课表存储（断开也显示不丢），原文缓存供离线导出
+                try {
+                    JSONObject od = new JSONObject(json);
+                    JSONObject dd = od.optJSONObject("data");
+                    org.json.JSONArray schCache = (dd == null) ? null : dd.optJSONArray("schedule");
+                    if (schCache != null) {
+                        ScheduleStore.upsertFromWatch(TransferActivity.this,
+                                selectedName == null ? "" : selectedName, schCache);
+                    }
+                } catch (Throwable ignored) {
+                }
+                getSharedPreferences(EXP_PREFS, 0).edit()
+                        .putString("last_export_json", json)
+                        .putString("last_export_name", selectedName == null ? "" : selectedName)
+                        .putLong("last_export_at", System.currentTimeMillis())
+                        .apply();
                 try {
                     JSONObject o = new JSONObject(json);
                     JSONObject d = o.optJSONObject("data");
@@ -436,9 +538,9 @@ public class TransferActivity extends Activity {
             @Override public void onError(String msg) { infoView.setText("读取失败：" + msg); }
         };
         if (selectedIndex >= 0) {
-            SyncEngine.get(this).exportSchedule(selectedIndex, cb);
+            SyncEngine.get(this).sendWake("{\"action\":\"export\",\"scheduleIndex\":" + selectedIndex + "}", cb);
         } else {
-            SyncEngine.get(this).export(cb);
+            SyncEngine.get(this).sendWake("{\"action\":\"export\"}", cb);
         }
     }
 
