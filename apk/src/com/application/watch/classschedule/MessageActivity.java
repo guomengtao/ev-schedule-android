@@ -56,7 +56,8 @@ public class MessageActivity extends Activity {
     private static final String SEEN_KEY = "seen_ids";
     private static final int SEEN_MAX = 500;
 
-    private TextView listView, stateView;
+    private LinearLayout listBox;
+    private TextView stateView;
     private EditText inputView;
     private final SimpleDateFormat TS = new SimpleDateFormat("MM-dd HH:mm", Locale.US);
 
@@ -78,11 +79,10 @@ public class MessageActivity extends Activity {
         root.addView(stateView);
         root.addView(Ui.space(this, 8));
 
-        listView = Ui.mono(this, "");
-        listView.setTextSize(12f);
-        listView.setTextColor(Ui.TEXT);
+        listBox = new LinearLayout(this);
+        listBox.setOrientation(LinearLayout.VERTICAL);
         ScrollView scroll = new ScrollView(this);
-        scroll.addView(listView);
+        scroll.addView(listBox);
         root.addView(scroll, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
@@ -102,24 +102,14 @@ public class MessageActivity extends Activity {
         root.addView(sendRow);
         root.addView(Ui.space(this, 6));
 
-        root.addView(Ui.grid(this,
-                Ui.button(this, "手环在不在", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { ping(); }
-                }),
-                Ui.button(this, "回首页重连", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) {
-                        Intent it = new Intent(MessageActivity.this, HomeActivity.class);
-                        it.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-                        startActivity(it);
-                    }
-                })));
-        root.addView(Ui.grid(this,
-                Ui.button(this, "补发待发送", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { flush(); }
-                }),
-                Ui.button(this, "清空记录", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { clearAll(); }
-                })));
+        // 按钮精简：诊断类动作移除（补发自动进行），只留一个低调的「清空记录」
+        TextView clearLink = Ui.text(this, "清空记录", 11.5f, Ui.MUTED, false);
+        clearLink.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8));
+        clearLink.setClickable(true);
+        clearLink.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { clearAll(); }
+        });
+        root.addView(clearLink);
 
         setContentView(Ui.fixedWithBottomBar(this, root, -1));
         installObserver(this);
@@ -180,30 +170,46 @@ public class MessageActivity extends Activity {
         return n;
     }
 
+    /** 极简卡片流：最新在上。每条 = 方向/状态标签 + 时间 + 内容，无气泡。 */
     private void render() {
-        StringBuilder sb = new StringBuilder();
+        listBox.removeAllViews();
         if (items.length() == 0) {
-            sb.append("还没有留言。\n断开也能写，连上手环后会自动送达。\n");
+            TextView empty = Ui.text(this,
+                    "还没有留言\n断开也能写，连上手环后会自动送达", 12.5f, Ui.MUTED, false);
+            empty.setPadding(0, Ui.dp(this, 24), 0, 0);
+            empty.setGravity(android.view.Gravity.CENTER);
+            listBox.addView(empty);
+            return;
         }
-        for (int i = 0; i < items.length(); i++) {
+        for (int i = items.length() - 1; i >= 0; i--) {
             JSONObject o = items.optJSONObject(i);
             if (o == null) {
                 continue;
             }
             boolean out = "out".equals(o.optString("dir"));
-            String who = out ? "我" : "手环";
-            String mark;
-            if (!out) {
-                mark = " ◀";
-            } else if ("sent".equals(o.optString("status"))) {
-                mark = " ✓";
-            } else {
-                mark = " ⏳待发送";
-            }
-            sb.append(who).append("  ").append(fmt(o.optLong("ts"))).append(mark).append('\n');
-            sb.append("    ").append(o.optString("text")).append("\n\n");
+            boolean sent = "sent".equals(o.optString("status"));
+
+            LinearLayout card = Ui.card(this);
+            // 头行：方向·状态（左） + 时间（右）
+            LinearLayout head = new LinearLayout(this);
+            head.setOrientation(LinearLayout.HORIZONTAL);
+            head.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            String tag = out ? (sent ? "我 · 已送达" : "我 · 待发送") : "手环";
+            TextView tagView = Ui.text(this, tag, 11f,
+                    out ? (sent ? Ui.OK : Ui.WARN) : Ui.ACCENT, true);
+            head.addView(tagView, new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            TextView timeView = Ui.text(this, fmt(o.optLong("ts")), 10.5f, Ui.MUTED, false);
+            head.addView(timeView);
+            card.addView(head);
+
+            TextView body = Ui.text(this, o.optString("text"), 14f, Ui.TEXT, false);
+            body.setPadding(0, Ui.dp(this, 4), 0, 0);
+            card.addView(body);
+
+            listBox.addView(card);
+            listBox.addView(Ui.space(this, 8));
         }
-        listView.setText(sb.toString());
     }
 
     private String fmt(long ts) {
