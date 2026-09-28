@@ -255,24 +255,22 @@ public class JsonEditorView extends FrameLayout {
         tools.setOrientation(LinearLayout.HORIZONTAL);
         tools.setPadding(Ui.dp(c, 6), Ui.dp(c, 6), Ui.dp(c, 6), 0);
         tools.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         tools.addView(toolBtn(c, "复制", new Runnable() {
             @Override public void run() { copyToClip(); }
-        }), tp);
+        }), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         tools.addView(toolBtn(c, "粘贴", new Runnable() {
             @Override public void run() { pasteFromClip(); }
-        }), tp);
+        }), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         tools.addView(toolBtn(c, "清空", new Runnable() {
             @Override public void run() { clearAll(); }
-        }), tp);
+        }), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         tools.addView(toolBtn(c, "格式化", new Runnable() {
             @Override public void run() { doFormat(); }
-        }), tp);
+        }), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         expandBtn = toolBtn(c, "展开", new Runnable() {
             @Override public void run() { toggleHeight(); }
         });
-        tools.addView(expandBtn, tp);
+        tools.addView(expandBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         inner.addView(tools);
 
         ScrollView scroll = new ScrollView(c);
