@@ -86,6 +86,7 @@
 
 ## 构建（apk/，无 Gradle）
 - 链：`aapt2 link → javac(JDK8) → d8(JDK11+) → zipalign → apksigner`。SDK `$HOME/android-sdk`。
+- **USB 真机**：华为荣耀畅玩7X `BLN-AL20`，adb 序列号 **`BTF4C17222009588`**（EMUI 8 / Android 8.0.0，`os_brand=emui` 分支已实测）。⚠️ 手环插 USB 时会以 `emulator-5554`（NuttX）出现在 adb 里——装 APK 必须带 `-s BTF4C17222009588`，别装错设备。装完 `am start -n com.application.watch.classschedule/.HomeActivity` 启动；排闪退 `adb logcat -s EVProbe AndroidRuntime`。产物在 `apk/dist/EVSyncProbe-v*.apk`。
 - 多变体：`bash build.sh`（EV，`com.application.watch.classschedule`，`version.env`，`EVSyncProbe-v*.apk`）；`APP_VARIANT=evbox bash build.sh`（EvBox，`version-evbox.env`，`EvBoxSyncProbe-v*.apk`）。同签名（先找 `tom/class/class/sign`）。
 - ⚠️ aapt2 必须 `--custom-package com.application.watch.classschedule`（变体改包名时 R.java 包名跟着变）。
 - ⚠️ 清单 sed 注入后有自检（占位符没替换干净即报错退出）。
