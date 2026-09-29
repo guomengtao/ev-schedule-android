@@ -152,21 +152,31 @@ public class SettingsActivity extends Activity {
         // ======================= 假期 / 调休（移植自 EV，默认开启） =======================
         root.addView(Ui.space(this, 10));
         LinearLayout holidayCard = Ui.card(this);
-        holidayCard.addView(Ui.text(this, "假期 / 调休", 12.5f, Ui.TEXT, true));
+        // 标题行：标题 + Switch 开关（跟随主题的 Material 样式）
+        LinearLayout hRow = new LinearLayout(this);
+        hRow.setOrientation(LinearLayout.HORIZONTAL);
+        hRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        hRow.addView(Ui.text(this, "假期 / 调休", 12.5f, Ui.TEXT, true),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        android.widget.Switch holidaySwitch = new android.widget.Switch(this);
+        holidaySwitch.setChecked(Holiday.enabled(this));
+        holidaySwitch.setOnCheckedChangeListener(
+                new android.widget.CompoundButton.OnCheckedChangeListener() {
+                    @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
+                        Holiday.setEnabled(SettingsActivity.this, on);
+                        refreshHoliday();
+                        // 插件上的假期/调休展示也要跟着变
+                        TodayWidgetProvider.refreshAll(SettingsActivity.this);
+                        NextWidgetProvider.refreshAll(SettingsActivity.this);
+                        WeekWidgetProvider.refreshAll(SettingsActivity.this);
+                    }
+                });
+        hRow.addView(holidaySwitch, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        holidayCard.addView(hRow);
         holidayStatusView = Ui.text(this, "", 11.5f, Ui.MUTED, false);
         holidayStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
         holidayCard.addView(holidayStatusView);
-        holidayCard.addView(Ui.button(this, "", false, new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                Holiday.setEnabled(SettingsActivity.this, !Holiday.enabled(SettingsActivity.this));
-                refreshHoliday();
-                // 插件上的假期/调休展示也要跟着变
-                TodayWidgetProvider.refreshAll(SettingsActivity.this);
-                NextWidgetProvider.refreshAll(SettingsActivity.this);
-                WeekWidgetProvider.refreshAll(SettingsActivity.this);
-            }
-        }));
-        holidayCard.addView(Ui.space(this, 6));
         holidayCard.addView(Ui.mono(this,
                 "内置 2026 年国务院放假安排：假期当天不排课，调休日按对应星期几的课表显示"));
         root.addView(holidayCard);

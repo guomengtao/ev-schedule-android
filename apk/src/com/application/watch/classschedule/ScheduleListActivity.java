@@ -337,84 +337,22 @@ public class ScheduleListActivity extends Activity {
 
     private void deleteSchedule(final ScheduleStore.Schedule s) {
         final boolean syncOnly = s.isSync();
-        final int RED = 0xFFE5484D;
-        final android.app.Dialog[] holder = new android.app.Dialog[1];
-
-        // 自绘弹窗：圆角卡 + 图标章 + 居中文案 + 幽灵/红色按钮（脱离系统 AlertDialog 默认样式）
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-        int pad = Ui.dp(this, 22);
-        box.setBackground(Ui.round(Ui.CARD, 22, 0, this));
-        box.setPadding(pad, pad, pad, pad);
-
-        ImageView iv = new ImageView(this);
-        iv.setImageResource(R.drawable.ic_trash_2);
-        iv.setColorFilter(RED);
-        iv.setBackground(Ui.round(0x2EE5484D, 26, 0, this));
-        iv.setPadding(Ui.dp(this, 13), Ui.dp(this, 13), Ui.dp(this, 13), Ui.dp(this, 13));
-        box.addView(iv, new LinearLayout.LayoutParams(Ui.dp(this, 52), Ui.dp(this, 52)));
-        box.addView(Ui.space(this, 12));
-
-        box.addView(Ui.text(this, syncOnly ? "从本机移除课表" : "删除课表", 16.5f, Ui.TEXT, true));
-        box.addView(Ui.space(this, 6));
-        box.addView(Ui.text(this, "「" + s.name + "」", 14f, Ui.TEXT, false));
-        TextView meta = Ui.text(this, s.sub(), 11.5f, Ui.MUTED, false);
-        meta.setPadding(0, Ui.dp(this, 2), 0, 0);
-        box.addView(meta);
-        TextView warn = Ui.text(this, syncOnly
-                        ? "仅从本机删除；手环上仍保留，连接同步后会重新拉回。"
+        // 共用美化弹窗（Dialogs）：圆角卡 + 图标章 + 红色警示 + 幽灵/红色按钮
+        Dialogs.confirm(this, R.drawable.ic_trash_2, 0,
+                syncOnly ? "从本机移除课表" : "删除课表",
+                "「" + s.name + "」\n" + s.sub(),
+                syncOnly
+                        ? "仅从本机删除；手环上仍保留，连接同步后会重新拉回。\n彻底从手环删除需手环端支持，暂未开放"
                         : "此操作不可撤销，删除后无法恢复。",
-                12f, RED, false);
-        warn.setPadding(0, Ui.dp(this, 10), 0, 0);
-        box.addView(warn);
-        if (syncOnly) {
-            TextView extra = Ui.text(this, "彻底从手环删除需手环端支持，暂未开放", 10.5f, Ui.MUTED, false);
-            extra.setPadding(0, Ui.dp(this, 4), 0, 0);
-            box.addView(extra);
-        }
-        box.addView(Ui.space(this, 18));
-
-        LinearLayout btns = new LinearLayout(this);
-        btns.setOrientation(LinearLayout.HORIZONTAL);
-        android.widget.Button cancel = Ui.button(this, "取消", false, new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (holder[0] != null) {
-                    holder[0].dismiss();
-                }
-            }
-        });
-        cancel.setBackground(Ui.round(0x00000000, 12, Ui.LINE, this));
-        cancel.setTextColor(Ui.TEXT);
-        btns.addView(cancel, new LinearLayout.LayoutParams(0, Ui.dp(this, 42), 1f));
-        // ⚠️ 这里不能用 Ui.space：它是 MATCH_PARENT 宽，在横向布局里会把「删除」挤出对话框
-        android.widget.Button del = Ui.button(this, syncOnly ? "仅删本地" : "删除", false, new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (holder[0] != null) {
-                    holder[0].dismiss();
-                }
-                ScheduleStore.remove(ScheduleListActivity.this, s.id);
-                status(syncOnly ? "已从本机删除「" + s.name + "」（手环仍保留）"
-                        : "已删除「" + s.name + "」", Ui.OK);
-                render();
-            }
-        });
-        del.setBackground(Ui.round(RED, 12, 0, this));
-        del.setTextColor(0xFFFFFFFF);
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(0, Ui.dp(this, 42), 1f);
-        dlp.leftMargin = Ui.dp(this, 10);
-        btns.addView(del, dlp);
-        box.addView(btns);
-
-        final android.app.Dialog dlg = new android.app.Dialog(this);
-        dlg.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
-        dlg.setContentView(box);
-        dlg.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
-        dlg.getWindow().setDimAmount(0.55f);
-        dlg.getWindow().setLayout(Ui.dp(this, 310),
-                android.view.WindowManager.LayoutParams.WRAP_CONTENT);
-        holder[0] = dlg;
-        dlg.show();
+                syncOnly ? "仅删本地" : "删除", true,
+                new Dialogs.Action() {
+                    @Override public void run() {
+                        ScheduleStore.remove(ScheduleListActivity.this, s.id);
+                        status(syncOnly ? "已从本机删除「" + s.name + "」（手环仍保留）"
+                                : "已删除「" + s.name + "」", Ui.OK);
+                        render();
+                    }
+                });
     }
 
     // ======================= 操作：同步到手环 =======================

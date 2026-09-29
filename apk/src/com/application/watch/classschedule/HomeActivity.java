@@ -384,16 +384,16 @@ public class HomeActivity extends Activity {
      *  蓝牙未连接时 call 发不出去 → 弹窗明确提醒，并提供一键去连接。 */
     private void callBand() {
         if (!SyncEngine.get(this).hasNode()) {
-            new AlertDialog.Builder(this)
-                    .setTitle("手环未连接")
-                    .setMessage("手环蓝牙还没有连接，无法呼叫。\n先到「手环」页连接手环？")
-                    .setPositiveButton("去连接", new DialogInterface.OnClickListener() {
-                        @Override public void onClick(DialogInterface d, int w) {
+            // 共用美化弹窗：图标章 + 提示 + 去连接
+            Dialogs.confirm(this, R.drawable.ic_unlink, 0,
+                    "手环未连接",
+                    "手环蓝牙还没有连接，无法呼叫。\n先到「手环」页连接手环？",
+                    null, "去连接", false,
+                    new Dialogs.Action() {
+                        @Override public void run() {
                             startActivity(new Intent(HomeActivity.this, BandActivity.class));
                         }
-                    })
-                    .setNegativeButton("取消", null)
-                    .show();
+                    });
             return;
         }
         quickSend("{\"action\":\"call\",\"text\":\"请查看手机\"}", "呼叫手环");
