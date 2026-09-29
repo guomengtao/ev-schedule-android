@@ -24,7 +24,7 @@ public class BandActivity extends Activity {
 
     private int lastThemeVersion = 0;
 
-    private TextView currentView, resultView, devStatusView, heroNameView, heroInfoView;
+    private TextView resultView, devStatusView, heroNameView, heroInfoView;
     private android.widget.Button heroActionBtn;
     private Runnable heroTick;
     private EditText nickView;
@@ -116,22 +116,24 @@ public class BandActivity extends Activity {
         ConnectionBar.attach(this, root);
         root.addView(Ui.space(this, 10));
 
-        // ===== 昵称（当前值 + 输入框 + 修改按钮，一行内完成） =====
+        // ===== 昵称（一行式：标签 + 输入框 + 修改按钮） =====
         LinearLayout nickCard = Ui.card(this);
-        nickCard.addView(Ui.text(this, "昵称（会写入手环）", 12.5f, Ui.TEXT, true));
-        nickCard.addView(Ui.space(this, 6));
-        currentView = Ui.text(this, "—", 17f, Ui.TEXT, true);
-        nickCard.addView(currentView);
-        nickCard.addView(Ui.space(this, 10));
-
         LinearLayout nickRow = new LinearLayout(this);
         nickRow.setOrientation(LinearLayout.HORIZONTAL);
         nickRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView nickLabel = Ui.text(this, "昵称", 13f, Ui.TEXT, true);
+        nickRow.addView(nickLabel, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        // ⚠️ 标签与输入框的间距用 margin（Ui.space 是 MATCH_PARENT 宽，会顶走输入框）
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
+                Ui.dp(this, 10), 1);
+        nickRow.addView(new View(this), nlp);
         nickView = new EditText(this);
         nickView.setTextSize(14f);
         nickView.setTextColor(Ui.TEXT);
         nickView.setHintTextColor(Ui.MUTED);
         nickView.setHint("请输入昵称");
+        nickView.setBackground(null); // 去掉系统下划线，融入卡片
         nickRow.addView(nickView, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         // ⚠️ 横向行内不能用 Ui.space（MATCH_PARENT 宽会把「修改」挤出屏幕，点不到）
@@ -139,7 +141,7 @@ public class BandActivity extends Activity {
             @Override public void onClick(View v) { save(); }
         });
         LinearLayout.LayoutParams nbp = new LinearLayout.LayoutParams(
-                Ui.dp(this, 88), LinearLayout.LayoutParams.WRAP_CONTENT);
+                Ui.dp(this, 76), LinearLayout.LayoutParams.WRAP_CONTENT);
         nbp.leftMargin = Ui.dp(this, 8);
         nickRow.addView(nickBtn, nbp);
         nickCard.addView(nickRow);
@@ -392,9 +394,11 @@ public class BandActivity extends Activity {
     private void refresh() {
         SyncEngine e = SyncEngine.get(this);
         String nick = e.nickname;
-        currentView.setText(nick == null || nick.length() == 0 ? "（未知，先回首页连接）" : nick);
+        // 一行式布局：没有独立的「当前值」展示了，手环昵称直接预填进输入框
         if (nick != null && nick.length() > 0 && nickView.getText().length() == 0) {
             nickView.setText(nick);
+        } else if (nick == null || nick.length() == 0) {
+            nickView.setHint("连接手环后读取昵称");
         }
     }
 
