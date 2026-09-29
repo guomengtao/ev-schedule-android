@@ -93,6 +93,10 @@ public class FastActivateActivity extends Activity {
         info.addView(Ui.button(this, "重新读取设备ID", false, new View.OnClickListener() {
             @Override public void onClick(View v) { loadDeviceId(); }
         }));
+        info.addView(Ui.space(this, 8));
+        info.addView(Ui.button(this, "呼叫手环（响铃找表）", false, new View.OnClickListener() {
+            @Override public void onClick(View v) { callBand(); }
+        }));
         root.addView(info);
         root.addView(Ui.space(this, 10));
 
@@ -116,7 +120,7 @@ public class FastActivateActivity extends Activity {
         root.addView(Ui.space(this, 8));
         root.addView(Ui.mono(this,
                 "前置条件：\n"
-                        + "· 需安卓手机（iOS / 鸿蒙暂不支持）\n"
+                        + "· 需安卓手机（iOS 暂不支持）\n"
                         + "· 手机已安装「小米运动健康」并连接手环\n"
                         + "· 手环已安装 EV 课程表\n\n"
                         + "说明：\n"
@@ -130,6 +134,35 @@ public class FastActivateActivity extends Activity {
         root.requestFocus();
 
         loadDeviceId();
+    }
+
+    // ======================= 呼叫手环 =======================
+
+    /** 推一条手表通知让手环响铃/震动，帮用户在蓝牙范围内找到手环。 */
+    private void callBand() {
+        if (!SyncEngine.get(this).hasNode()) {
+            resultView.setText("手环未连接，无法呼叫。请先回首页连接手环");
+            resultView.setTextColor(Ui.WARN);
+            return;
+        }
+        resultView.setText("正在呼叫手环…");
+        resultView.setTextColor(Ui.ACCENT);
+        SyncEngine.get(this).notifyWatch("呼叫手环", "🔔 你的手环在这里！—— 来自手机 Ev课程表同步器",
+                new SyncEngine.Cb() {
+                    @Override public void on(final boolean ok, final String msg) {
+                        runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                if (ok) {
+                                    resultView.setText("已发送呼叫，看一下手环（会弹通知并震动）");
+                                    resultView.setTextColor(Ui.OK);
+                                } else {
+                                    resultView.setText("呼叫失败：" + msg);
+                                    resultView.setTextColor(Ui.ERR);
+                                }
+                            }
+                        });
+                    }
+                });
     }
 
     // ======================= 购买入口 =======================
