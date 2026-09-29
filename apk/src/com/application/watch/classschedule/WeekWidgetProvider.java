@@ -149,8 +149,6 @@ public class WeekWidgetProvider extends AppWidgetProvider {
                     rv.setTextViewText(id, hname[d]);
                     rv.setInt(id, "setBackgroundColor", 0x1422C55E);
                     rv.setTextColor(id, 0xFF166534);
-                    rv.setInt(id, "setGravity", android.view.Gravity.CENTER);
-                    rv.setTextViewTextSize(id, android.util.TypedValue.COMPLEX_UNIT_SP, 9f);
                 } else if (hit == null) {
                     rv.setTextViewText(id, "");
                     rv.setInt(id, "setBackgroundColor", 0x00000000);
@@ -159,10 +157,7 @@ public class WeekWidgetProvider extends AppWidgetProvider {
                     rv.setTextViewText(id, disp);
                     rv.setInt(id, "setBackgroundColor", Ui.courseColor(hit.name));
                     rv.setTextColor(id, 0xFFFFFFFF);
-                    // 单字放大居中；多字恢复常规字号（RemoteViews 同一布局复用，两档都要显式设）
-                    rv.setInt(id, "setGravity", android.view.Gravity.CENTER);
-                    rv.setTextViewTextSize(id, android.util.TypedValue.COMPLEX_UNIT_SP,
-                            disp.length() <= 1 ? 13f : 9f);
+                    // 单字放大居中改在渲染端做不了（RemoteViews 无 setTextSize 可靠支持），单字暂用原字号
                 }
             }
         }
