@@ -81,6 +81,9 @@ public final class UpdateChecker {
                 if (!manual && remote == ignoredVersion(a)) {
                     return;
                 }
+                // 更新漏斗：发现新版本（channel=inapp 与下载页/手环入口区分）
+                Analytics.pageView(a, "/apk/update-found?from=" + localCode(a)
+                        + "&to=" + remote + "&c=inapp");
                 show(a, j);
             }
         });
@@ -248,6 +251,9 @@ public final class UpdateChecker {
                         return;
                     }
                     hide(a, pd);
+                    // 更新漏斗：升级包校验通过、即将唤起安装
+                    Analytics.pageView(a, "/apk/update-installed?to="
+                            + j.optInt("versionCode", 0) + "&c=inapp");
                     toast(a, "下载完成，请在系统弹窗中确认安装");
                     install(a, apk);
                 }
