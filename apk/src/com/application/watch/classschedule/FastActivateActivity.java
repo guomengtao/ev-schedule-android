@@ -1,10 +1,17 @@
 package com.application.watch.classschedule;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.Editable;
 import android.text.InputFilter;
+import android.text.TextWatcher;
 import android.text.TextUtils;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -18,21 +25,39 @@ import java.util.regex.Pattern;
  * 高级版「快速激活」。
  *
  * 流程（省掉手环上扫两个码 + 手输 18 位）：
+ *   0. 购买：按钮直达爱发电（/go/ev-timetable 短链，自带点击统计），获得 4 位兑换码
  *   1. 从手环取设备ID（get_device_id）
- *   2. 用户只输 4 位兑换码
+ *   2. 四格输入 4 位兑换码（支持粘贴自动分格、自动大写、自动跳格）
  *   3. 调后端 /api/activate 换 18 位激活码
  *   4. 把 18 位码交给手环（activate），手环本地校验 + 落库
+ *
+ * 断点续传（SharedPreferences ev_pending_activate）：
+ *   - 未连接手环时提交 → 只暂存兑换码，连接后自动继续
+ *   - 换到 18 位码但写入手环失败 → 暂存 18 位码，重连后直接补写（不再打服务端）
+ *   - 18 位码由服务端按 deviceId 确定性生成，暂存丢失也可重新兑换取回（幂等）
  */
 public class FastActivateActivity extends Activity {
 
     private int lastThemeVersion = 0;
 
     private static final Pattern REDEEM = Pattern.compile("^[A-Z0-9]{4}$");
+    private static final String BUY_URL = "https://app-auth.gudq.com/go/ev-timetable";
+
+    private static final String PREF = "ev_pending_activate";
+    private static final String K_REDEEM = "redeem";
+    private static final String K_DEVICE = "deviceId";
+    private static final String K_CODE = "activationCode";
+    private static final String K_TS = "ts";
 
     private TextView deviceView, statusView, resultView;
-    private EditText codeView;
+    private EditText[] boxes = new EditText[4];
     private String deviceId = "";
     private String deviceId4 = "";
+    /** 防止自动续传在同一设备上反复触发 */
+    private String resumedRedeem = "";
+    private String resumedCode = "";
+    /** 四格分发中标记，防止 TextWatcher 递归 */
+    private boolean distributing = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,6 +69,20 @@ public class FastActivateActivity extends Activity {
         root.addView(Ui.text(this, "一键激活：只需填 4 位兑换码", 11.5f, Ui.MUTED, false));
         root.addView(Ui.space(this, 10));
 
+        // ===== 步骤①：购买 =====
+        LinearLayout buy = Ui.card(this);
+        buy.addView(Ui.text(this, "① 购买兑换码", 12.5f, Ui.TEXT, true));
+        buy.addView(Ui.space(this, 6));
+        buy.addView(Ui.text(this, "前往爱发电下单后即可获得 4 位兑换码（大写字母/数字）",
+                11.5f, Ui.MUTED, false));
+        buy.addView(Ui.space(this, 10));
+        buy.addView(Ui.button(this, "前往爱发电购买", true, new View.OnClickListener() {
+            @Override public void onClick(View v) { openBuy(); }
+        }));
+        root.addView(buy);
+        root.addView(Ui.space(this, 10));
+
+        // ===== 设备卡 =====
         LinearLayout info = Ui.card(this);
         deviceView = Ui.text(this, "设备ID：读取中…", 13f, Ui.TEXT, true);
         info.addView(deviceView);
@@ -57,17 +96,13 @@ public class FastActivateActivity extends Activity {
         root.addView(info);
         root.addView(Ui.space(this, 10));
 
+        // ===== 步骤②：四格兑换码 =====
         LinearLayout act = Ui.card(this);
-        act.addView(Ui.text(this, "4 位兑换码", 12.5f, Ui.TEXT, true));
-        act.addView(Ui.space(this, 6));
-        codeView = new EditText(this);
-        codeView.setTextSize(16f);
-        codeView.setTextColor(Ui.TEXT);
-        codeView.setHintTextColor(Ui.MUTED);
-        codeView.setHint("例如 1BZR");
-        codeView.setFilters(new InputFilter[]{new InputFilter.LengthFilter(4),
-                new android.text.InputFilter.AllCaps()});
-        act.addView(codeView);
+        act.addView(Ui.text(this, "② 输入 4 位兑换码", 12.5f, Ui.TEXT, true));
+        act.addView(Ui.space(this, 10));
+        act.addView(buildCodeBoxes());
+        act.addView(Ui.space(this, 10));
+        act.addView(Ui.text(this, "支持长按粘贴，自动大写", 11f, Ui.MUTED, false));
         act.addView(Ui.space(this, 10));
         act.addView(Ui.button(this, "一键激活", true, new View.OnClickListener() {
             @Override public void onClick(View v) { activate(); }
@@ -80,10 +115,14 @@ public class FastActivateActivity extends Activity {
         root.addView(resultView);
         root.addView(Ui.space(this, 8));
         root.addView(Ui.mono(this,
-                "说明：\n"
-                        + "· 兑换码在爱发电购买后获得（4 位大写字母/数字）\n"
+                "前置条件：\n"
+                        + "· 需安卓手机（iOS / 鸿蒙暂不支持）\n"
+                        + "· 手机已安装「小米运动健康」并连接手环\n"
+                        + "· 手环已安装 EV 课程表\n\n"
+                        + "说明：\n"
                         + "· 激活码为 18 位数字，由服务端按你的设备ID生成，本页自动写入，无需手输\n"
-                        + "· 一个兑换码通常只能激活一台设备"));
+                        + "· 一个兑换码只能激活一台手环；未连接手环时会先暂存，连接后自动继续\n"
+                        + "· 换手机不用重新激活（激活码跟随手环）"));
 
         setContentView(Ui.wrapWithBottomBar(this, root, 2));
 
@@ -93,13 +132,198 @@ public class FastActivateActivity extends Activity {
         loadDeviceId();
     }
 
+    // ======================= 购买入口 =======================
+
+    private void openBuy() {
+        try {
+            StringBuilder url = new StringBuilder(BUY_URL).append("?c=apk-fast");
+            try {
+                PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+                url.append("&r=").append(Uri.encode(pi.versionName));
+            } catch (Throwable ignored) {
+            }
+            if (deviceId.length() > 0) {
+                url.append("&deviceId=").append(Uri.encode(deviceId));
+            }
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url.toString()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(Intent.createChooser(i, "前往爱发电购买"));
+        } catch (Throwable t) {
+            resultView.setText("无法打开浏览器，请手动访问爱发电搜索「EV课程表」购买");
+            resultView.setTextColor(Ui.WARN);
+        }
+    }
+
+    // ======================= 四格输入 =======================
+
+    private View buildCodeBoxes() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        for (int i = 0; i < 4; i++) {
+            LinearLayout cell = new LinearLayout(this);
+            cell.setOrientation(LinearLayout.VERTICAL);
+            cell.setBackgroundDrawable(Ui.round(Ui.CARD2, 10, 1, this));
+            cell.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    0, Ui.dp(this, 54), 1f);
+            if (i > 0) {
+                lp.leftMargin = Ui.dp(this, 10);
+            }
+            cell.setLayoutParams(lp);
+
+            final int idx = i;
+            EditText b = new EditText(this);
+            b.setTextSize(24f);
+            b.setTextColor(Ui.TEXT);
+            b.setHintTextColor(Ui.MUTED);
+            b.setHint("·");
+            b.setGravity(Gravity.CENTER);
+            b.setBackgroundDrawable(null);
+            b.setSingleLine(true);
+            b.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                    | android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+                    | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+            b.setFilters(new InputFilter[]{new InputFilter.AllCaps()});
+            b.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int a, int b2, int c) {}
+                @Override public void onTextChanged(CharSequence s, int st, int bf, int af) {
+                    if (distributing) {
+                        return;
+                    }
+                    // 粘贴多位 → 从当前格往后分发
+                    if (s.length() > 1) {
+                        distribute(idx, s.toString());
+                        return;
+                    }
+                    if (s.length() == 1) {
+                        String up = s.toString().toUpperCase();
+                        if (!up.equals(s.toString())) {
+                            distributing = true;
+                            boxes[idx].setText(up);
+                            distributing = false;
+                            boxes[idx].setSelection(1);
+                        }
+                    }
+                    if (s.length() == 1 && idx < 3) {
+                        boxes[idx + 1].requestFocus();
+                    }
+                    // 当前格清空 → 焦点回退一格
+                    if (s.length() == 0 && idx > 0) {
+                        boxes[idx - 1].requestFocus();
+                    }
+                }
+                @Override public void afterTextChanged(Editable s) {}
+            });
+            cell.addView(b, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT));
+            row.addView(cell);
+            boxes[i] = b;
+        }
+        return row;
+    }
+
+    /** 把（可能是粘贴进来的）一串字符从第 from 格开始分发到后面的格子 */
+    private void distribute(int from, String text) {
+        distributing = true;
+        String up = text.toUpperCase().replaceAll("[^A-Z0-9]", "");
+        int i = from;
+        for (int k = 0; k < up.length() && i < 4; k++, i++) {
+            boxes[i].setText(String.valueOf(up.charAt(k)));
+        }
+        distributing = false;
+        int last = Math.min(from + up.length(), 4) - 1;
+        if (last >= from) {
+            boxes[last].requestFocus();
+        }
+    }
+
+    private String collectCode() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 4; i++) {
+            sb.append(boxes[i].getText().toString().trim().toUpperCase());
+        }
+        return sb.toString();
+    }
+
+    private void fillBoxes(String code) {
+        distributing = true;
+        for (int i = 0; i < 4; i++) {
+            boxes[i].setText(i < code.length() ? String.valueOf(code.charAt(i)) : "");
+        }
+        distributing = false;
+    }
+
+    // ======================= 暂存 / 续传 =======================
+
+    private SharedPreferences pending() {
+        return getSharedPreferences(PREF, MODE_PRIVATE);
+    }
+
+    private void savePending(String redeem, String pendDevice, String code18) {
+        pending().edit()
+                .putString(K_REDEEM, redeem == null ? "" : redeem)
+                .putString(K_DEVICE, pendDevice == null ? "" : pendDevice)
+                .putString(K_CODE, code18 == null ? "" : code18)
+                .putLong(K_TS, System.currentTimeMillis())
+                .apply();
+    }
+
+    private void clearPending() {
+        pending().edit().clear().apply();
+        resumedRedeem = "";
+        resumedCode = "";
+    }
+
+    /**
+     * 尝试续传：有暂存的 18 位码 → 直接补写；只有兑换码 → 自动兑换并写入。
+     * 每个凭证在同一 deviceId 上只自动触发一次，失败后靠用户点按钮重试。
+     */
+    private void tryResume() {
+        SharedPreferences p = pending();
+        String redeem = p.getString(K_REDEEM, "");
+        String pendDev = p.getString(K_DEVICE, "");
+        String code = p.getString(K_CODE, "");
+
+        boolean deviceKnown = deviceId.length() > 0;
+        boolean deviceMatch = !deviceKnown || pendDev.length() == 0 || pendDev.equals(deviceId);
+        if (!deviceMatch) {
+            resultView.setText("检测到未完成的激活，但它属于另一台手环（"
+                    + mask(pendDev) + "），请确认后重新输入兑换码");
+            resultView.setTextColor(Ui.WARN);
+            return;
+        }
+
+        if (code.length() == 18 && deviceKnown && !code.equals(resumedCode)) {
+            resumedCode = code;
+            resultView.setText("发现未完成的激活，正在写入手环…");
+            resultView.setTextColor(Ui.ACCENT);
+            writeToBand(code);
+            return;
+        }
+
+        if (redeem.length() == 4 && deviceKnown && !redeem.equals(resumedRedeem)) {
+            resumedRedeem = redeem;
+            fillBoxes(redeem);
+            resultView.setText("发现未完成的激活，正在继续…");
+            resultView.setTextColor(Ui.ACCENT);
+            activate();
+            return;
+        }
+
+        if (!deviceKnown && redeem.length() == 4 && collectCode().length() < 4) {
+            fillBoxes(redeem);
+        }
+    }
+
     // ======================= 设备ID =======================
 
     private void loadDeviceId() {
         if (!SyncEngine.get(this).hasNode()) {
             deviceView.setText("设备ID：（未连接手环）");
-            statusView.setText("请先回首页完成连接");
+            statusView.setText("请先回首页完成连接（需要小米运动健康）");
             statusView.setTextColor(Ui.WARN);
+            tryResume();
             return;
         }
         deviceView.setText("设备ID：读取中…");
@@ -115,12 +339,15 @@ public class FastActivateActivity extends Activity {
                     deviceId = o.optString("deviceId");
                     deviceId4 = o.optString("deviceId4");
                     boolean fallback = o.optBoolean("fallback", false);
+                    String name = SyncEngine.get(FastActivateActivity.this).deviceName;
                     deviceView.setText("设备ID：" + mask(deviceId)
                             + (fallback ? "（临时标识）" : ""));
-                    statusView.setText(fallback
+                    statusView.setText((name.length() > 0 ? "目标手环：" + name + "　" : "")
+                            + (fallback
                             ? "设备标识为临时值，激活后重装应用可能失效"
-                            : "设备ID已就绪，可输入兑换码");
+                            : "设备ID已就绪，可输入兑换码"));
                     statusView.setTextColor(fallback ? Ui.WARN : Ui.OK);
+                    tryResume();
                 } catch (Throwable t) {
                     deviceView.setText("设备ID：回包无法解析");
                 }
@@ -151,20 +378,23 @@ public class FastActivateActivity extends Activity {
     // ======================= 激活 =======================
 
     private void activate() {
-        if (!SyncEngine.get(this).hasNode()) {
-            resultView.setText("请先回首页连接手环");
-            resultView.setTextColor(Ui.WARN);
-            return;
-        }
-        String code = codeView.getText().toString().trim().toUpperCase();
+        String code = collectCode();
         if (!REDEEM.matcher(code).matches()) {
             resultView.setText("兑换码必须是 4 位大写字母或数字（A-Z, 0-9）");
             resultView.setTextColor(Ui.ERR);
             return;
         }
+        if (!SyncEngine.get(this).hasNode()) {
+            // 未连接：先暂存兑换码，连接后自动继续
+            savePending(code, "", null);
+            resultView.setText("手环未连接，兑换码已暂存。\n连上手环回到本页后会自动继续激活。");
+            resultView.setTextColor(Ui.WARN);
+            return;
+        }
         if (TextUtils.isEmpty(deviceId)) {
-            resultView.setText("还没有取到设备ID，请点「重新读取设备ID」");
-            resultView.setTextColor(Ui.ERR);
+            resultView.setText("还没有取到设备ID，正在重试读取…");
+            resultView.setTextColor(Ui.WARN);
+            loadDeviceId();
             return;
         }
 
@@ -235,6 +465,8 @@ public class FastActivateActivity extends Activity {
             resultView.setTextColor(Ui.ERR);
             return;
         }
+        // 换码成功先落暂存：写入手环失败也能断点续传
+        savePending(collectCode(), deviceId, activationCode);
         writeToBand(activationCode);
     }
 
@@ -248,6 +480,8 @@ public class FastActivateActivity extends Activity {
                     if (o.optBoolean("ok", false)) {
                         String disp = o.optString("displayStatus");
                         String status = o.optString("status");
+                        clearPending();
+                        fillBoxes("");
                         resultView.setText("激活成功！" + (disp.length() > 0 ? ("　" + disp)
                                 : (status.length() > 0 ? ("　" + status) : ""))
                                 + "\n可在手环上打开「EV 课程表 → 高级版」查看有效期。");
@@ -255,7 +489,8 @@ public class FastActivateActivity extends Activity {
                         statusView.setText("已激活" + (disp.length() > 0 ? ("：" + disp) : ""));
                         statusView.setTextColor(Ui.OK);
                     } else {
-                        resultView.setText("手环拒绝激活：" + o.optString("reason"));
+                        resultView.setText("手环拒绝激活：" + o.optString("reason")
+                                + "\n激活码已暂存，解决后回到本页会自动重试。");
                         resultView.setTextColor(Ui.ERR);
                     }
                 } catch (Throwable t) {
@@ -264,11 +499,11 @@ public class FastActivateActivity extends Activity {
                 }
             }
             @Override public void onTimeout(String hint) {
-                resultView.setText(hint);
+                resultView.setText(hint + "\n激活码已暂存，重连手环后回到本页会自动补写。");
                 resultView.setTextColor(Ui.WARN);
             }
             @Override public void onError(String msg) {
-                resultView.setText("写入失败：" + msg);
+                resultView.setText("写入失败：" + msg + "\n激活码已暂存，重连手环后回到本页会自动补写。");
                 resultView.setTextColor(Ui.ERR);
             }
         });
@@ -282,5 +517,6 @@ public class FastActivateActivity extends Activity {
             return;
         }
         lastThemeVersion = Ui.themeVersion;
+        loadDeviceId();
     }
 }
