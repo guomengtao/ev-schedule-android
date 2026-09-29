@@ -14,7 +14,10 @@ public class SettingsActivity extends Activity {
     private int lastThemeVersion = 0;
 
     private TextView resultView, bgStatusView, remindStatusView, holidayStatusView;
-    private Button remindToggleBtn, remindLeadBtn, remindPushBtn;
+    private Button remindLeadBtn;
+    private android.widget.Switch remindSwitch, pushSwitch, bgSwitch;
+    /** 程序化 setChecked 时置 true，避免触发 onCheckedChanged 造成循环 */
+    private boolean switching;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,42 +71,66 @@ public class SettingsActivity extends Activity {
 
         root.addView(Ui.space(this, 12));
         LinearLayout bgCard = Ui.card(this);
-        bgCard.addView(Ui.text(this, "后台常驻提醒", 12.5f, Ui.TEXT, true));
+        // 标题行：标题 + Switch（与假期开关同款）
+        LinearLayout bgRow = new LinearLayout(this);
+        bgRow.setOrientation(LinearLayout.HORIZONTAL);
+        bgRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        bgRow.addView(Ui.text(this, "后台常驻提醒", 12.5f, Ui.TEXT, true),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        bgSwitch = new android.widget.Switch(this);
+        bgSwitch.setOnCheckedChangeListener(
+                new android.widget.CompoundButton.OnCheckedChangeListener() {
+                    @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
+                        if (switching) {
+                            return;
+                        }
+                        applyBg(on);
+                    }
+                });
+        bgRow.addView(bgSwitch, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        bgCard.addView(bgRow);
         bgStatusView = Ui.text(this, bgText(), 11.5f, Ui.MUTED, false);
         bgStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
         bgCard.addView(bgStatusView);
-        bgCard.addView(Ui.grid(this,
-                Ui.button(this, "切换开关", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { toggleBg(); }
-                }),
-                Ui.button(this, "省电白名单", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) {
-                        startActivity(new Intent(SettingsActivity.this, BatteryGuideActivity.class));
-                    }
-                })));
+        bgCard.addView(Ui.button(this, "省电白名单引导", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(SettingsActivity.this, BatteryGuideActivity.class));
+            }
+        }));
         root.addView(bgCard);
 
         // ======================= 上课提醒（本地闹钟 + 可选推手环） =======================
         root.addView(Ui.space(this, 10));
         LinearLayout remindCard = Ui.card(this);
-        remindCard.addView(Ui.text(this, "上课提醒", 12.5f, Ui.TEXT, true));
+        // 标题行：标题 + Switch
+        LinearLayout rRow = new LinearLayout(this);
+        rRow.setOrientation(LinearLayout.HORIZONTAL);
+        rRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        rRow.addView(Ui.text(this, "上课提醒", 12.5f, Ui.TEXT, true),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        remindSwitch = new android.widget.Switch(this);
+        remindSwitch.setOnCheckedChangeListener(
+                new android.widget.CompoundButton.OnCheckedChangeListener() {
+                    @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
+                        if (switching) {
+                            return;
+                        }
+                        Reminders.setEnabled(SettingsActivity.this, on);
+                        refreshRemind();
+                        resultView.setText(!on ? "已关闭上课提醒"
+                                : (Reminders.exactAllowed(SettingsActivity.this)
+                                        ? "上课提醒已开启"
+                                        : "已开启。未授予「闹钟和提醒」权限，可能有 ±1 分钟误差"));
+                        resultView.setTextColor(!on ? Ui.MUTED : Ui.OK);
+                    }
+                });
+        rRow.addView(remindSwitch, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        remindCard.addView(rRow);
         remindStatusView = Ui.text(this, "", 11.5f, Ui.MUTED, false);
         remindStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
         remindCard.addView(remindStatusView);
-        remindToggleBtn = Ui.button(this, "", false, new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                boolean on = !Reminders.enabled(SettingsActivity.this);
-                Reminders.setEnabled(SettingsActivity.this, on);
-                refreshRemind();
-                resultView.setText(!on ? "已关闭上课提醒"
-                        : (Reminders.exactAllowed(SettingsActivity.this)
-                                ? "上课提醒已开启"
-                                : "已开启。未授予「闹钟和提醒」权限，可能有 ±1 分钟误差"));
-                resultView.setTextColor(!on ? Ui.MUTED : Ui.OK);
-            }
-        });
-        remindCard.addView(remindToggleBtn);
-        remindCard.addView(Ui.space(this, 6));
         remindCard.addView(Ui.grid(this,
                 remindLeadBtn = Ui.button(this, "", false, new View.OnClickListener() {
                     @Override public void onClick(View v) {
@@ -120,15 +147,6 @@ public class SettingsActivity extends Activity {
                         refreshRemind();
                     }
                 }),
-                remindPushBtn = Ui.button(this, "", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) {
-                        Reminders.setPushWatch(SettingsActivity.this,
-                                !Reminders.pushWatch(SettingsActivity.this));
-                        refreshRemind();
-                    }
-                })));
-        remindCard.addView(Ui.space(this, 6));
-        remindCard.addView(Ui.grid(this,
                 Ui.button(this, "测试提醒", false, new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         Reminders.test(SettingsActivity.this);
@@ -136,14 +154,36 @@ public class SettingsActivity extends Activity {
                                 + (Reminders.pushWatch(SettingsActivity.this) ? " + 手环通知，手环需已连接" : "") + "）");
                         resultView.setTextColor(Ui.OK);
                     }
-                }),
-                Ui.button(this, "重排提醒", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) {
-                        Reminders.reschedule(SettingsActivity.this);
-                        resultView.setText("已按最新课表重排提醒");
-                        resultView.setTextColor(Ui.OK);
-                    }
                 })));
+        remindCard.addView(Ui.space(this, 6));
+        // 推送到手环：独立一行 Switch
+        LinearLayout pushRow = new LinearLayout(this);
+        pushRow.setOrientation(LinearLayout.HORIZONTAL);
+        pushRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        pushRow.addView(Ui.text(this, "推送到手环", 12.5f, Ui.TEXT, false),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        pushSwitch = new android.widget.Switch(this);
+        pushSwitch.setOnCheckedChangeListener(
+                new android.widget.CompoundButton.OnCheckedChangeListener() {
+                    @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
+                        if (switching) {
+                            return;
+                        }
+                        Reminders.setPushWatch(SettingsActivity.this, on);
+                        refreshRemind();
+                    }
+                });
+        pushRow.addView(pushSwitch, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        remindCard.addView(pushRow);
+        remindCard.addView(Ui.space(this, 6));
+        remindCard.addView(Ui.button(this, "重排提醒", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                Reminders.reschedule(SettingsActivity.this);
+                resultView.setText("已按最新课表重排提醒");
+                resultView.setTextColor(Ui.OK);
+            }
+        }));
         remindCard.addView(Ui.space(this, 6));
         remindCard.addView(Ui.mono(this,
                 "基于本地课表缓存 + 系统闹钟，不依赖手环连接；课表更新/开机后自动重排"));
@@ -220,7 +260,11 @@ public class SettingsActivity extends Activity {
     }
 
     private void toggleBg() {
-        boolean on = !SyncService.enabled(this);
+        applyBg(!SyncService.enabled(this));
+    }
+
+    /** Switch 回调入口：按目标状态应用（含省电白名单引导） */
+    private void applyBg(boolean on) {
         SyncService.setEnabled(this, on);
         if (on) {
             SyncService.startIfEnabled(this);
@@ -269,9 +313,13 @@ public class SettingsActivity extends Activity {
 
     private void refreshRemind() {
         remindStatusView.setText(remindText());
-        remindToggleBtn.setText(Reminders.enabled(this) ? "关闭提醒" : "开启提醒");
         remindLeadBtn.setText("提前 " + Reminders.leadMinutes(this) + " 分钟");
-        remindPushBtn.setText("推手环：" + (Reminders.pushWatch(this) ? "开" : "关"));
+        switching = true; // 程序化同步 Switch 状态，不触发监听
+        remindSwitch.setChecked(Reminders.enabled(this));
+        pushSwitch.setChecked(Reminders.pushWatch(this));
+        bgSwitch.setChecked(SyncService.enabled(this));
+        switching = false;
+        bgStatusView.setText(bgText());
     }
 
     private void refreshHoliday() {
