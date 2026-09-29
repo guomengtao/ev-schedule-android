@@ -80,12 +80,14 @@ public class WeekWidgetProvider extends AppWidgetProvider {
         // 本周 7 天的日期（含假期 / 调休覆盖）
         Calendar[] days = new Calendar[7];
         int[] override = new int[7];
+        String[] hname = new String[7]; // 该列若是假期日 → 假期名（写入当天列）
         Calendar mon = Calendar.getInstance();
         mon.add(Calendar.DAY_OF_MONTH, -today);
         for (int d = 0; d < 7; d++) {
             days[d] = (Calendar) mon.clone();
             days[d].add(Calendar.DAY_OF_MONTH, d);
             override[d] = Holiday.resolveDay(ctx, days[d]);
+            hname[d] = Holiday.holidayName(ctx, days[d]);
         }
 
         // 表头：假期列「休」（绿）、调休列「班」（琥珀）、今天主色
@@ -141,13 +143,26 @@ public class WeekWidgetProvider extends AppWidgetProvider {
                         }
                     }
                 }
-                if (hit == null) {
+                if (hit == null && override[d] == Holiday.HOLIDAY && r == 1
+                        && hname[d] != null && hname[d].length() > 0) {
+                    // 假期列第一格：写假期名（那天放假就写那天）
+                    rv.setTextViewText(id, hname[d]);
+                    rv.setInt(id, "setBackgroundColor", 0x1422C55E);
+                    rv.setTextColor(id, 0xFF166534);
+                    rv.setInt(id, "setGravity", android.view.Gravity.CENTER);
+                    rv.setTextViewTextSize(id, android.util.TypedValue.COMPLEX_UNIT_SP, 9f);
+                } else if (hit == null) {
                     rv.setTextViewText(id, "");
                     rv.setInt(id, "setBackgroundColor", 0x00000000);
                 } else {
-                    rv.setTextViewText(id, CourseCache.displayName(hit.name, shortName));
+                    String disp = CourseCache.displayName(hit.name, shortName);
+                    rv.setTextViewText(id, disp);
                     rv.setInt(id, "setBackgroundColor", Ui.courseColor(hit.name));
                     rv.setTextColor(id, 0xFFFFFFFF);
+                    // 单字放大居中；多字恢复常规字号（RemoteViews 同一布局复用，两档都要显式设）
+                    rv.setInt(id, "setGravity", android.view.Gravity.CENTER);
+                    rv.setTextViewTextSize(id, android.util.TypedValue.COMPLEX_UNIT_SP,
+                            disp.length() <= 1 ? 13f : 9f);
                 }
             }
         }

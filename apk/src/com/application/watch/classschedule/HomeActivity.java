@@ -641,25 +641,6 @@ public class HomeActivity extends Activity {
         java.util.Calendar gridMon = java.util.Calendar.getInstance();
         gridMon.add(java.util.Calendar.DAY_OF_MONTH, -CourseCache.todayIndex() + weekOffset * 7);
 
-        // 本周含假期 → 顶部假期名横幅（国庆/中秋…），多假期并排显示
-        java.util.LinkedHashSet<String> holidayNames = new java.util.LinkedHashSet<>();
-        for (int d = 0; d < 7; d++) {
-            java.util.Calendar day = (java.util.Calendar) gridMon.clone();
-            day.add(java.util.Calendar.DAY_OF_MONTH, d);
-            String hn = Holiday.holidayName(this, day);
-            if (hn.length() > 0) {
-                holidayNames.add(hn);
-            }
-        }
-        if (!holidayNames.isEmpty()) {
-            TextView hb = Ui.text(this, "放假 · " + joinNames(holidayNames) + "，本周不上课",
-                    11.5f, 0xFF166534, true);
-            hb.setPadding(Ui.dp(this, 8), Ui.dp(this, 5), Ui.dp(this, 8), Ui.dp(this, 5));
-            hb.setBackground(Ui.round(0x2E22C55E, 8, 0, this));
-            wrapper.addView(hb);
-            wrapper.addView(Ui.space(this, 6));
-        }
-
         boolean thisWeek = (weekOffset == 0);
         for (int d = 0; d < 7; d++) {
             boolean isToday = thisWeek && d == today;
@@ -698,22 +679,42 @@ public class HomeActivity extends Activity {
         }
         body.addView(timeCol);
 
-        // 7 day columns（假期列清空；调休列按目标星期几的课表显示）
+        // 7 day columns（假期列清空并在列内写假期名；调休列按目标星期几的课表显示）
         for (int d = 0; d < 7; d++) {
             LinearLayout dayCol = new LinearLayout(this);
             dayCol.setOrientation(LinearLayout.VERTICAL);
+            java.util.Calendar day = (java.util.Calendar) gridMon.clone();
+            day.add(java.util.Calendar.DAY_OF_MONTH, d);
+            int override = Holiday.resolveDay(this, day);
+
+            // 假期列（EV 首页语义：假期名写在放假的「那一天」）——整列淡绿底 + 列中央假期名
+            if (override == Holiday.HOLIDAY) {
+                if (thisWeek && d == today) {
+                    dayCol.setBackground(Ui.round(0x2E22C55E, 6, 0, this)); // 今天+假期：绿底更实
+                } else {
+                    dayCol.setBackground(Ui.round(0x1422C55E, 6, 0, this));
+                }
+                dayCol.setGravity(android.view.Gravity.CENTER);
+                dayCol.setPadding(Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2));
+                TextView hn = Ui.text(this, Holiday.holidayName(this, day),
+                        9.5f, 0xFF166534, true);
+                hn.setGravity(android.view.Gravity.CENTER);
+                int colH = Ui.dp(this, 42) * Math.max(1, timeSlots.size());
+                hn.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, colH));
+                dayCol.addView(hn);
+                body.addView(dayCol, new LinearLayout.LayoutParams(
+                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                continue;
+            }
+
             if (thisWeek && d == today) {
                 dayCol.setBackground(Ui.round(Ui.ACCENT_LIGHT, 6, 0, this));
             }
             dayCol.setPadding(Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2));
 
-            java.util.Calendar day = (java.util.Calendar) gridMon.clone();
-            day.add(java.util.Calendar.DAY_OF_MONTH, d);
-            int override = Holiday.resolveDay(this, day);
-            // 假期列整列清空（EV 语义：假期日 currentClasses = []）；调休列按目标星期几取课
-            java.util.List<CourseCache.Course> dayList = (override == Holiday.HOLIDAY)
-                    ? new java.util.ArrayList<CourseCache.Course>()
-                    : CourseCache.coursesOfDay(all, override >= 0 ? override : d);
+            // 调休列按目标星期几取课
+            java.util.List<CourseCache.Course> dayList = CourseCache.coursesOfDay(all, override >= 0 ? override : d);
 
             java.util.Map<String, CourseCache.Course> map = new java.util.LinkedHashMap<>();
             for (CourseCache.Course c : dayList) {
@@ -742,7 +743,7 @@ public class HomeActivity extends Activity {
         return wrapper;
     }
 
-    /** 课程小色块（周视图网格用，固定高度 40dp；单字模式下只显示第一个字） */
+    /** 课程小色块（周视图网格用，固定高度 40dp；单字模式下只显示第一个字并放大居中） */
     private View courseBlockCompact(CourseCache.Course c) {
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.VERTICAL);
@@ -753,23 +754,12 @@ public class HomeActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 40));
         lp.setMargins(0, Ui.dp(this, 1), 0, Ui.dp(this, 1)); // 块间留缝，更透气
         b.setLayoutParams(lp);
-        TextView tv = Ui.text(this, CourseCache.displayName(c.name, CourseCache.shortNameMode(this)),
-                9.5f, 0xFFFFFFFF, true);
+        String disp = CourseCache.displayName(c.name, CourseCache.shortNameMode(this));
+        TextView tv = Ui.text(this, disp, disp.length() <= 1 ? 14f : 9.5f, 0xFFFFFFFF, true);
+        tv.setGravity(android.view.Gravity.CENTER);
         tv.setSingleLine(true);
         b.addView(tv);
         return b;
-    }
-
-    /** 「国庆 · 中秋」这样的假期名拼接 */
-    private static String joinNames(java.util.Set<String> names) {
-        StringBuilder sb = new StringBuilder();
-        for (String n : names) {
-            if (sb.length() > 0) {
-                sb.append(" · ");
-            }
-            sb.append(n);
-        }
-        return sb.toString();
     }
 
     // ======================= 快捷操作 =======================
