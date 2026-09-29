@@ -68,6 +68,8 @@ public class FastActivateActivity extends Activity {
         root.addView(Ui.space(this, 4));
         root.addView(Ui.text(this, "一键激活：只需填 4 位兑换码", 11.5f, Ui.MUTED, false));
         root.addView(Ui.space(this, 10));
+        ConnectionBar.attach(this, root); // 自动连接状态条（与首页同一数据源）
+        root.addView(Ui.space(this, 8));
 
         // ===== 步骤①：购买 =====
         LinearLayout buy = Ui.card(this);

@@ -112,6 +112,10 @@ public class BandActivity extends Activity {
         };
         SyncEngine.get(this).addStatusCallback(heroTick);
 
+        // ===== 自动连接状态条（与首页同一数据源），置于昵称区上方 =====
+        ConnectionBar.attach(this, root);
+        root.addView(Ui.space(this, 10));
+
         // ===== 昵称（当前值 + 输入框 + 修改按钮，一行内完成） =====
         LinearLayout nickCard = Ui.card(this);
         nickCard.addView(Ui.text(this, "昵称（会写入手环）", 12.5f, Ui.TEXT, true));
