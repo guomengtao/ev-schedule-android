@@ -48,9 +48,10 @@
         android:orientation="horizontal"
         android:layout_marginTop="3dp">
 
-        <Space
+        <TextView
             android:layout_width="24dp"
-            android:layout_height="wrap_content"/>
+            android:layout_height="wrap_content"
+            android:textSize="8sp"/>
         <TextView
             android:id="@+id/whdr1"
             android:layout_width="0dp"

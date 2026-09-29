@@ -212,6 +212,35 @@ public final class CourseCache {
     // ======================= 查询辅助 =======================
 
     /** 今天是周几 → 0=周一 … 6=周日 */
+    /** 单字模式：课表/小插件里课程名只显示第一个字（语/数/英）。用户打开后记住。 */
+    public static boolean shortNameMode(Context c) {
+        try {
+            return c.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+                    .getBoolean("short_name_mode", false);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    public static void setShortNameMode(Context c, boolean on) {
+        try {
+            c.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+                    .edit().putBoolean("short_name_mode", on).apply();
+        } catch (Throwable ignored) {
+        }
+        // 同步刷新两个桌面插件（未添加时 no-op）
+        WeekWidgetProvider.refreshAll(c);
+        TodayWidgetProvider.refreshAll(c);
+    }
+
+    /** 按单字模式取显示名（关 = 原名；开 = 第一个字） */
+    public static String displayName(String name, boolean shortMode) {
+        if (shortMode && name != null && name.length() > 1) {
+            return name.substring(0, 1);
+        }
+        return name == null ? "" : name;
+    }
+
     public static int todayIndex() {
         int cal = Calendar.getInstance().get(Calendar.DAY_OF_WEEK); // Calendar.MONDAY=2 … SUNDAY=1
         return (cal - Calendar.MONDAY + 7) % 7;

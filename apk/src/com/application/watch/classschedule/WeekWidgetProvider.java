@@ -75,6 +75,7 @@ public class WeekWidgetProvider extends AppWidgetProvider {
 
         List<CourseCache.Course> all = CourseCache.load(ctx);
         int today = CourseCache.todayIndex();
+        boolean shortName = CourseCache.shortNameMode(ctx);
 
         // 本周 7 天的日期（含假期 / 调休覆盖）
         Calendar[] days = new Calendar[7];
@@ -144,7 +145,7 @@ public class WeekWidgetProvider extends AppWidgetProvider {
                     rv.setTextViewText(id, "");
                     rv.setInt(id, "setBackgroundColor", 0x00000000);
                 } else {
-                    rv.setTextViewText(id, hit.name);
+                    rv.setTextViewText(id, CourseCache.displayName(hit.name, shortName));
                     rv.setInt(id, "setBackgroundColor", Ui.courseColor(hit.name));
                     rv.setTextColor(id, 0xFFFFFFFF);
                 }
@@ -156,9 +157,27 @@ public class WeekWidgetProvider extends AppWidgetProvider {
         rv.setTextViewText(R.id.widget_week_foot, foot);
         Calendar sun = (Calendar) mon.clone();
         sun.add(Calendar.DAY_OF_MONTH, 6);
-        rv.setTextViewText(R.id.widget_week_date,
-                (mon.get(Calendar.MONTH) + 1) + "." + mon.get(Calendar.DAY_OF_MONTH) + "-"
-                        + (sun.get(Calendar.MONTH) + 1) + "." + sun.get(Calendar.DAY_OF_MONTH));
+        String dateLabel = (mon.get(Calendar.MONTH) + 1) + "." + mon.get(Calendar.DAY_OF_MONTH) + "-"
+                + (sun.get(Calendar.MONTH) + 1) + "." + sun.get(Calendar.DAY_OF_MONTH);
+        // 本周有假期 → 日期旁并排显示假期名（如「10.1-10.7 · 国庆」）
+        java.util.LinkedHashSet<String> hs = new java.util.LinkedHashSet<>();
+        for (int d = 0; d < 7; d++) {
+            String hn = Holiday.holidayName(ctx, days[d]);
+            if (hn.length() > 0) {
+                hs.add(hn);
+            }
+        }
+        if (!hs.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (String hn : hs) {
+                if (sb.length() > 0) {
+                    sb.append("·");
+                }
+                sb.append(hn);
+            }
+            dateLabel = dateLabel + " · " + sb;
+        }
+        rv.setTextViewText(R.id.widget_week_date, dateLabel);
 
         rv.setOnClickPendingIntent(R.id.widget_root, TodayWidgetProvider.openApp(ctx));
         return rv;
