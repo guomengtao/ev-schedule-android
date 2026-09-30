@@ -48,6 +48,10 @@ public final class ScheduleStore {
         public long syncedAt = 0;
         /** 假期模式：true = 假期日不排课、调休日按目标星期几换课。**默认开启**（JSON 缺字段也按 true） */
         public boolean holiday = true;
+        /** 上次同步完成时的课程表快照（三方合并的 base）；空 = 从未同步过 */
+        public String baseJson = "";
+        /** 是否有未同步改动（缓存值；真判据靠 base 对比，见 SyncCoordinator） */
+        public boolean dirty = false;
         public final List<CourseCache.Course> courses = new ArrayList<>();
 
         public boolean isSync() {
@@ -267,7 +271,23 @@ public final class ScheduleStore {
         }
     }
 
-    /** 更新某套课表的课程（首页手动同步刷新用） */
+    /** 重命名课表（可视化编辑页改课表名用）；若是激活课表，同步更新插件缓存里的名字 */
+    public static synchronized void rename(Context c, String id, String newName) {
+        try {
+            Schedule s = find(c, id);
+            if (s == null || newName == null || newName.trim().length() == 0) {
+                return;
+            }
+            s.name = newName.trim();
+            upsert(c, s);
+            if (id.equals(activeId(c)) && !s.courses.isEmpty()) {
+                CourseCache.saveFlat(c, s.courses, s.name);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 更新某套课表的课程（首页手动同步刷新用）；本地编辑调用 → 标记 dirty（有未同步改动） */
     public static synchronized void updateCourses(Context c, String id, List<CourseCache.Course> courses) {
         Schedule s = find(c, id);
         if (s == null || courses == null) {
@@ -275,6 +295,7 @@ public final class ScheduleStore {
         }
         s.courses.clear();
         s.courses.addAll(courses);
+        s.dirty = true;
         if (s.isSync()) {
             s.syncedAt = System.currentTimeMillis();
         }
@@ -282,6 +303,36 @@ public final class ScheduleStore {
         if (id.equals(activeId(c))) {
             CourseCache.saveFlat(c, s.courses, s.name);
         }
+    }
+
+    /** 同步完成：写入合并结果 + 记录 base 快照 + 清 dirty（三方合并成功后调用） */
+    public static synchronized void commitSync(Context c, String id,
+                                               List<CourseCache.Course> courses, String baseJson) {
+        Schedule s = find(c, id);
+        if (s == null || courses == null) {
+            return;
+        }
+        s.courses.clear();
+        s.courses.addAll(courses);
+        s.baseJson = (baseJson == null) ? "" : baseJson;
+        s.dirty = false;
+        if (s.isSync()) {
+            s.syncedAt = System.currentTimeMillis();
+        }
+        upsert(c, s);
+        if (id.equals(activeId(c))) {
+            CourseCache.saveFlat(c, s.courses, s.name);
+        }
+    }
+
+    /** 标记某套课表有未同步改动（断连暂存，连上补发） */
+    public static synchronized void markDirty(Context c, String id) {
+        Schedule s = find(c, id);
+        if (s == null) {
+            return;
+        }
+        s.dirty = true;
+        upsert(c, s);
     }
 
     /**
@@ -474,6 +525,8 @@ public final class ScheduleStore {
             o.put("createdAt", s.createdAt);
             o.put("syncedAt", s.syncedAt);
             o.put("holiday", s.holiday);
+            o.put("baseJson", s.baseJson == null ? "" : s.baseJson);
+            o.put("dirty", s.dirty);
             JSONArray cs = new JSONArray();
             for (CourseCache.Course co : s.courses) {
                 cs.put(CourseCache.toJson(co));
@@ -494,6 +547,8 @@ public final class ScheduleStore {
             s.syncedAt = o.optLong("syncedAt", 0);
             // 假期模式默认开启：旧 JSON / 导入的 JSON 没有这个字段也按 true
             s.holiday = o.optBoolean("holiday", true);
+            s.baseJson = o.optString("baseJson", "");
+            s.dirty = o.optBoolean("dirty", false);
             JSONArray cs = o.optJSONArray("courses");
             if (cs != null) {
                 for (int i = 0; i < cs.length(); i++) {

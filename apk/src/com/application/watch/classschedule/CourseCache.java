@@ -48,6 +48,29 @@ public final class CourseCache {
         public String location = "";
         /** 0 = 周一 … 6 = 周日；-1 = 未知 */
         public int day = -1;
+        // ===== 字段级三方合并的同步元数据 =====
+        /** 全局唯一键（生成后终身不变），三方合并按它对齐 */
+        public String id = "";
+        /** 最后修改时间（本地时钟，仅展示/调试，不用于裁决冲突） */
+        public long updatedAt = 0;
+        /** 软删除标记：删课不物理删，打标后由合并逻辑处理 */
+        public boolean deleted = false;
+
+        /** 生成一个全局唯一课程 id */
+        public static String newId() {
+            return "c_" + System.currentTimeMillis() + "_"
+                    + Integer.toHexString((int) (Math.random() * 0xFFFF));
+        }
+
+        /** 无 id 时补齐（读旧数据 / 新建课程时调用），幂等 */
+        public void ensureId() {
+            if (id == null || id.length() == 0) {
+                id = newId();
+            }
+            if (updatedAt == 0) {
+                updatedAt = System.currentTimeMillis();
+            }
+        }
 
         public String dayLabel() {
             return (day >= 0 && day < WEEK.length) ? WEEK[day] : "";
@@ -150,6 +173,8 @@ public final class CourseCache {
                     co.teacher = src.optString("teacher");
                     co.location = src.optString("location");
                     co.day = dayIndex(day.opt("day"));
+                    co.id = src.optString("id");
+                    co.ensureId();
                     out.add(co);
                 }
             }
@@ -439,11 +464,15 @@ public final class CourseCache {
     public static JSONObject toJson(Course c) {
         JSONObject o = new JSONObject();
         try {
+            c.ensureId();
+            o.put("id", c.id);
             o.put("name", c.name);
             o.put("time", c.time);
             o.put("teacher", c.teacher);
             o.put("location", c.location);
             o.put("day", c.day);
+            o.put("updatedAt", c.updatedAt);
+            o.put("deleted", c.deleted);
         } catch (Throwable ignored) {
         }
         return o;
@@ -455,11 +484,15 @@ public final class CourseCache {
             return co;
         }
         try {
+            co.id = o.optString("id");
             co.name = o.optString("name");
             co.time = o.optString("time");
             co.teacher = o.optString("teacher");
             co.location = o.optString("location");
             co.day = o.optInt("day", -1);
+            co.updatedAt = o.optLong("updatedAt", 0);
+            co.deleted = o.optBoolean("deleted", false);
+            co.ensureId();
         } catch (Throwable ignored) {
         }
         return co;

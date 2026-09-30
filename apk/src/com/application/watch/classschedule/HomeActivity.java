@@ -44,6 +44,8 @@ public class HomeActivity extends Activity {
     private int phase = PHASE_CONNECT;
 
     private TextView greetingView, pageTitleView, weekLabelView;
+    /** 连接迷你条容器（与错误卡互斥显示，修"同屏两处说未连接"） */
+    private LinearLayout miniBarView;
     private LinearLayout dateStripView, deviceCardView;
     private TextView deviceNameView, deviceStatusView, batteryView;
     private int selectedDay = CourseCache.todayIndex();
@@ -193,6 +195,7 @@ public class HomeActivity extends Activity {
         bar.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 8));
         miniStatusView = Ui.text(this, "● 正在连接手环…", 12f, Ui.MUTED, false);
         bar.addView(miniStatusView);
+        miniBarView = bar;
         root.addView(bar);
         root.addView(Ui.space(this, 8));
 
@@ -200,6 +203,7 @@ public class HomeActivity extends Activity {
         errorCard = Ui.card(this);
         errorCard.setVisibility(View.GONE);
         hintView = Ui.text(this, "", 13f, Ui.WARN, false);
+        hintView.setLineSpacing(Ui.dp(this, 2), 1f);
         errorCard.addView(hintView);
         errorCard.addView(Ui.space(this, 10));
         errorCard.addView(Ui.grid(this,
@@ -212,11 +216,10 @@ public class HomeActivity extends Activity {
         root.addView(errorCard);
 
         root.addView(Ui.space(this, 6));
-        root.addView(Ui.mono(this, "包名 " + getPackageName() + "  ·  v" + version()));
 
         // 顶栏：居中标题 + 右上角 ⊕ 圆钮（微信式下拉菜单：导出课程/导入课程/呼叫手环）
         android.widget.FrameLayout header = new android.widget.FrameLayout(this);
-        TextView hTitle = Ui.text(this, "Ev课程表", 17f, Ui.TEXT, true);
+        TextView hTitle = Ui.textMedium(this, "Ev课程表", 16f, Ui.TEXT);
         hTitle.setGravity(android.view.Gravity.CENTER);
         header.addView(hTitle, new android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
@@ -255,9 +258,9 @@ public class HomeActivity extends Activity {
 
         LinearLayout greetingBlock = new LinearLayout(this);
         greetingBlock.setOrientation(LinearLayout.VERTICAL);
-        greetingView = Ui.text(this, "Hi，同学", 14f, Ui.MUTED, false);
+        greetingView = Ui.text(this, "Hi，同学", 12.5f, Ui.MUTED, false);
         greetingBlock.addView(greetingView);
-        pageTitleView = Ui.text(this, "本周课表", 26f, Ui.TEXT, true);
+        pageTitleView = Ui.textMedium(this, "本周课表", 26f, Ui.TEXT);
         // 标题位复用为「状态/操作」双态切换（显隐在 renderWeek 里控制）：
         // 当前周 = 「📅 本周课表」普通标题（图标仅装饰、中性色、不可点）；
         // 非当前周 = 「回到本周 ↩」可点操作（主题色 + 按压水波纹）。
@@ -287,25 +290,32 @@ public class HomeActivity extends Activity {
         weekNav.setOrientation(LinearLayout.HORIZONTAL);
         weekNav.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
-        TextView prevBtn = Ui.text(this, "‹", 18f, Ui.MUTED, false);
-        prevBtn.setGravity(android.view.Gravity.CENTER);
+        // 周导航：矢量箭头（字符 ‹ 字形小且基线不齐，18dp 图标在 32dp 圆钮里视觉饱满）
+        ImageView prevBtn = new ImageView(this);
+        prevBtn.setImageResource(R.drawable.ic_chevron_left);
+        prevBtn.setColorFilter(Ui.MUTED);
+        prevBtn.setPadding(Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7));
         prevBtn.setBackground(Ui.round(Ui.CARD2, 15, 0, this));
-        int btnSize = Ui.dp(this, 30);
+        prevBtn.setContentDescription("上一周");
+        int btnSize = Ui.dp(this, 32);
         prevBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { weekOffset--; renderWeek(); }
         });
         weekNav.addView(prevBtn, new LinearLayout.LayoutParams(btnSize, btnSize));
 
         weekLabelView = Ui.text(this, "9.28-10.04", 12f, Ui.MUTED, false);
-        weekLabelView.setPadding(Ui.dp(this, 6), 0, Ui.dp(this, 6), 0);
+        weekLabelView.setPadding(Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8));
         weekLabelView.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { weekOffset = 0; renderWeek(); }
         });
         weekNav.addView(weekLabelView);
 
-        TextView nextBtn = Ui.text(this, "›", 18f, Ui.MUTED, false);
-        nextBtn.setGravity(android.view.Gravity.CENTER);
+        ImageView nextBtn = new ImageView(this);
+        nextBtn.setImageResource(R.drawable.ic_chevron_right);
+        nextBtn.setColorFilter(Ui.MUTED);
+        nextBtn.setPadding(Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7));
         nextBtn.setBackground(Ui.round(Ui.CARD2, 15, 0, this));
+        nextBtn.setContentDescription("下一周");
         nextBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { weekOffset++; renderWeek(); }
         });
@@ -422,8 +432,19 @@ public class HomeActivity extends Activity {
             String dayLabel = weekLabels[d] + (badge.length() > 0 ? " " + badge : "");
 
             // 文字水平居中（之前 Ui.text 默认靠左，视觉上歪）
-            TextView wv = Ui.text(this, dayLabel, 11f, sel ? 0xFFFFFFFF : Ui.MUTED,
-                    badge.length() > 0);
+            // badge（休/班）单独上主题色变体（暗底亮色/浅底深色），选中格保持纯白
+            TextView wv = Ui.textMedium(this, dayLabel, 11f, sel ? 0xFFFFFFFF : Ui.MUTED);
+            if (!sel && badge.length() > 0) {
+                boolean darkNow = Ui.isDark();
+                int badgeColor = "休".equals(badge)
+                        ? (darkNow ? 0xFF7BD88F : 0xFF16A34A)
+                        : (darkNow ? 0xFFFFC53D : 0xFFD97706);
+                android.text.SpannableString sp = new android.text.SpannableString(dayLabel);
+                sp.setSpan(new android.text.style.ForegroundColorSpan(badgeColor),
+                        dayLabel.length() - badge.length(), dayLabel.length(),
+                        android.text.SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
+                wv.setText(sp);
+            }
             wv.setGravity(android.view.Gravity.CENTER);
             TextView dd = Ui.text(this, String.valueOf(cal.get(java.util.Calendar.DAY_OF_MONTH)),
                     15f, sel ? 0xFFFFFFFF : Ui.TEXT, true);
@@ -547,14 +568,15 @@ public class HomeActivity extends Activity {
         if (greetingView != null) {
             greetingView.setText("Hi，" + displayName);
         }
-        // 课表名行：📌图标 + 课表名（整行可点 → 课表管理页）+ 右侧「单」字开关（单字课程名模式，记住）
+        // 课表名行：🔁切换图标 + 课表名（整行可点 → 课表管理页=切换课表）+ 右侧[单]/✏️控件组
         LinearLayout nameRow = new LinearLayout(this);
         nameRow.setOrientation(LinearLayout.HORIZONTAL);
         nameRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        TextView nameLine = Ui.text(this, s.name, 13f, Ui.TEXT, true);
+        TextView nameLine = Ui.textMedium(this, s.name, 13f, Ui.TEXT);
         nameLine.setCompoundDrawablePadding(Ui.dp(this, 6));
+        // 图标 17dp 本征尺寸（ic_repeat.xml width/height），与 13sp 文字行高齐平
         android.graphics.drawable.Drawable listIc = new android.graphics.drawable.InsetDrawable(
-                getDrawable(R.drawable.ic_tab_schedule), 0, Ui.dp(this, 2), 0, 0);
+                getDrawable(R.drawable.ic_repeat), 0, Ui.dp(this, 1), 0, 0);
         nameLine.setCompoundDrawablesWithIntrinsicBounds(listIc, null, null, null);
         nameLine.getCompoundDrawables()[0].setColorFilter(Ui.ACCENT, android.graphics.PorterDuff.Mode.SRC_IN);
         nameLine.setClickable(true);
@@ -569,12 +591,12 @@ public class HomeActivity extends Activity {
         nameRow.addView(nameLine, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         final boolean shortOn = CourseCache.shortNameMode(this);
-        TextView singleBtn = Ui.text(this, "单", 12f, shortOn ? 0xFFFFFFFF : Ui.MUTED, true);
+        TextView singleBtn = Ui.textMedium(this, "单", 12f, shortOn ? 0xFFFFFFFF : Ui.MUTED);
         singleBtn.setGravity(android.view.Gravity.CENTER);
         singleBtn.setBackground(shortOn
                 ? Ui.round(Ui.ACCENT, 14, 0, this)
                 : Ui.round(Ui.CARD2, 14, Ui.LINE, this));
-        singleBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 3), Ui.dp(this, 10), Ui.dp(this, 3));
+        singleBtn.setPadding(0, 0, 0, 0);
         singleBtn.setClickable(true);
         singleBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -582,13 +604,69 @@ public class HomeActivity extends Activity {
                 renderWeek();
             }
         });
-        nameRow.addView(singleBtn);
+        // 与 ✏️ 完全同框：30×30 正方
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                Ui.dp(this, 30), Ui.dp(this, 30));
+        slp.leftMargin = Ui.dp(this, 8);
+        nameRow.addView(singleBtn, slp);
+        // ✏️ 编辑：进入可视化编辑态（点课表名 → 课程表管理仍是管理入口）；与[单]同高成组
+        ImageView editBtn = new ImageView(this);
+        editBtn.setImageResource(R.drawable.ic_pencil);
+        editBtn.setColorFilter(Ui.ACCENT);
+        editBtn.setBackground(Ui.round(Ui.CARD2, 14, Ui.LINE, this));
+        editBtn.setPadding(Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7));
+        editBtn.setClickable(true);
+        editBtn.setContentDescription("编辑课表");
+        editBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                Intent i = new Intent(HomeActivity.this, CourseEditActivity.class);
+                i.putExtra(CourseEditActivity.EXTRA_ID, s.id);
+                startActivity(i);
+            }
+        });
+        LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(
+                Ui.dp(this, 30), Ui.dp(this, 30));
+        elp.leftMargin = Ui.dp(this, 6);
+        nameRow.addView(editBtn, elp);
         weekBox.addView(nameRow);
-        weekBox.addView(Ui.space(this, 4));
+        weekBox.addView(Ui.space(this, 8));
+        // 同步状态按钮：显示未同步课数，点击强制三方同步（兜底）
+        int unsaved = SyncCoordinator.unsavedCount(s);
+        String syncText;
+        int syncColor;
+        if (unsaved > 0) {
+            syncText = unsaved + " 门课未同步 · 点此同步";
+            syncColor = Ui.ACCENT;
+        } else if (s.isSync()) {
+            syncText = "已同步 ✓";
+            syncColor = Ui.OK;
+        } else {
+            syncText = "尚未同步到手环 · 点此同步";
+            syncColor = Ui.WARN;
+        }
+        TextView syncBtn = Ui.textMedium(this, syncText, 12f, syncColor);
+        syncBtn.setGravity(android.view.Gravity.CENTER);
+        syncBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 7), Ui.dp(this, 10), Ui.dp(this, 7));
+        syncBtn.setBackground(Ui.round(Ui.CARD2, 14, Ui.LINE, this));
+        syncBtn.setClickable(true);
+        syncBtn.setContentDescription("同步课表到手环");
+        syncBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { forceSync(); }
+        });
+        weekBox.addView(syncBtn, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        weekBox.addView(Ui.space(this, 8));
         weekBox.addView(weekGridWithTime(s.courses));
-        String note = s.sub() + "　·　更新于 " + CourseCache.ago(
-                s.isSync() ? s.syncedAt : s.createdAt);
-        TextView n = Ui.mono(this, note);
+        // note 信息去重：sync 课表"最后同步"与"更新于"是同一件事，只说一遍
+        String note;
+        if (s.isSync()) {
+            note = "来自手环 · " + s.courses.size() + " 门课 · 最后同步 "
+                    + CourseCache.ago(s.syncedAt);
+        } else {
+            note = "仅本机 · " + s.courses.size() + " 门课 · 更新于 "
+                    + CourseCache.ago(s.createdAt);
+        }
+        TextView n = Ui.text(this, note, 11.5f, Ui.MUTED, false);
         n.setPadding(0, Ui.dp(this, 6), 0, 0);
         weekBox.addView(n);
 
@@ -648,13 +726,18 @@ public class HomeActivity extends Activity {
             day.add(java.util.Calendar.DAY_OF_MONTH, d);
             String badge = Holiday.badge(this, day);
             String head = heads[d] + badge;
+            // 休/班 badge：深浅主题各给可读变体（暗底暗字看不清 → 暗底用亮色）
+            boolean darkNow = Ui.isDark();
+            int holidayColor = darkNow ? 0xFF7BD88F : 0xFF16A34A;
+            int workdayColor = darkNow ? 0xFFFFC53D : 0xFFD97706;
             int headColor = isToday ? 0xFFFFFFFF
-                    : ("休".equals(badge) ? 0xFF16A34A : ("班".equals(badge) ? 0xFFD97706 : Ui.MUTED));
-            TextView hl = Ui.text(this, head, 9f, headColor, true);
+                    : ("休".equals(badge) ? holidayColor
+                        : ("班".equals(badge) ? workdayColor : Ui.MUTED));
+            TextView hl = Ui.textMedium(this, head, 10.5f, headColor);
             hl.setGravity(android.view.Gravity.CENTER);
             hl.setPadding(0, Ui.dp(this, 2), 0, Ui.dp(this, 2));
             if (isToday) {
-                // 今天列头：主色药丸（替代纯变色，更醒目也更精致）
+                // 今天列头：主色药丸（「今天」唯一主表达；列蒙层已移除避免重复强调）
                 hl.setBackground(Ui.round(Ui.ACCENT, 12, 0, this));
             }
             headerRow.addView(hl, new LinearLayout.LayoutParams(
@@ -667,14 +750,14 @@ public class HomeActivity extends Activity {
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.HORIZONTAL);
 
-        // time column
+        // time column（宽 34 / 行高 44 与课程块对齐 / 字号 10）
         LinearLayout timeCol = new LinearLayout(this);
         timeCol.setOrientation(LinearLayout.VERTICAL);
         for (String ts : timeSlots) {
-            TextView tv = Ui.text(this, ts, 9f, Ui.MUTED, false);
+            TextView tv = Ui.text(this, ts, 10f, Ui.MUTED, false);
             tv.setGravity(android.view.Gravity.CENTER);
-            tv.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, 30),
-                    Ui.dp(this, 42)));
+            tv.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, 34),
+                    Ui.dp(this, 44)));
             timeCol.addView(tv);
         }
         body.addView(timeCol);
@@ -689,17 +772,13 @@ public class HomeActivity extends Activity {
 
             // 假期列（EV 首页语义：假期名写在放假的「那一天」）——整列淡绿底 + 列中央假期名
             if (override == Holiday.HOLIDAY) {
-                if (thisWeek && d == today) {
-                    dayCol.setBackground(Ui.round(0x2E22C55E, 6, 0, this)); // 今天+假期：绿底更实
-                } else {
-                    dayCol.setBackground(Ui.round(0x1422C55E, 6, 0, this));
-                }
+                dayCol.setBackground(Ui.round(Ui.isDark() ? 0x142FBF6A : 0x1422C55E, 6, 0, this));
                 dayCol.setGravity(android.view.Gravity.CENTER);
                 dayCol.setPadding(Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2));
-                TextView hn = Ui.text(this, Holiday.holidayName(this, day),
-                        9.5f, 0xFF166534, true);
+                TextView hn = Ui.textMedium(this, Holiday.holidayName(this, day),
+                        11.5f, Ui.isDark() ? 0xFF7BD88F : 0xFF166534);
                 hn.setGravity(android.view.Gravity.CENTER);
-                int colH = Ui.dp(this, 42) * Math.max(1, timeSlots.size());
+                int colH = Ui.dp(this, 44) * Math.max(1, timeSlots.size());
                 hn.setLayoutParams(new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, colH));
                 dayCol.addView(hn);
@@ -708,9 +787,6 @@ public class HomeActivity extends Activity {
                 continue;
             }
 
-            if (thisWeek && d == today) {
-                dayCol.setBackground(Ui.round(Ui.ACCENT_LIGHT, 6, 0, this));
-            }
             dayCol.setPadding(Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2));
 
             // 调休列按目标星期几取课
@@ -725,13 +801,22 @@ public class HomeActivity extends Activity {
             for (String ts : timeSlots) {
                 CourseCache.Course c = map.get(ts);
                 if (c != null) {
-                    dayCol.addView(courseBlockCompact(c));
+                    // 当前节：本周 + 今天列 + 现在时刻落在该课时间区间内
+                    boolean current = false;
+                    if (thisWeek && d == today) {
+                        int[] m = CourseCache.minutes(c.time);
+                        if (m != null) {
+                            int now = CourseCache.nowMinutes();
+                            current = now >= m[0] && now < m[1];
+                        }
+                    }
+                    dayCol.addView(courseBlockCompact(c, current));
                 } else {
                     // empty slot
                     View empty = new View(this);
                     empty.setBackground(Ui.round(0x00000000, 5, 0, this));
                     empty.setLayoutParams(new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 40)));
+                            LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 44)));
                     dayCol.addView(empty);
                 }
             }
@@ -743,23 +828,74 @@ public class HomeActivity extends Activity {
         return wrapper;
     }
 
-    /** 课程小色块（周视图网格用，固定高度 40dp；单字模式下只显示第一个字并放大居中） */
-    private View courseBlockCompact(CourseCache.Course c) {
+    /**
+     * 课程小色块（周视图网格用，固定高度 44dp 双行：课名 + 教室）。
+     * 字色按底色亮度自动选深/白（Ui.onCourseColor），单字模式放大课名。
+     * current=true（今天列里正在上的课）加 2dp ACCENT 描边。
+     */
+    private View courseBlockCompact(CourseCache.Course c, boolean current) {
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.VERTICAL);
         b.setGravity(android.view.Gravity.CENTER);
-        b.setBackground(Ui.round(Ui.courseColor(c.name), 8, 0, this));
-        b.setPadding(Ui.dp(this, 2), 0, Ui.dp(this, 2), 0);
+        int bg = Ui.courseColor(c.name);
+        b.setBackground(current
+                ? Ui.round(bg, 10, Ui.ACCENT, 2, this)
+                : Ui.round(bg, 10, 0, this));
+        b.setPadding(Ui.dp(this, 1), Ui.dp(this, 2), Ui.dp(this, 1), Ui.dp(this, 2));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 40));
-        lp.setMargins(0, Ui.dp(this, 1), 0, Ui.dp(this, 1)); // 块间留缝，更透气
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 44));
+        lp.setMargins(Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2)); // 四向留缝
         b.setLayoutParams(lp);
+        int fg = Ui.onCourseColor(bg);
         String disp = CourseCache.displayName(c.name, CourseCache.shortNameMode(this));
-        TextView tv = Ui.text(this, disp, disp.length() <= 1 ? 14f : 9.5f, 0xFFFFFFFF, true);
+        TextView tv = Ui.textMedium(this, disp, disp.length() <= 1 ? 16f : 10f, fg);
         tv.setGravity(android.view.Gravity.CENTER);
         tv.setSingleLine(true);
+        tv.setLineSpacing(Ui.dp(this, 1), 1f);
         b.addView(tv);
+        if (!shortModeHere() && c.location != null && c.location.length() > 0) {
+            TextView loc = Ui.text(this, ellip6(c.location), 9f,
+                    (fg & 0x00FFFFFF) | 0xC8000000, false);
+            loc.setGravity(android.view.Gravity.CENTER);
+            loc.setSingleLine(true);
+            b.addView(loc);
+        }
+        b.setClickable(true);
+        b.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { showCourseDetail(c); }
+        });
         return b;
+    }
+
+    private boolean shortModeHere() {
+        return CourseCache.shortNameMode(this);
+    }
+
+    private static String ellip6(String s) {
+        return s != null && s.length() > 7 ? s.substring(0, 6) + "…" : s;
+    }
+
+    /**
+     * 课程只读详情（浏览态轻量路径，方案 v2 3.2）：看到课有问题 → [编辑] 直达对应课的编辑面板。
+     * 这里只负责"看"，改课必须进编辑态页面，避免首页误触改数据。
+     */
+    private void showCourseDetail(final CourseCache.Course c) {
+        Dialogs.confirm(this, 0, 0,
+                c.name,
+                "周" + CourseEditUtil.DAY_SHORT[Math.max(0, Math.min(6, c.day))] + "　" + (c.time == null ? "" : c.time)
+                        + (c.location.length() > 0 ? "\n📍 " + c.location : "")
+                        + (c.teacher.length() > 0 ? "　👤 " + c.teacher : ""),
+                null, "编辑", false,
+                new Dialogs.Action() {
+                    @Override public void run() {
+                        Intent i = new Intent(HomeActivity.this, CourseEditActivity.class);
+                        i.putExtra(CourseEditActivity.EXTRA_ID, ScheduleStore.activeId(HomeActivity.this));
+                        i.putExtra(CourseEditActivity.EXTRA_FOCUS_NAME, c.name);
+                        i.putExtra(CourseEditActivity.EXTRA_FOCUS_DAY, c.day);
+                        i.putExtra(CourseEditActivity.EXTRA_FOCUS_TIME, c.time);
+                        startActivity(i);
+                    }
+                });
     }
 
     // ======================= 快捷操作 =======================
@@ -774,7 +910,21 @@ public class HomeActivity extends Activity {
         miniStatus("正在发送「" + label + "」…", Ui.ACCENT);
         e.send(json, new SyncEngine.Reply() {
             @Override public void onReply(String r) {
-                miniStatus("「" + label + "」已送达 ✓", Ui.OK);
+                // 检查回包 ok 字段：手环「执行成功」才算送达，避免把错误回包误判成成功
+                boolean ok = true;
+                String reason = "";
+                try {
+                    JSONObject o = new JSONObject(r);
+                    ok = o.optBoolean("ok", true);   // 无 ok 字段按兼容成功
+                    reason = o.optString("reason", "");
+                } catch (Throwable ignored) {
+                }
+                if (ok) {
+                    miniStatus("「" + label + "」已送达 ✓", Ui.OK);
+                } else {
+                    miniStatus("手环未响应「" + label + "」"
+                            + (reason.length() > 0 ? "：" + reason : ""), Ui.WARN);
+                }
             }
             @Override public void onTimeout(String hint) {
                 miniStatus("手环无回应（" + label + "）", Ui.WARN);
@@ -822,6 +972,22 @@ public class HomeActivity extends Activity {
         } else {
             startConnect();
         }
+    }
+
+    /** 强制同步（同步状态按钮）：字段级三方合并，兜底把本地改动写回手环 */
+    private void forceSync() {
+        if (!SyncEngine.get(this).hasNode()) {
+            miniStatus("手环未连接，先连接再同步", Ui.WARN);
+            startConnect();
+            return;
+        }
+        miniStatus("正在同步课表…", Ui.ACCENT);
+        SyncCoordinator.syncNow(this, new SyncCoordinator.Callback() {
+            @Override public void onDone(boolean ok, String msg) {
+                miniStatus((ok ? "● " : "✕ ") + msg, ok ? Ui.OK : Ui.WARN);
+                renderWeek();
+            }
+        });
     }
 
     // ======================= UI：EvBox 旧首页 =======================
@@ -1059,6 +1225,10 @@ public class HomeActivity extends Activity {
                         if (sch != null) {
                             if (legacy) {
                                 CourseCache.save(HomeActivity.this, sch, "");
+                            } else if (ScheduleStore.active(HomeActivity.this) != null
+                                    && ScheduleStore.active(HomeActivity.this).dirty) {
+                                // 有未同步本地改动：走三方合并补发，不整表覆盖（否则会丢本地编辑）
+                                SyncCoordinator.syncNow(HomeActivity.this, null);
                             } else {
                                 // 方案 A：写入多课表存储（拿到当前课表名后覆盖更新）
                                 syncScheduleToStore(sch);
@@ -1187,6 +1357,10 @@ public class HomeActivity extends Activity {
         }
         hintView.setText(hint);
         errorCard.setVisibility(View.VISIBLE);
+        // 状态只说一遍：错误卡（带重试按钮）在场时，隐藏迷你条
+        if (miniBarView != null) {
+            miniBarView.setVisibility(View.GONE);
+        }
         // 连不上也保持课表在屏（默认本地课表兜底），只是迷你条提示未连接
     }
 
@@ -1196,6 +1370,9 @@ public class HomeActivity extends Activity {
         }
         miniStatusView.setText(s);
         miniStatusView.setTextColor(color);
+        if (miniBarView != null) {
+            miniBarView.setVisibility(View.VISIBLE);
+        }
     }
 
     /** 迷你条按引擎状态刷新（状态回调驱动；与 ConnectionBar 同一数据源）。 */
