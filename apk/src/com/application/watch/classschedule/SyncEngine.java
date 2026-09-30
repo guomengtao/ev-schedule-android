@@ -441,18 +441,38 @@ public final class SyncEngine {
                     android.util.Log.d("EVProbe", "keepalive: offline → autoReconnect");
                     autoReconnect();
                 } else if (nodeId != null && pending == null && idle) {
-                    android.util.Log.d("EVProbe", "keepalive: ping");
-                    ping(new Reply() {
-                        @Override public void onReply(String json) { /* 通道活着，什么都不做 */ }
-                        @Override public void onTimeout(String hint) {
-                            android.util.Log.d("EVProbe", "keepalive: EV 无回应，拉起");
-                            try {
-                                Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx));
-                            } catch (Throwable ignored) {
+                    // P4/A5（§7.1 遗留 #2）：空闲时补拿手环真实 deviceId —— 从未拿到过、
+                    // 或换了手环（nodeId 与缓存不同）时借这次心跳的空闲窗口发一次
+                    // get_device_id（不占用户操作：pending==null 才会走到这）。
+                    if (Stats.needsDeviceIdRefresh(ctx, nodeId)) {
+                        android.util.Log.d("EVProbe", "keepalive: refresh deviceId");
+                        getDeviceId(new Reply() {
+                            @Override public void onReply(String json) { }
+                            @Override public void onTimeout(String hint) {
+                                // 与 ping 分支同款自愈：EV 没回应多半是退了，拉起来，
+                                // 下一轮心跳自然能刷新成功
+                                android.util.Log.d("EVProbe", "keepalive: deviceId 无回应，拉起");
+                                try {
+                                    Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx));
+                                } catch (Throwable ignored) {
+                                }
                             }
-                        }
-                        @Override public void onError(String msg) { /* 静默 */ }
-                    });
+                            @Override public void onError(String msg) { }
+                        });
+                    } else {
+                        android.util.Log.d("EVProbe", "keepalive: ping");
+                        ping(new Reply() {
+                            @Override public void onReply(String json) { /* 通道活着，什么都不做 */ }
+                            @Override public void onTimeout(String hint) {
+                                android.util.Log.d("EVProbe", "keepalive: EV 无回应，拉起");
+                                try {
+                                    Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx));
+                                } catch (Throwable ignored) {
+                                }
+                            }
+                            @Override public void onError(String msg) { /* 静默 */ }
+                        });
+                    }
                 } else {
                     android.util.Log.d("EVProbe", "keepalive: skip("
                             + (nodeId == null ? "未连接" : pending != null ? "操作在途" : "刚有收发") + ")");
@@ -759,6 +779,12 @@ public final class SyncEngine {
         }
         try {
             Stats.connectEnd(ctx, ok, failStep, failStep > 0 ? failDetail : hint);
+        } catch (Throwable ignored) {
+        }
+        // P4/A5：多手环历史清单——成功失败都算「见过这只手环」。
+        //   失败时 versionName 已被上面清空，recordWatchSeen 对空值不覆盖，保留上次记录。
+        try {
+            Stats.recordWatchSeen(ctx, nodeId, deviceName, ok ? versionName : "", ok);
         } catch (Throwable ignored) {
         }
         // P3（§4.4）：连接结果事件。ok 只落库（connect 推送与 page_visit 重复）；
