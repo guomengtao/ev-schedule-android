@@ -26,6 +26,9 @@ public class EvApp extends Application implements Application.ActivityLifecycleC
         try {
             Stats.onProcessStart(this);
             registerActivityLifecycleCallbacks(this);
+            // P3（§4.4）：app_open 只落库不推送（与 page_visit 高度重复，推了纯噪音）；
+            //   open_count/upgrade_count 在 body.app 段里，服务端据此算日活与升级确认。
+            Analytics.event(this, "app_open", null);
         } catch (Throwable ignored) {
         }
     }

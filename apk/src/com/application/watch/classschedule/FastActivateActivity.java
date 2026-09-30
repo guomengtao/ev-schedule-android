@@ -7,6 +7,7 @@ import android.content.pm.PackageInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.TextWatcher;
@@ -14,6 +15,7 @@ import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -48,6 +50,11 @@ public class FastActivateActivity extends Activity {
     private static final String K_DEVICE = "deviceId";
     private static final String K_CODE = "activationCode";
     private static final String K_TS = "ts";
+    // P1（§4.1）：深链溯源参数。存 prefs 而不是实例字段 —— 深链进来时手环没连上会走「暂存」，
+    // 页面重建后实例字段会丢，prefs 不会；激活时也就能一直带着来源。键名加 trace 前缀避免和上面撞。
+    private static final String K_TRACE_UID = "traceUid";
+    private static final String K_TRACE_CHANNEL = "traceChannel";
+    private static final String K_TRACE_ORDER = "traceOrder";
 
     private TextView deviceView, statusView, resultView;
     private EditText[] boxes = new EditText[4];
@@ -58,6 +65,21 @@ public class FastActivateActivity extends Activity {
     private String resumedCode = "";
     /** 四格分发中标记，防止 TextWatcher 递归 */
     private boolean distributing = false;
+    // P3/A6：深链溯源参数快照（onBackend 里 clearTrace 会清 prefs，写入成功的事件要带上）
+    private String lastTraceUid = "";
+    private String lastTraceChannel = "";
+    private String lastTraceOrder = "";
+
+    // ===== 深链自动填码（evsched://activate?code=XXXX）与按钮状态 =====
+    private Button activateBtn;
+    /** 深链带来的兑换码；空串表示本次进入没有深链 */
+    private String deepLinkCode = "";
+    /** 深链兑换码只自动触发一次激活，防止回环 */
+    private boolean deepLinkConsumed = false;
+    private final Handler btnHandler = new Handler();
+    private final Runnable btnReset = new Runnable() {
+        @Override public void run() { resetBtn(); }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -110,9 +132,10 @@ public class FastActivateActivity extends Activity {
         act.addView(Ui.space(this, 10));
         act.addView(Ui.text(this, "支持长按粘贴，自动大写", 11f, Ui.MUTED, false));
         act.addView(Ui.space(this, 10));
-        act.addView(Ui.button(this, "一键激活", true, new View.OnClickListener() {
+        activateBtn = Ui.button(this, "一键激活", true, new View.OnClickListener() {
             @Override public void onClick(View v) { activate(); }
-        }));
+        });
+        act.addView(activateBtn);
         root.addView(act);
         root.addView(Ui.space(this, 10));
 
@@ -136,6 +159,101 @@ public class FastActivateActivity extends Activity {
         root.requestFocus();
 
         loadDeviceId();
+        handleDeepLink(getIntent());
+        // P3（§4.4-E2）：激活页此前没有 pageView，是 App 侧访问埋点的最大盲区
+        Analytics.pageView(this, "/apk/activate");
+    }
+
+    // ======================= 深链自动填码 =======================
+
+    /**
+     * 处理 evsched://activate?code=XXXX&u=&c=&o= 深链：自动填入四格，
+     * 等「设备ID就绪」或「确认手环未连接」后自动触发一次激活（见 maybeDeepLinkActivate）。
+     * P1（§4.1）：u（用户识别码）/ c（渠道）/ o（订单号）会被存下来随激活上报；老链接（只有 code）照样能用。
+     */
+    private void handleDeepLink(Intent intent) {
+        if (intent == null || intent.getData() == null) {
+            return;
+        }
+        Uri data = intent.getData();
+        if (!"activate".equals(data.getHost())) {
+            return;
+        }
+        String code = data.getQueryParameter("code");
+        if (code == null) {
+            return;
+        }
+        code = code.trim().toUpperCase().replaceAll("[^A-Z0-9]", "");
+        if (code.length() != 4) {
+            return;
+        }
+        deepLinkCode = code;
+        deepLinkConsumed = false;
+        // P1（§4.1）：把链接里的溯源参数存下来（u=用户识别码 / c=渠道 / o=订单号），
+        // 激活时随请求上报 —— 这样「链接被点开 → 激活」能确定性地归到同一订单/渠道。
+        // 只保留白名单字符，链接来自私信，必须假定是脏的；没有的键写空串（= 老链接，行为不变）。
+        pending().edit()
+                .putString(K_TRACE_UID, sanitizeTrace(data.getQueryParameter("u"), 32))
+                .putString(K_TRACE_CHANNEL, sanitizeTrace(data.getQueryParameter("c"), 32))
+                .putString(K_TRACE_ORDER, sanitizeTrace(data.getQueryParameter("o"), 64))
+                .apply();
+        fillBoxes(code);
+        resultView.setText("已从链接自动填入兑换码 " + code
+                + (deviceId.length() > 0 ? "，正在激活…" : "，等待读取设备ID…"));
+        resultView.setTextColor(Ui.ACCENT);
+        maybeDeepLinkActivate();
+    }
+
+    /** 深链参数清洗：只留 [A-Za-z0-9_-] 并限长（链接来自私信，一律按不可信输入处理） */
+    private static String sanitizeTrace(String v, int max) {
+        if (v == null) return "";
+        String s = v.replaceAll("[^A-Za-z0-9_-]", "");
+        return s.length() > max ? s.substring(0, max) : s;
+    }
+
+    /** 清掉已用完的深链溯源参数，避免用户之后再手输别的码时被错误归因 */
+    private void clearTrace() {
+        pending().edit()
+                .putString(K_TRACE_UID, "")
+                .putString(K_TRACE_CHANNEL, "")
+                .putString(K_TRACE_ORDER, "")
+                .apply();
+    }
+
+    /** 深链兑换码自动激活：设备ID已就绪或确认未连接（走暂存）时才触发，且只触发一次 */
+    private void maybeDeepLinkActivate() {
+        if (deepLinkCode.length() == 0 || deepLinkConsumed) {
+            return;
+        }
+        if (collectCode().length() != 4) {
+            return;
+        }
+        boolean node = SyncEngine.get(this).hasNode();
+        if (node && deviceId.length() == 0) {
+            return; // 设备ID还在读取，等 onReply 后再触发
+        }
+        deepLinkConsumed = true;
+        activate();
+    }
+
+    // ======================= 按钮状态 =======================
+
+    /** 点「一键激活」后按钮进入激活中状态（文字变化 + 禁点），15 秒无回包强制恢复 */
+    private void setBtnBusy() {
+        if (activateBtn != null) {
+            activateBtn.setText("激活中…");
+            activateBtn.setEnabled(false);
+        }
+        btnHandler.removeCallbacks(btnReset);
+        btnHandler.postDelayed(btnReset, 15000);
+    }
+
+    private void resetBtn() {
+        btnHandler.removeCallbacks(btnReset);
+        if (activateBtn != null) {
+            activateBtn.setText("一键激活");
+            activateBtn.setEnabled(true);
+        }
     }
 
     // ======================= 呼叫手环 =======================
@@ -359,6 +477,7 @@ public class FastActivateActivity extends Activity {
             statusView.setText("请先回首页完成连接（需要小米运动健康）");
             statusView.setTextColor(Ui.WARN);
             tryResume();
+            maybeDeepLinkActivate();
             return;
         }
         deviceView.setText("设备ID：读取中…");
@@ -383,6 +502,7 @@ public class FastActivateActivity extends Activity {
                             : "设备ID已就绪，可输入兑换码"));
                     statusView.setTextColor(fallback ? Ui.WARN : Ui.OK);
                     tryResume();
+                    maybeDeepLinkActivate();
                 } catch (Throwable t) {
                     deviceView.setText("设备ID：回包无法解析");
                 }
@@ -419,16 +539,19 @@ public class FastActivateActivity extends Activity {
             resultView.setTextColor(Ui.ERR);
             return;
         }
+        setBtnBusy();
         if (!SyncEngine.get(this).hasNode()) {
             // 未连接：先暂存兑换码，连接后自动继续
             savePending(code, "", null);
             resultView.setText("手环未连接，兑换码已暂存。\n连上手环回到本页后会自动继续激活。");
             resultView.setTextColor(Ui.WARN);
+            resetBtn();
             return;
         }
         if (TextUtils.isEmpty(deviceId)) {
             resultView.setText("还没有取到设备ID，正在重试读取…");
             resultView.setTextColor(Ui.WARN);
+            resetBtn();
             loadDeviceId();
             return;
         }
@@ -441,6 +564,16 @@ public class FastActivateActivity extends Activity {
             body.put("deviceId", deviceId);
             body.put("redeemCode", code);
             body.put("deviceInfo", deviceInfo());
+            // P1（§4.1）：带上深链溯源参数。三者都为空时**一个键都不加** ——
+            // 保证「手输激活码」的报文形状与改造前完全一致（服务端按可缺省处理）。
+            // ⚠️ 刻意不改 deviceInfo.source（仍是 "apk"）：服务端 activationClient() 靠它判客户端类型，
+            //    渠道归因走独立的 channel 字段，两件事不混在一个字段里。
+            String tUid = sanitizeTrace(pending().getString(K_TRACE_UID, ""), 32);
+            String tChn = sanitizeTrace(pending().getString(K_TRACE_CHANNEL, ""), 32);
+            String tOrd = sanitizeTrace(pending().getString(K_TRACE_ORDER, ""), 64);
+            if (tUid.length() > 0) body.put("uid", tUid);
+            if (tChn.length() > 0) body.put("channel", tChn);
+            if (tOrd.length() > 0) body.put("orderNo", tOrd);
         } catch (Throwable ignored) {
         }
 
@@ -472,6 +605,7 @@ public class FastActivateActivity extends Activity {
 
     private void onBackend(int httpCode, String resp) {
         if (httpCode < 0 || resp == null) {
+            resetBtn();
             resultView.setText("网络请求失败，请检查网络后重试");
             resultView.setTextColor(Ui.ERR);
             return;
@@ -486,22 +620,31 @@ public class FastActivateActivity extends Activity {
                 if (TextUtils.isEmpty(err)) {
                     err = "服务器返回失败";
                 }
+                resetBtn();
                 resultView.setText("激活失败：" + err);
                 resultView.setTextColor(Ui.ERR);
                 return;
             }
         } catch (Throwable t) {
+            resetBtn();
             resultView.setText("服务器回包无法解析");
             resultView.setTextColor(Ui.ERR);
             return;
         }
         if (activationCode == null || activationCode.length() != 18) {
+            resetBtn();
             resultView.setText("服务器没有返回有效的 18 位激活码");
             resultView.setTextColor(Ui.ERR);
             return;
         }
         // 换码成功先落暂存：写入手环失败也能断点续传
         savePending(collectCode(), deviceId, activationCode);
+        // P3/A6：clearTrace 会把溯源参数从 prefs 清掉，先抓快照留给写入成功事件
+        lastTraceUid = sanitizeTrace(pending().getString(K_TRACE_UID, ""), 32);
+        lastTraceChannel = sanitizeTrace(pending().getString(K_TRACE_CHANNEL, ""), 32);
+        lastTraceOrder = sanitizeTrace(pending().getString(K_TRACE_ORDER, ""), 64);
+        // P1（§4.1）：溯源参数已经用掉，清掉避免影响后续手输激活的归因
+        clearTrace();
         writeToBand(activationCode);
     }
 
@@ -517,27 +660,41 @@ public class FastActivateActivity extends Activity {
                         String status = o.optString("status");
                         clearPending();
                         fillBoxes("");
+                        resetBtn();
                         resultView.setText("激活成功！" + (disp.length() > 0 ? ("　" + disp)
                                 : (status.length() > 0 ? ("　" + status) : ""))
                                 + "\n可在手环上打开「EV 课程表 → 高级版」查看有效期。");
                         resultView.setTextColor(Ui.OK);
                         statusView.setText("已激活" + (disp.length() > 0 ? ("：" + disp) : ""));
                         statusView.setTextColor(Ui.OK);
+                        // P3/A6：App 端激活闭环确认（服务端发码 ✓ + 手环落盘 ✓ 两个节点）。
+                        //   dedupeKey 按激活码幂等：同一码的重试成功只记一次。
+                        Analytics.event(FastActivateActivity.this, "app_activate_ok",
+                                Analytics.p("activation_code", code18,
+                                        "uid", lastTraceUid,
+                                        "channel", lastTraceChannel,
+                                        "order_no", lastTraceOrder),
+                                Analytics.dedupeKey(FastActivateActivity.this,
+                                        "app_activate_ok", code18));
                     } else {
+                        resetBtn();
                         resultView.setText("手环拒绝激活：" + o.optString("reason")
                                 + "\n激活码已暂存，解决后回到本页会自动重试。");
                         resultView.setTextColor(Ui.ERR);
                     }
                 } catch (Throwable t) {
+                    resetBtn();
                     resultView.setText("手环回包无法解析：" + json);
                     resultView.setTextColor(Ui.ERR);
                 }
             }
             @Override public void onTimeout(String hint) {
+                resetBtn();
                 resultView.setText(hint + "\n激活码已暂存，重连手环后回到本页会自动补写。");
                 resultView.setTextColor(Ui.WARN);
             }
             @Override public void onError(String msg) {
+                resetBtn();
                 resultView.setText("写入失败：" + msg + "\n激活码已暂存，重连手环后回到本页会自动补写。");
                 resultView.setTextColor(Ui.ERR);
             }
@@ -553,5 +710,13 @@ public class FastActivateActivity extends Activity {
         }
         lastThemeVersion = Ui.themeVersion;
         loadDeviceId();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // App 已在前台时再次点深链 → 走这里（不重建 Activity）
+        setIntent(intent);
+        handleDeepLink(intent);
     }
 }

@@ -84,6 +84,10 @@ public final class UpdateChecker {
                 // 更新漏斗：发现新版本（channel=inapp 与下载页/手环入口区分）
                 Analytics.pageView(a, "/apk/update-found?from=" + localCode(a)
                         + "&to=" + remote + "&c=inapp");
+                // P3（§4.4）：同口径事件化（dedupeKey 按天+目标版本幂等，防每次启动重报）
+                Analytics.event(a, "app_update_found",
+                        Analytics.p("from_code", localCode(a), "to_code", remote),
+                        Analytics.dedupeKey(a, "app_update_found", String.valueOf(remote)));
                 show(a, j);
             }
         });
@@ -254,6 +258,11 @@ public final class UpdateChecker {
                     // 更新漏斗：升级包校验通过、即将唤起安装
                     Analytics.pageView(a, "/apk/update-installed?to="
                             + j.optInt("versionCode", 0) + "&c=inapp");
+                    // P3（§4.4）：升级完成事件（按天+目标版本幂等）
+                    Analytics.event(a, "app_update_installed",
+                            Analytics.p("to_code", j.optInt("versionCode", 0)),
+                            Analytics.dedupeKey(a, "app_update_installed",
+                                    String.valueOf(j.optInt("versionCode", 0))));
                     toast(a, "下载完成，请在系统弹窗中确认安装");
                     install(a, apk);
                 }

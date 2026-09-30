@@ -82,6 +82,17 @@ public class TransferActivity extends Activity {
     private LinearLayout exportCard;
     private EditText exportBox;
 
+    // P3：最近一次从手环读出的课程总数（供导出成功事件的 course_count）
+    private int lastExportTotal = 0;
+
+    /** P3 埋点便捷入口：失败静默，绝不影响导入导出主流程 */
+    private void ev(String kind, JSONObject payload) {
+        try {
+            Analytics.event(this, kind, payload);
+        } catch (Throwable ignored) {
+        }
+    }
+
     // ---- 导入：粘贴 / 预览 ----
     private JsonEditorView importEditor;
     private LinearLayout previewBox, previewCard;
@@ -530,6 +541,9 @@ public class TransferActivity extends Activity {
                         if (sch != null) {
                             setExportJson(flattenFormatA(sch));
                         }
+                        // P3：记住本次读出的课程数，供「保存/复制」成功事件带上 course_count
+                        lastExportTotal = total;
+                        ev("app_export_ok", Analytics.p("course_count", total, "target", "band_read"));
                     } else {
                         sb.append("回包无 data：").append(shortJson(json));
                     }
@@ -545,7 +559,11 @@ public class TransferActivity extends Activity {
                 }
             }
             @Override public void onTimeout(String hint) { infoView.setText(hint); }
-            @Override public void onError(String msg) { infoView.setText("读取失败：" + msg); }
+            @Override public void onError(String msg) {
+                infoView.setText("读取失败：" + msg);
+                // P3：读手环失败（导出主链路断在这）→ 失败合并桶
+                ev("app_export_fail", Analytics.p("stage", "band_read", "reason", msg));
+            }
         };
         if (selectedIndex >= 0) {
             SyncEngine.get(this).sendWake("{\"action\":\"export\",\"scheduleIndex\":" + selectedIndex + "}", cb);
@@ -576,6 +594,8 @@ public class TransferActivity extends Activity {
             return;
         }
         copyToClipboard(exportBox.getText().toString(), "EV课程表");
+        // P3：复制导出结果成功（导出落地口径之一）
+        ev("app_export_ok", Analytics.p("course_count", lastExportTotal, "target", "clip"));
     }
 
     /** 快捷更新：把编辑框里的 JSON 直接导回手环（覆盖当前课表） */
@@ -691,6 +711,8 @@ public class TransferActivity extends Activity {
                 os.flush();
                 os.close();
                 resultView.setText("已保存：下载 / EVSync / " + name);
+                // P3：保存到下载目录成功（导出落地口径之一）
+                ev("app_export_ok", Analytics.p("course_count", lastExportTotal, "target", "file"));
             } else {
                 File dir = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "EVSync");
                 if (!dir.exists() && !dir.mkdirs()) {
@@ -701,11 +723,15 @@ public class TransferActivity extends Activity {
                 fos.write(lastExportJson.getBytes(UTF8));
                 fos.close();
                 resultView.setText("已保存：" + f.getAbsolutePath());
+                // P3：保存到应用目录成功（老系统路径）
+                ev("app_export_ok", Analytics.p("course_count", lastExportTotal, "target", "file"));
             }
             resultView.setTextColor(Ui.OK);
         } catch (Throwable t) {
             resultView.setText("保存失败：" + t);
             resultView.setTextColor(Ui.ERR);
+            // P3：保存失败 → 失败合并桶
+            ev("app_export_fail", Analytics.p("stage", "save_file", "reason", String.valueOf(t)));
         }
     }
 
@@ -1000,23 +1026,33 @@ public class TransferActivity extends Activity {
                         infoView.setText("导入成功" + (count >= 0 ? ("，共 " + count + " 门课") : ""));
                         infoView.setTextColor(Ui.OK);
                         resultView.setText(json);
+                        // P3（§4.4）：导入成功 → 实时推送（每 kind 每分钟 ≤5 条节流在服务端）
+                        ev("app_import_ok", Analytics.p("course_count", count >= 0 ? count : 0,
+                                "source", selectedName == null ? "" : selectedName));
                     } else {
                         infoView.setText("手环拒绝：" + o.optString("reason"));
                         infoView.setTextColor(Ui.ERR);
                         resultView.setText(json);
+                        // P3：手环拒绝写入 → 失败合并桶（不逐条打扰）
+                        ev("app_import_fail", Analytics.p("stage", "band_reject",
+                                "reason", o.optString("reason")));
                     }
                 } catch (Throwable t) {
                     infoView.setText("回包无法解析");
                     resultView.setText(json);
+                    ev("app_import_fail", Analytics.p("stage", "reply_parse",
+                            "reason", String.valueOf(t)));
                 }
             }
             @Override public void onTimeout(String hint) {
                 infoView.setText(hint);
                 infoView.setTextColor(Ui.WARN);
+                ev("app_import_fail", Analytics.p("stage", "timeout", "reason", hint));
             }
             @Override public void onError(String msg) {
                 infoView.setText("导入失败：" + msg);
                 infoView.setTextColor(Ui.ERR);
+                ev("app_import_fail", Analytics.p("stage", "network", "reason", msg));
             }
         });
     }

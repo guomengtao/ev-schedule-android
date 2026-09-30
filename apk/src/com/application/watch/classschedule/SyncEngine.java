@@ -339,9 +339,35 @@ public final class SyncEngine {
         send("{\"action\":\"export\",\"scheduleIndex\":" + index + "}", cb);
     }
 
-    /** 索取手环设备ID（APK 侧拿不到）：回包 {ok,action:"get_device_id",deviceId,deviceId4,fallback} */
+    /**
+     * 索取手环设备ID（APK 侧拿不到）：回包 {ok,action:"get_device_id",deviceId,deviceId4,fallback}
+     *
+     * 📱 A4：取到后立刻缓存到 {@link Stats}（幂等，不改动调用方语义）。
+     * 为什么在这里缓存而不是让调用方自己存：这是**唯一**能拿到手环真实 deviceId 的入口，
+     * 而它是「这台手机 ↔ 这只手环」的合并钥匙（与激活用的同一个 deviceId），
+     * 后续每次埋点上报都要用，不能只在激活页临时用一次就丢。
+     */
     public void getDeviceId(Reply cb) {
-        send("{\"action\":\"get_device_id\"}", cb);
+        final Reply outer = (cb != null) ? cb : new Reply() {
+            @Override public void onReply(String json) { }
+            @Override public void onTimeout(String hint) { }
+            @Override public void onError(String msg) { }
+        };
+        send("{\"action\":\"get_device_id\"}", new Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    Stats.cacheWatchDeviceId(ctx, json, nodeId);
+                } catch (Throwable ignored) {
+                }
+                outer.onReply(json);
+            }
+            @Override public void onTimeout(String hint) {
+                outer.onTimeout(hint);
+            }
+            @Override public void onError(String msg) {
+                outer.onError(msg);
+            }
+        });
     }
 
     /** 一键激活：把后端换来的 18 位激活码交给手环本地校验并落库 */
@@ -733,6 +759,17 @@ public final class SyncEngine {
         }
         try {
             Stats.connectEnd(ctx, ok, failStep, failStep > 0 ? failDetail : hint);
+        } catch (Throwable ignored) {
+        }
+        // P3（§4.4）：连接结果事件。ok 只落库（connect 推送与 page_visit 重复）；
+        //   fail 走服务端「失败合并桶」——每次尝试都落 tracking_events，但通知至多 1 小时合并一条。
+        try {
+            if (ok) {
+                Analytics.event(ctx, "app_connect_ok", null);
+            } else {
+                Analytics.event(ctx, "app_connect_fail",
+                        Analytics.p("stage", failStep, "reason", failStep > 0 ? failDetail : hint));
+            }
         } catch (Throwable ignored) {
         }
         main.post(new Runnable() {
