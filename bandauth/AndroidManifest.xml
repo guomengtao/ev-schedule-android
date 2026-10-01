@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  BandAuthProbe - standalone authkey direct-connect test tool.
+  Not part of the EV Sync apk; own package, own build.
+  Uses raw BLE (not xms-wearable). For experimentation only.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.ev.bandauthprobe">
+
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
+
+    <!-- BLE direct-connect needs both classic-ish scan + location for Android 12+ -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:maxSdkVersion="34" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" android:maxSdkVersion="34" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+
+    <application
+        android:label="BandAuthProbe"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <activity
+            android:name="com.ev.bandauthprobe.ProbeActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+    </activity>
+    </application>
+</manifest>
