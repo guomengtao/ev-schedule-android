@@ -211,43 +211,109 @@ public final class CommandRouter {
 
     // ======================= 倒计时 =======================
 
+    private static final String PREFS = "toolbox";
+    private static final String KEY_END = "countdown_end";
+    private static final String KEY_FIRED = "countdown_fired";
+    private static final int CD_REQUEST_CODE = 7003;
+    private static final int CD_NOTIFY_ID = 9102;
+
     public static void countdown(Context c, int minutes) {
         final Context app = c.getApplicationContext();
         long at = System.currentTimeMillis() + minutes * 60_000L;
-        PendingIntent pi = PendingIntent.getBroadcast(app, 7003,
-                new Intent(app, ToolboxReceiver.class).setAction(ToolboxReceiver.ACTION_COUNTDOWN_FIRE),
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent pi = cdPendingIntent(app);
         AlarmManager am = (AlarmManager) app.getSystemService(Context.ALARM_SERVICE);
         if (am != null) {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+            if (Build.VERSION.SDK_INT >= 21) {
+                am.setAlarmClock(new AlarmManager.AlarmClockInfo(at, pi), pi);
+            } else {
+                am.setExact(AlarmManager.RTC_WAKEUP, at, pi);
+            }
         }
-        app.getSharedPreferences("toolbox", Context.MODE_PRIVATE).edit()
-                .putLong("countdown_end", at).apply();
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putLong(KEY_END, at)
+                .putBoolean(KEY_FIRED, false)
+                .apply();
     }
 
-    /** 倒计时到点（ToolboxReceiver 调）：高优先级通知 + 震动 + 短响 */
+    /** Cancel the active countdown alarm and clear stored state */
+    public static void cancelCountdown(Context c) {
+        final Context app = c.getApplicationContext();
+        AlarmManager am = (AlarmManager) app.getSystemService(Context.ALARM_SERVICE);
+        if (am != null) {
+            am.cancel(cdPendingIntent(app));
+        }
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .remove(KEY_END)
+                .remove(KEY_FIRED)
+                .apply();
+    }
+
+    /** Check if a countdown has fired (user should see the alert) */
+    public static boolean countdownFired(Context c) {
+        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_FIRED, false);
+    }
+
+    /** Dismiss the fired state after user has acknowledged */
+    public static void dismissCountdownFired(Context c) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_FIRED, false)
+                .remove(KEY_END)
+                .apply();
+    }
+
+    /** Countdown fired: shows a notification with action to open toolbox */
     public static void onCountdownFire(Context c) {
         final Context app = c.getApplicationContext();
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_FIRED, true)
+                .apply();
+
+        Intent open = new Intent(app, ToolboxActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent contentPi = PendingIntent.getActivity(app, 0, open,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Intent dismissI = new Intent(app, ToolboxReceiver.class)
+                .setAction(ToolboxReceiver.ACTION_COUNTDOWN_DISMISS);
+        PendingIntent dismissPi = PendingIntent.getBroadcast(app, 7004, dismissI,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         Notification n = new Notification.Builder(app, Notifications.CH_REMIND)
                 .setSmallIcon(R.drawable.ic_timer)
-                .setContentTitle("倒计时结束")
-                .setContentText("时间到了")
+                .setContentTitle("Countdown Finished")
+                .setContentText("Time's up — tap to open toolbox")
                 .setPriority(Notification.PRIORITY_HIGH)
                 .setAutoCancel(true)
+                .setContentIntent(contentPi)
+                .addAction(0, "Dismiss", dismissPi)
                 .build();
-        nm(app).notify(9102, n);
+        nm(app).notify(CD_NOTIFY_ID, n);
+
         Vibrator v = (Vibrator) app.getSystemService(Context.VIBRATOR_SERVICE);
-        if (v != null && Build.VERSION.SDK_INT >= 26) {
-            v.vibrate(VibrationEffect.createWaveform(new long[]{400, 200, 400, 200, 600}, -1));
+        if (v != null) {
+            if (Build.VERSION.SDK_INT >= 26) {
+                v.vibrate(VibrationEffect.createWaveform(
+                        new long[]{300, 150, 300, 150, 500}, -1));
+            } else {
+                v.vibrate(new long[]{300, 150, 300, 150, 500}, -1);
+            }
         }
     }
 
-    /** 剩余秒数（工具箱页显示用），-1 = 无进行中的倒计时 */
+    /** Remaining seconds (-1 = no active countdown) */
     public static long countdownRemaining(Context c) {
-        long end = c.getSharedPreferences("toolbox", Context.MODE_PRIVATE)
-                .getLong("countdown_end", 0);
+        long end = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getLong(KEY_END, 0);
         long left = (end - System.currentTimeMillis()) / 1000;
         return left > 0 ? left : -1;
+    }
+
+    private static PendingIntent cdPendingIntent(Context app) {
+        return PendingIntent.getBroadcast(app, CD_REQUEST_CODE,
+                new Intent(app, ToolboxReceiver.class)
+                        .setAction(ToolboxReceiver.ACTION_COUNTDOWN_FIRE),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     private static NotificationManager nm(Context c) {

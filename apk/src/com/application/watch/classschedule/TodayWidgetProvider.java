@@ -99,8 +99,9 @@ public class TodayWidgetProvider extends AppWidgetProvider {
             rv.setTextViewText(TIME[i], CourseCache.shortTime(c.time));
             rv.setTextViewText(NAME[i], c.name);
             rv.setTextViewText(ROOM[i], c.location);
-            // 已结束灰显；正在上的课用课程色高亮课名
-            rv.setTextColor(NAME[i], past ? Ui.MUTED : (live ? color : Ui.TEXT));
+            // 已结束灰显；正在上的课用课程色高亮课名（高亮度过强的色在浅底压一档）
+            rv.setTextColor(NAME[i], past ? Ui.MUTED
+                    : (live ? Ui.readableAccent(color, Ui.isDark()) : Ui.TEXT));
             rv.setTextColor(TIME[i], Ui.MUTED);
             rv.setTextColor(ROOM[i], past ? Ui.MUTED : Ui.MUTED);
         }

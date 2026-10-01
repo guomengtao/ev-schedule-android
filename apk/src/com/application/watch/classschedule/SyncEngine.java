@@ -781,6 +781,13 @@ public final class SyncEngine {
             Stats.connectEnd(ctx, ok, failStep, failStep > 0 ? failDetail : hint);
         } catch (Throwable ignored) {
         }
+        try {
+            ConnLog.record(ctx, ok, deviceName, nodeId,
+                    ok ? 0 : failStep,
+                    ok ? "" : (failStep > 0 ? failDetail : hint),
+                    ok ? versionName : "");
+        } catch (Throwable ignored) {
+        }
         // P4/A5：多手环历史清单——成功失败都算「见过这只手环」。
         //   失败时 versionName 已被上面清空，recordWatchSeen 对空值不覆盖，保留上次记录。
         try {

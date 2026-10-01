@@ -630,32 +630,6 @@ public class HomeActivity extends Activity {
         nameRow.addView(editBtn, elp);
         weekBox.addView(nameRow);
         weekBox.addView(Ui.space(this, 8));
-        // 同步状态按钮：显示未同步课数，点击强制三方同步（兜底）
-        int unsaved = SyncCoordinator.unsavedCount(s);
-        String syncText;
-        int syncColor;
-        if (unsaved > 0) {
-            syncText = unsaved + " 门课未同步 · 点此同步";
-            syncColor = Ui.ACCENT;
-        } else if (s.isSync()) {
-            syncText = "已同步 ✓";
-            syncColor = Ui.OK;
-        } else {
-            syncText = "尚未同步到手环 · 点此同步";
-            syncColor = Ui.WARN;
-        }
-        TextView syncBtn = Ui.textMedium(this, syncText, 12f, syncColor);
-        syncBtn.setGravity(android.view.Gravity.CENTER);
-        syncBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 7), Ui.dp(this, 10), Ui.dp(this, 7));
-        syncBtn.setBackground(Ui.round(Ui.CARD2, 14, Ui.LINE, this));
-        syncBtn.setClickable(true);
-        syncBtn.setContentDescription("同步课表到手环");
-        syncBtn.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { forceSync(); }
-        });
-        weekBox.addView(syncBtn, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        weekBox.addView(Ui.space(this, 8));
         weekBox.addView(weekGridWithTime(s.courses));
         // note 信息去重：sync 课表"最后同步"与"更新于"是同一件事，只说一遍
         String note;
@@ -972,22 +946,6 @@ public class HomeActivity extends Activity {
         } else {
             startConnect();
         }
-    }
-
-    /** 强制同步（同步状态按钮）：字段级三方合并，兜底把本地改动写回手环 */
-    private void forceSync() {
-        if (!SyncEngine.get(this).hasNode()) {
-            miniStatus("手环未连接，先连接再同步", Ui.WARN);
-            startConnect();
-            return;
-        }
-        miniStatus("正在同步课表…", Ui.ACCENT);
-        SyncCoordinator.syncNow(this, new SyncCoordinator.Callback() {
-            @Override public void onDone(boolean ok, String msg) {
-                miniStatus((ok ? "● " : "✕ ") + msg, ok ? Ui.OK : Ui.WARN);
-                renderWeek();
-            }
-        });
     }
 
     // ======================= UI：EvBox 旧首页 =======================

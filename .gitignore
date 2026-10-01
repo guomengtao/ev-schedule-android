@@ -29,3 +29,17 @@ tools/*.zip
 # ============ 系统 ============
 .DS_Store
 **/.DS_Store
+
+# ============ 会话实验/临时（2026-10-02 收纳入库时划定） ============
+.trae/
+**/__pycache__/
+# band-ble 实验目录只收两个脚本，venv 不入库
+band-ble/bin/
+band-ble/include/
+band-ble/lib/
+band-ble/pyvenv.cfg
+# bandauth 探针的构建产物与日志
+bandauth/out/
+bandauth/dist/
+bandauth/logs/
+bandauth/*.apk

@@ -7,7 +7,6 @@ import android.text.TextUtils;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
@@ -48,7 +47,7 @@ public class DebugActivity extends Activity {
         root.addView(Ui.header(this, "调试"));
         root.addView(Ui.space(this, 4));
         root.addView(Ui.text(this, "按顺序点击任一步骤，逐步定位问题", 12f, Ui.MUTED, false));
-        root.addView(Ui.space(this, 12));
+        root.addView(Ui.space(this, 8));
 
         // 步骤列表
         for (int i = 0; i < STEPS; i++) {
@@ -101,14 +100,16 @@ public class DebugActivity extends Activity {
         }));
 
         root.addView(Ui.space(this, 8));
+        root.addView(Ui.button(this, "连接手环日志", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(DebugActivity.this, ConnLogActivity.class));
+            }
+        }));
+        root.addView(Ui.space(this, 8));
         logView = Ui.mono(this, "");
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(logView);
-        root.addView(scroll, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        root.addView(logView);
 
-        // 调试页也保留常驻底栏（不属于三个 tab，故不高亮任何一项）
-        setContentView(Ui.fixedWithBottomBar(this, root, -1));
+        setContentView(Ui.wrapWithBottomBar(this, root, -1));
 
         // 进页面不自动弹出输入法（把焦点交给根布局，EditText 不抢焦点）
         root.setFocusableInTouchMode(true);
@@ -249,5 +250,94 @@ public class DebugActivity extends Activity {
             return;
         }
         lastThemeVersion = Ui.themeVersion;
+    }
+
+    // ======================= Countdown Unit Tests =======================
+    // These tests verify the countdown logic. They can be called via:
+    //   adb shell am start -n com.application.watch.classschedule/.DebugActivity \
+    //     --es test countdown_all
+
+    /** Run all countdown tests: invoked via intent extra "test" = "countdown_all" */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        String test = intent != null ? intent.getStringExtra("test") : null;
+        if ("countdown_all".equals(test)) {
+            log("=== Countdown Unit Tests ===");
+            testCountdownSetAndRemaining();
+            testCountdownCancel();
+            testCountdownFired();
+            testCountdownMinutesEdgeCases();
+            log("=== All countdown tests finished ===");
+        }
+    }
+
+    private void testCountdownSetAndRemaining() {
+        CommandRouter.cancelCountdown(this);
+        long before = System.currentTimeMillis();
+
+        CommandRouter.countdown(this, 5);
+        long remaining = CommandRouter.countdownRemaining(this);
+        boolean ok = remaining > 0 && remaining <= 300;
+        log("  testSetAndRemaining: " + (ok ? "PASS" : "FAIL")
+                + " (remaining=" + remaining + "s, expected 0<r<=300)");
+
+        // Clean up
+        CommandRouter.cancelCountdown(this);
+    }
+
+    private void testCountdownCancel() {
+        CommandRouter.cancelCountdown(this);
+        CommandRouter.countdown(this, 10);
+        CommandRouter.cancelCountdown(this);
+
+        long remaining = CommandRouter.countdownRemaining(this);
+        boolean ok = remaining == -1;
+        log("  testCancel: " + (ok ? "PASS" : "FAIL")
+                + " (remaining=" + remaining + ", expected -1)");
+    }
+
+    private void testCountdownFired() {
+        CommandRouter.cancelCountdown(this);
+
+        // Simulate a countdown that has already ended
+        // store end time in the past
+        getSharedPreferences("toolbox", MODE_PRIVATE).edit()
+                .putLong("countdown_end", System.currentTimeMillis() - 60_000)
+                .putBoolean("countdown_fired", true)
+                .apply();
+
+        boolean fired = CommandRouter.countdownFired(this);
+        boolean ok = fired;
+        log("  testFiredFlag: " + (ok ? "PASS" : "FAIL")
+                + " (fired=" + fired + ", expected true)");
+
+        // Dismiss and verify
+        CommandRouter.dismissCountdownFired(this);
+        boolean afterDismiss = CommandRouter.countdownFired(this);
+        boolean dismissedOk = !afterDismiss;
+        log("  testDismissFired: " + (dismissedOk ? "PASS" : "FAIL")
+                + " (fired after dismiss=" + afterDismiss + ", expected false)");
+
+        // Clean up
+        CommandRouter.cancelCountdown(this);
+    }
+
+    private void testCountdownMinutesEdgeCases() {
+        CommandRouter.cancelCountdown(this);
+
+        // Test 1 minute
+        CommandRouter.countdown(this, 1);
+        long rem1 = CommandRouter.countdownRemaining(this);
+        boolean ok1 = rem1 > 0 && rem1 <= 60;
+        log("  test1min: " + (ok1 ? "PASS" : "FAIL") + " (remaining=" + rem1 + "s)");
+        CommandRouter.cancelCountdown(this);
+
+        // Test 30 minutes
+        CommandRouter.countdown(this, 30);
+        long rem30 = CommandRouter.countdownRemaining(this);
+        boolean ok30 = rem30 > 0 && rem30 <= 1800;
+        log("  test30min: " + (ok30 ? "PASS" : "FAIL") + " (remaining=" + rem30 + "s)");
+        CommandRouter.cancelCountdown(this);
     }
 }

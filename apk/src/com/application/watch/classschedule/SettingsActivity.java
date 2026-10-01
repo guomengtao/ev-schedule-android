@@ -2,6 +2,7 @@ package com.application.watch.classschedule;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -59,6 +60,11 @@ public class SettingsActivity extends Activity {
                     @Override public void onClick(View v) {
                         UpdateChecker.checkManual(SettingsActivity.this);
                     }
+                }));
+        root.addView(Ui.space(this, 6));
+        root.addView(Ui.row(this, "帮助与反馈", "常见问题 · QQ 群 · 提交截图反馈", Ui.TEXT,
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) { openFeedbackPage(); }
                 }));
 
         root.addView(Ui.space(this, 6));
@@ -248,6 +254,26 @@ public class SettingsActivity extends Activity {
             return pi.versionName;
         } catch (Throwable t) {
             return "?";
+        }
+    }
+
+    /** 帮助与反馈：浏览器打开带参反馈页（src/版本/机型/渠道，服务端据此定位问题） */
+    private void openFeedbackPage() {
+        try {
+            String ch = Variant.isEv(this) ? "ev-apk" : "evbox-apk";
+            String url = "https://app-auth.gudq.com/feedback.html"
+                    + "?src=app"
+                    + "&v=" + java.net.URLEncoder.encode(version(), "UTF-8")
+                    + "&m=" + java.net.URLEncoder.encode(android.os.Build.MODEL, "UTF-8")
+                    + "&ch=" + ch;
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Throwable t) {
+            // 无浏览器等极端情况：退化为打开站点首页
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://app-auth.gudq.com/")));
+            } catch (Throwable ignored) {
+            }
         }
     }
 

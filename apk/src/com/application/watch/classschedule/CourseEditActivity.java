@@ -344,30 +344,38 @@ public class CourseEditActivity extends Activity implements WeekEditGrid.Callbac
     }
 
     @Override
-    public void onEmptyTap(int day) {
-        // 方案 3.3：预填该列星期 + 该列下一常用时段
+    public void onEmptyTap(int day, int row) {
+        // 记住点的具体天 + 该位置对应的节次时段，避免用户再改
         CourseCache.Course prefill = new CourseCache.Course();
         prefill.day = day;
-        prefill.time = CourseEditUtil.nextSlotForDay(draft, day);
+        String t = CourseEditUtil.timeForRow(row);
+        prefill.time = t != null ? t : CourseEditUtil.nextSlotForDay(draft, day);
         openAddSheet(prefill);
     }
 
     @Override
     public void onCourseLongPress(CourseCache.Course c) {
-        Toast.makeText(this, "拖到其他列可换星期", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "拖到任意格可调整星期与节次", Toast.LENGTH_SHORT).show();
     }
 
     @Override
-    public void onCourseMoved(final CourseCache.Course c, int newDay) {
+    public void onCourseMoved(final CourseCache.Course c, int newDay, int newRow) {
         final int oldDay = c.day;
+        final String oldTime = c.time;
         c.day = newDay;
-        EvLog.i("moved " + c.name + " day " + oldDay + " -> " + newDay);
+        String t = CourseEditUtil.timeForRow(newRow);
+        if (t != null) {
+            c.time = t;
+        }
+        EvLog.i("moved " + c.name + " day " + oldDay + "->" + newDay
+                + " time " + oldTime + "->" + c.time);
         grid.rebuild();
         markDirty();
         showUndo("已移到周" + CourseEditUtil.DAY_SHORT[newDay], new Runnable() {
             @Override public void run() {
                 EvLog.i("undo moved " + c.name + " day " + newDay + " -> " + oldDay);
                 c.day = oldDay;
+                c.time = oldTime;
                 grid.rebuild();
                 refresh();
             }
@@ -469,7 +477,7 @@ public class CourseEditActivity extends Activity implements WeekEditGrid.Callbac
         };
     }
 
-    /** 底部「＋ 添加课程」：找第一个有空档的天预填 */
+    /** 底部「＋ 添加课程」：找第一个有空档的天，预填第一个空格对应的时段 */
     private void addCourseAtFirstEmpty() {
         for (int d = 0; d < 7; d++) {
             int n = 0;
@@ -479,11 +487,11 @@ public class CourseEditActivity extends Activity implements WeekEditGrid.Callbac
                 }
             }
             if (n < grid.rowCount()) {
-                onEmptyTap(d);
+                onEmptyTap(d, n);
                 return;
             }
         }
-        onEmptyTap(0);
+        onEmptyTap(0, 0);
     }
 
     // ======================= 撤销横幅 =======================

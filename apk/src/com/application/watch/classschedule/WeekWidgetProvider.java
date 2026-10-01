@@ -155,8 +155,10 @@ public class WeekWidgetProvider extends AppWidgetProvider {
                 } else {
                     String disp = CourseCache.displayName(hit.name, shortName);
                     rv.setTextViewText(id, disp);
-                    rv.setInt(id, "setBackgroundColor", Ui.courseColor(hit.name));
-                    rv.setTextColor(id, 0xFFFFFFFF);
+                    int bg = Ui.courseColor(hit.name);
+                    rv.setInt(id, "setBackgroundColor", bg);
+                    // 块底亮色（橙/绿/青…）用深字，保证对比度（与首页同公式）
+                    rv.setTextColor(id, Ui.onCourseColor(bg));
                     // 单字放大居中改在渲染端做不了（RemoteViews 无 setTextSize 可靠支持），单字暂用原字号
                 }
             }

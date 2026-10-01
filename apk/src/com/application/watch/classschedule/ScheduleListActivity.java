@@ -21,9 +21,9 @@ import java.util.List;
  * 课程表管理（底部导航「课程表」Tab）。
  *
  * 重做后卡片样式：图标 + 课表名 + 副信息 + 右侧紧凑图标行（编辑/删除/同步）。
- *   - 编辑 → 通用 JSON 编辑器（JsonEditorActivity）
+ *   - 编辑 → 可视化编辑器（CourseEditActivity，JSON 编辑器降级为它内部的「JSON」按钮）
  *   - 删除 → local 直删；sync 仅删本地（附说明），「从手环删除」本期置灰
- *   - 新建 → 通用 JSON 编辑器（默认模板）
+ *   - 新建 → 可视化编辑器（新建模式）
  */
 public class ScheduleListActivity extends Activity {
 
@@ -34,6 +34,8 @@ public class ScheduleListActivity extends Activity {
 
     private LinearLayout listBox;
     private TextView statusView;
+    private TextView syncView;
+    private boolean syncPendingConnect = false;
     private String editingId;
     private long lastPullAt = 0;
 
@@ -85,6 +87,26 @@ public class ScheduleListActivity extends Activity {
                 11.5f, Ui.MUTED, false));
         root.addView(Ui.space(this, 10));
 
+        // active schedule sync status: unsaved count, tap to force 3-way sync (moved here from home)
+        syncView = Ui.textMedium(this, "", 12f, Ui.ACCENT);
+        syncView.setGravity(android.view.Gravity.CENTER);
+        syncView.setPadding(Ui.dp(this, 10), Ui.dp(this, 7), Ui.dp(this, 10), Ui.dp(this, 7));
+        syncView.setBackground(Ui.round(Ui.CARD2, 14, Ui.LINE, this));
+        syncView.setClickable(true);
+        syncView.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (syncPendingConnect) {
+                    syncPendingConnect = false;
+                    startActivity(new Intent(ScheduleListActivity.this, BandActivity.class));
+                } else {
+                    syncActive();
+                }
+            }
+        });
+        root.addView(syncView, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        root.addView(Ui.space(this, 8));
+
         listBox = new LinearLayout(this);
         listBox.setOrientation(LinearLayout.VERTICAL);
         root.addView(listBox);
@@ -120,6 +142,7 @@ public class ScheduleListActivity extends Activity {
 
     private void render() {
         listBox.removeAllViews();
+        refreshSyncView();
         final String activeId = ScheduleStore.activeId(this);
         List<ScheduleStore.Schedule> all = ScheduleStore.list(this);
         if (all.isEmpty()) {
@@ -281,10 +304,8 @@ public class ScheduleListActivity extends Activity {
     // ======================= 操作：新建 =======================
 
     private void createLocal() {
-        Intent i = new Intent(this, JsonEditorActivity.class);
-        i.putExtra(JsonEditorActivity.EXTRA_TITLE, "新建本地课表");
-        i.putExtra(JsonEditorActivity.EXTRA_JSON, defaultTemplate());
-        i.putExtra(JsonEditorActivity.EXTRA_SAVE_LABEL, "创建课表");
+        Intent i = new Intent(this, CourseEditActivity.class);
+        i.putExtra(CourseEditActivity.EXTRA_NEW, true);
         startActivityForResult(i, REQ_CREATE);
     }
 
@@ -292,43 +313,24 @@ public class ScheduleListActivity extends Activity {
 
     private void editSchedule(ScheduleStore.Schedule s) {
         editingId = s.id;
-        Intent i = new Intent(this, JsonEditorActivity.class);
-        i.putExtra(JsonEditorActivity.EXTRA_TITLE, "编辑：" + s.name);
-        i.putExtra(JsonEditorActivity.EXTRA_JSON, scheduleToEditorJson(s));
-        i.putExtra(JsonEditorActivity.EXTRA_SAVE_LABEL, "更新课表");
+        Intent i = new Intent(this, CourseEditActivity.class);
+        i.putExtra(CourseEditActivity.EXTRA_ID, s.id);
         startActivityForResult(i, REQ_EDIT);
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode != RESULT_OK || data == null) {
+        if (resultCode != RESULT_OK) {
             return;
         }
-        String json = data.getStringExtra(JsonEditorActivity.RESULT_JSON);
-        if (json == null) {
-            return;
-        }
-        EditorResult r;
-        try {
-            r = parseEditorJson(json);
-        } catch (Throwable t) {
-            status("JSON 结构错误：" + t.getMessage(), Ui.ERR);
-            return;
-        }
-        if (requestCode == REQ_EDIT && editingId != null) {
-            ScheduleStore.updateCourses(this, editingId, r.courses);
-            // 同时更新课表名（编辑可能改了 name）
-            ScheduleStore.Schedule s = ScheduleStore.find(this, editingId);
-            if (s != null && !s.name.equals(r.name)) {
-                rename(editingId, r.name);
-            }
-            status("已更新「" + r.name + "」（" + r.courses.size() + " 门课）", Ui.OK);
+        // 可视化编辑器自己负责落盘（updateCourses / addLocal），这里只刷列表 + 显示它带回的结果
+        String summary = data == null ? null : data.getStringExtra("summary");
+        if (requestCode == REQ_EDIT) {
+            status(summary != null ? summary : "课表已更新", Ui.OK);
             editingId = null;
         } else if (requestCode == REQ_CREATE) {
-            String id = ScheduleStore.addLocal(this, r.name, r.courses);
-            ScheduleStore.setActive(this, id);
-            status("已创建并激活「" + r.name + "」", Ui.OK);
+            status(summary != null ? summary : "已创建新课表", Ui.OK);
         }
         render();
     }
@@ -356,6 +358,50 @@ public class ScheduleListActivity extends Activity {
     }
 
     // ======================= 操作：同步到手环 =======================
+
+    /** Refresh top sync status button (active schedule): unsaved count / synced / not synced. */
+    private void refreshSyncView() {
+        if (syncView == null) {
+            return;
+        }
+        ScheduleStore.Schedule s = ScheduleStore.active(this);
+        if (s == null) {
+            syncView.setVisibility(View.GONE);
+            syncView.setText("");
+            return;
+        }
+        syncView.setVisibility(View.VISIBLE);
+        syncPendingConnect = false;
+        int unsaved = SyncCoordinator.unsavedCount(s);
+        if (unsaved > 0) {
+            syncView.setText(unsaved + " 门课未同步 · 点此同步");
+            syncView.setTextColor(Ui.ACCENT);
+        } else if (s.isSync()) {
+            syncView.setText("已同步 ✓");
+            syncView.setTextColor(Ui.OK);
+        } else {
+            syncView.setText("尚未同步到手环 · 点此同步");
+            syncView.setTextColor(Ui.WARN);
+        }
+    }
+
+    /** Force sync active schedule: field-level 3-way merge, write local changes back to watch. */
+    private void syncActive() {
+        if (!SyncEngine.get(this).connected()) {
+            syncPendingConnect = true;
+            syncView.setText("手环未连接 · 点此去连接");
+            syncView.setTextColor(Ui.WARN);
+            return;
+        }
+        syncPendingConnect = false;
+        status("正在同步课表…", Ui.ACCENT);
+        SyncCoordinator.syncNow(this, new SyncCoordinator.Callback() {
+            @Override public void onDone(boolean ok, String msg) {
+                status((ok ? "● " : "✕ ") + msg, ok ? Ui.OK : Ui.WARN);
+                render();
+            }
+        });
+    }
 
     private void syncToWatch(final ScheduleStore.Schedule s) {
         SyncEngine e = SyncEngine.get(this);
@@ -409,70 +455,6 @@ public class ScheduleListActivity extends Activity {
         }
     }
 
-    // ======================= JSON 工具 =======================
-
-    /** 课表 → 编辑器 JSON（day 用 1-7，人类友好） */
-    static String scheduleToEditorJson(ScheduleStore.Schedule s) {
-        try {
-            JSONObject o = new JSONObject();
-            o.put("name", s.name);
-            JSONArray arr = new JSONArray();
-            for (CourseCache.Course c : s.courses) {
-                JSONObject co = new JSONObject();
-                co.put("name", c.name);
-                co.put("day", c.day + 1);
-                co.put("time", c.time);
-                co.put("teacher", c.teacher);
-                co.put("location", c.location);
-                arr.put(co);
-            }
-            o.put("courses", arr);
-            return o.toString(2);
-        } catch (Throwable t) {
-            return "{\"name\":\"\",\"courses\":[]}";
-        }
-    }
-
-    /** 默认新建模板 */
-    static String defaultTemplate() {
-        return "{\n"
-                + "  \"name\": \"新课表\",\n"
-                + "  \"courses\": [\n"
-                + "    {\"name\":\"课程名\",\"day\":1,\"time\":\"08:00 - 09:35\",\"teacher\":\"\",\"location\":\"教学楼\"},\n"
-                + "    {\"name\":\"课程名\",\"day\":2,\"time\":\"10:00 - 11:35\",\"teacher\":\"\",\"location\":\"教学楼\"}\n"
-                + "  ]\n"
-                + "}";
-    }
-
-    static final class EditorResult {
-        String name;
-        List<CourseCache.Course> courses = new ArrayList<>();
-    }
-
-    /** 编辑器 JSON → {name, courses}（day 1-7 → 0-6） */
-    static EditorResult parseEditorJson(String json) throws Exception {
-        JSONObject o = new JSONObject(json);
-        EditorResult r = new EditorResult();
-        r.name = o.optString("name", "未命名课表");
-        JSONArray arr = o.optJSONArray("courses");
-        if (arr != null) {
-            for (int i = 0; i < arr.length(); i++) {
-                JSONObject co = arr.optJSONObject(i);
-                if (co == null) {
-                    continue;
-                }
-                CourseCache.Course c = new CourseCache.Course();
-                c.name = co.optString("name");
-                c.time = co.optString("time");
-                c.teacher = co.optString("teacher");
-                c.location = co.optString("location");
-                c.day = CourseCache.dayIndex(co.opt("day"));
-                r.courses.add(c);
-            }
-        }
-        return r;
-    }
-
     private void status(String msg, int color) {
         statusView.setText(msg);
         statusView.setTextColor(color);
@@ -482,29 +464,5 @@ public class ScheduleListActivity extends Activity {
         Intent i = new Intent(this, TransferActivity.class);
         i.putExtra(TransferActivity.EXTRA_MODE, mode);
         startActivity(i);
-    }
-
-    /** 重命名课表（编辑时改了 name 字段用） */
-    private void rename(String id, String name) {
-        try {
-            // 直接操作存储：更新该 id 的 name 字段
-            android.content.SharedPreferences sp =
-                    getSharedPreferences("ev_schedules", MODE_PRIVATE);
-            String raw = sp.getString("data", "");
-            JSONObject root = new JSONObject(raw);
-            JSONArray arr = root.optJSONArray("schedules");
-            if (arr == null) {
-                return;
-            }
-            for (int i = 0; i < arr.length(); i++) {
-                JSONObject o = arr.optJSONObject(i);
-                if (o != null && id.equals(o.optString("id"))) {
-                    o.put("name", name);
-                    break;
-                }
-            }
-            sp.edit().putString("data", root.toString()).apply();
-        } catch (Throwable ignored) {
-        }
     }
 }

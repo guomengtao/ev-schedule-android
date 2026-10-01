@@ -88,7 +88,13 @@
         <activity android:name="com.application.watch.classschedule.JsonEditorActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
+        <activity android:name="com.application.watch.classschedule.CourseEditActivity"
+            android:exported="true"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.DebugActivity"
+            android:exported="true"
+            android:windowSoftInputMode="stateAlwaysHidden" />
+        <activity android:name="com.application.watch.classschedule.ConnLogActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
         <activity android:name="com.application.watch.classschedule.ToolboxActivity"
@@ -105,7 +111,16 @@
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.FastActivateActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize">
+            <!-- 深链自动填码测试：浏览器/私信里点 evsched://activate?code=XXXX
+                 拉起快速激活页（目前先验证「能拉起」，自动填码下一步在 Activity 里读 intent.data） -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="evsched" android:host="activate" />
+            </intent-filter>
+        </activity>
         <activity android:name="com.application.watch.classschedule.HomepageSettingsActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />

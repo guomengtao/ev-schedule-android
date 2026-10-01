@@ -197,6 +197,52 @@ public final class Ui {
         return t;
     }
 
+    /**
+     * Medium 字重文本（中文精致度关键：中文 bold 是伪粗体发糊，
+     * sans-serif-medium 是真字重，API 24+ 全覆盖）。
+     * 标题/强调/表头等原 bold 场景的主用字重。
+     */
+    public static TextView textMedium(Context c, String s, float size, int color) {
+        TextView t = text(c, s, size, color, false);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        return t;
+    }
+
+    /**
+     * 课程色底上的可读字色：按 WCAG 相对亮度选深/白。
+     * 亮度 > 0.45 的底色（橙/绿/青/粉）用深字，否则白字——
+     * 让 7 色课程块的白/深字对比度全部 ≥3:1（粗体大字标准）。
+     */
+    public static int onCourseColor(int bg) {
+        return luminance(bg) > 0.45 ? 0xFF101828 : 0xFFFFFFFF;
+    }
+
+    /**
+     * 高亮度课程色（橙/绿/青/粉）直接当文字色时，浅色主题下对比不足：
+     * 混 35% 深色压一档；深色主题原色即可（亮色在暗底对比反而好）。
+     * 用于 Today 插件 live 课名等"课程色当前景"的场景。
+     */
+    public static int readableAccent(int color, boolean dark) {
+        if (dark || luminance(color) <= 0.45) {
+            return color;
+        }
+        int r = (int) (((color >> 16) & 0xFF) * 0.65);
+        int g = (int) (((color >> 8) & 0xFF) * 0.65);
+        int b = (int) ((color & 0xFF) * 0.65);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
+
+    /** WCAG 相对亮度（0~1） */
+    public static double luminance(int color) {
+        double r = ((color >> 16) & 0xFF) / 255.0;
+        double g = ((color >> 8) & 0xFF) / 255.0;
+        double b = (color & 0xFF) / 255.0;
+        r = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+        g = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+        b = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+
     public static LinearLayout card(Context c) {
         LinearLayout l = new LinearLayout(c);
         l.setOrientation(LinearLayout.VERTICAL);
@@ -215,11 +261,17 @@ public final class Ui {
     }
 
     public static GradientDrawable round(int fill, int radiusDp, int stroke, Context c) {
+        return round(fill, radiusDp, stroke, stroke != 0 ? 1 : 0, c);
+    }
+
+    /** 可指定描边宽度的圆角矩形（当前节 2dp ACCENT 描边用） */
+    public static GradientDrawable round(int fill, int radiusDp, int stroke,
+                                         int strokeDp, Context c) {
         GradientDrawable g = new GradientDrawable();
         g.setColor(fill);
         g.setCornerRadius(dp(c, radiusDp));
-        if (stroke != 0) {
-            g.setStroke(Math.max(1, dp(c, 1)), stroke);
+        if (stroke != 0 && strokeDp > 0) {
+            g.setStroke(Math.max(1, dp(c, strokeDp)), stroke);
         }
         return g;
     }
@@ -397,7 +449,8 @@ public final class Ui {
             ic.setColorFilter(color);
             int iconSize = dp(a, 22);
             tab.addView(ic, new LinearLayout.LayoutParams(iconSize, iconSize));
-            TextView lb = text(a, labels[i], 10.5f, color, active);
+            TextView lb = active ? textMedium(a, labels[i], 10.5f, color)
+                    : text(a, labels[i], 10.5f, color, false);
             lb.setGravity(Gravity.CENTER);
             tab.addView(lb);
             tab.setOnClickListener(new View.OnClickListener() {
