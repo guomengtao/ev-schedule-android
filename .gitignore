@@ -1,6 +1,9 @@
 # ============ 构建产物 ============
 apk/out/
 apk/dist/
+# out.bak 是 apk/out/ 的历史备份（4.2MB / 502 文件），构建重新生成，不入库。
+# 注意：它未 ignore 时会把整批待提交真代码一起"卡住"（禁 git add -A 时最省事的停摆点）。
+apk/out.bak/
 # 固定路径的最新包（apk/dist/ 已整目录忽略；这里覆盖多变体的根目录副本）
 apk/*Probe.apk
 apk/tools/bcclasses/

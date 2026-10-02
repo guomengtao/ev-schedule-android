@@ -47,7 +47,8 @@ public class CourseSheetDialog {
     private final CourseCache.Course original;
 
     private final List<CourseCache.Course> draftAll;   // 冲突检测 / 最近课名默认值用
-    private final List<String> recentNames;
+    /** 课程名候选：本机全部课表出现过的课名（全量历史，按频次降序），横滑选课用 */
+    private final List<String> allNames;
 
     private EditText nameInput;
     private EditText locInput;
@@ -83,7 +84,7 @@ public class CourseSheetDialog {
         this.prefill = prefill;
         this.draftAll = draftAll;
         this.listener = listener;
-        this.recentNames = CourseEditUtil.recentNames(ctx, 8);
+        this.allNames = CourseEditUtil.allCourseNames(ctx);
         build();
     }
 
@@ -204,17 +205,17 @@ public class CourseSheetDialog {
         errorView.setPadding(Ui.dp(c, 2), Ui.dp(c, 3), 0, 0);
         form.addView(errorView);
 
-        // ── 最近使用 chips ──
-        if (!recentNames.isEmpty()) {
+        // ── 课程 chips（左右滑动选课）──
+        if (!allNames.isEmpty()) {
             form.addView(Ui.space(c, 2));
-            TextView recLabel = Ui.text(c, "最近使用", 10.5f, Ui.MUTED, false);
+            TextView recLabel = Ui.text(c, "课程", 10.5f, Ui.MUTED, false);
             recLabel.setPadding(Ui.dp(c, 2), 0, 0, Ui.dp(c, 4));
             form.addView(recLabel);
             HorizontalScrollView hs = new HorizontalScrollView(c);
             hs.setHorizontalScrollBarEnabled(false);
             LinearLayout row = new LinearLayout(c);
             row.setOrientation(LinearLayout.HORIZONTAL);
-            for (final String n : recentNames) {
+            for (final String n : allNames) {
                 row.addView(chip(c, n, new View.OnClickListener() {
                     @Override public void onClick(View v) { applyRecent(n); }
                 }));
