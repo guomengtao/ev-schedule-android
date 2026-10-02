@@ -38,6 +38,11 @@ public class ScheduleListActivity extends Activity {
     private boolean syncPendingConnect = false;
     private String editingId;
     private long lastPullAt = 0;
+    /** 头部设备条：明确「当前某某手环的课表」+ 切换入口（P3 多设备分组） */
+    private LinearLayout deviceBar;
+    private TextView deviceBarTitle;
+    /** 「其他设备」折叠分组是否展开（默认收起，避免多设备课表淹没当前设备） */
+    private boolean otherExpanded = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,6 +112,26 @@ public class ScheduleListActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         root.addView(Ui.space(this, 8));
 
+        // 头部设备条：明确「当前某某手环的课表」，点击切换设备（P3）
+        deviceBar = new LinearLayout(this);
+        deviceBar.setOrientation(LinearLayout.HORIZONTAL);
+        deviceBar.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        deviceBar.setBackground(Ui.round(Ui.CARD2, 14, Ui.LINE, this));
+        deviceBar.setPadding(Ui.dp(this, 12), Ui.dp(this, 9), Ui.dp(this, 12), Ui.dp(this, 9));
+        deviceBar.setClickable(true);
+        deviceBar.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(ScheduleListActivity.this, BandActivity.class));
+            }
+        });
+        deviceBarTitle = Ui.text(this, "", 12.5f, Ui.TEXT, true);
+        deviceBar.addView(deviceBarTitle, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        deviceBar.addView(Ui.text(this, "切换 ›", 12f, Ui.ACCENT, true));
+        root.addView(deviceBar, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        root.addView(Ui.space(this, 8));
+
         listBox = new LinearLayout(this);
         listBox.setOrientation(LinearLayout.VERTICAL);
         root.addView(listBox);
@@ -143,49 +168,86 @@ public class ScheduleListActivity extends Activity {
     private void render() {
         listBox.removeAllViews();
         refreshSyncView();
+        renderDeviceBar();
         final String activeId = ScheduleStore.activeId(this);
         List<ScheduleStore.Schedule> all = ScheduleStore.list(this);
         if (all.isEmpty()) {
             listBox.addView(Ui.text(this, "还没有课表，点下方按钮新建", 12.5f, Ui.MUTED, false));
             return;
         }
-        // 分组：来自手环（连接时已自动同步保存到本地）在上，本机课表在下，中间分割线
-        List<ScheduleStore.Schedule> fromWatch = new ArrayList<>();
+        SyncEngine e = SyncEngine.get(this);
+        String curDev = e.currentDeviceId();
+        String[] bandNames = e.bandScheduleNames;
+
+        // 三分类：本地创建 / 当前设备 / 其他设备（含未识别 legacy）
         List<ScheduleStore.Schedule> local = new ArrayList<>();
+        List<ScheduleStore.Schedule> syncCur = new ArrayList<>();
+        List<ScheduleStore.Schedule> syncOther = new ArrayList<>();
         for (ScheduleStore.Schedule s : all) {
-            (s.isSync() ? fromWatch : local).add(s);
+            if (!s.isSync()) {
+                local.add(s);
+            } else if (!curDev.isEmpty() && curDev.equals(s.deviceId)) {
+                syncCur.add(s);
+            } else {
+                syncOther.add(s);
+            }
         }
-        // 以手环真实清单为准渲染（本地只有拉取过的，是手环的子集）：
-        // 有本地镜像 → 完整卡片；只存在于手环 → 占位卡，可一键「读取到本机」
-        String[] bandNames = SyncEngine.get(this).bandScheduleNames;
-        if (bandNames != null && bandNames.length > 0) {
-            int localMirror = 0;
-            String curDev = SyncEngine.get(this).currentDeviceId();
-            for (int i = 0; i < bandNames.length; i++) {
-                if (ScheduleStore.findByDeviceName(this, curDev, bandNames[i]) != null) {
-                    localMirror++;
+
+        if (!curDev.isEmpty()) {
+            // 已连接手环：按设备分组 —— 当前设备展开，其他设备默认折叠（不隐藏，可展开查）
+            if (bandNames != null && bandNames.length > 0) {
+                int localMirror = 0;
+                for (int i = 0; i < bandNames.length; i++) {
+                    if (ScheduleStore.findByDeviceName(this, curDev, bandNames[i]) != null) {
+                        localMirror++;
+                    }
+                }
+                listBox.addView(sectionHead("当前手环课表 · 手环上共 " + bandNames.length
+                        + " 套 · 本地已存 " + localMirror + " 套"));
+                for (int i = 0; i < bandNames.length; i++) {
+                    ScheduleStore.Schedule mirror = ScheduleStore.findByDeviceName(this, curDev, bandNames[i]);
+                    listBox.addView(mirror != null ? scheduleCard(mirror, activeId) : bandOnlyCard(bandNames[i]));
+                    listBox.addView(Ui.space(this, 8));
+                }
+                // 本地有、手环清单已没有的当前设备课表：仍展示，避免「切了设备就消失」
+                for (ScheduleStore.Schedule s : syncCur) {
+                    if (!inNames(bandNames, s.name)) {
+                        listBox.addView(scheduleCard(s, activeId));
+                        listBox.addView(Ui.space(this, 8));
+                    }
+                }
+            } else if (!syncCur.isEmpty()) {
+                listBox.addView(sectionHead("当前手环课表", syncCur.size()));
+                for (ScheduleStore.Schedule s : syncCur) {
+                    listBox.addView(scheduleCard(s, activeId));
+                    listBox.addView(Ui.space(this, 8));
                 }
             }
-            listBox.addView(sectionHead("手环课表 · 手环上共 " + bandNames.length
-                    + " 套 · 本地已存 " + localMirror + " 套"));
-            for (int i = 0; i < bandNames.length; i++) {
-                ScheduleStore.Schedule mirror = ScheduleStore.findByDeviceName(this, curDev, bandNames[i]);
-                if (mirror != null) {
-                    listBox.addView(scheduleCard(mirror, activeId));
-                } else {
-                    listBox.addView(bandOnlyCard(bandNames[i]));
+            // 其他设备：默认收起，点标题展开（每套副行仍带设备名，不与当前设备混淆）
+            if (!syncOther.isEmpty()) {
+                listBox.addView(divider());
+                listBox.addView(otherGroupHead(syncOther.size()));
+                if (otherExpanded) {
+                    for (ScheduleStore.Schedule s : syncOther) {
+                        listBox.addView(scheduleCard(s, activeId));
+                        listBox.addView(Ui.space(this, 8));
+                    }
                 }
-                listBox.addView(Ui.space(this, 8));
             }
-        } else if (!fromWatch.isEmpty()) {
-            listBox.addView(sectionHead("手环课表（已自动同步保存到本地）", fromWatch.size()));
-            for (ScheduleStore.Schedule s : fromWatch) {
-                listBox.addView(scheduleCard(s, activeId));
-                listBox.addView(Ui.space(this, 8));
+        } else {
+            // 未连接手环：无「当前设备」可言，全部手环课表平铺（副行已带设备名/未识别）
+            List<ScheduleStore.Schedule> fromWatch = new ArrayList<>(syncCur);
+            fromWatch.addAll(syncOther);
+            if (!fromWatch.isEmpty()) {
+                listBox.addView(sectionHead("手环课表（已自动同步保存到本地）", fromWatch.size()));
+                for (ScheduleStore.Schedule s : fromWatch) {
+                    listBox.addView(scheduleCard(s, activeId));
+                    listBox.addView(Ui.space(this, 8));
+                }
             }
         }
         if (!local.isEmpty()) {
-            if (!fromWatch.isEmpty()) {
+            if (!syncCur.isEmpty() || !syncOther.isEmpty()) {
                 listBox.addView(divider());
             }
             listBox.addView(sectionHead("本机课表", local.size()));
@@ -194,6 +256,62 @@ public class ScheduleListActivity extends Activity {
                 listBox.addView(Ui.space(this, 8));
             }
         }
+    }
+
+    /** 头部设备条文案：已连接 → 「当前手环课表：XX ··后4位」；未连接 → 提示 */
+    private void renderDeviceBar() {
+        if (deviceBar == null) {
+            return;
+        }
+        String curDev = SyncEngine.get(this).currentDeviceId();
+        if (curDev.isEmpty()) {
+            deviceBarTitle.setText("未连接手环 · 课表按设备分组显示");
+            return;
+        }
+        String name = SyncEngine.get(this).currentDeviceName();
+        String tail = tail4(curDev);
+        deviceBarTitle.setText("当前手环课表：" + (name.isEmpty() ? "当前手环" : name)
+                + (tail.isEmpty() ? "" : " ··" + tail));
+    }
+
+    /** 设备 ID 后 4 位（展示用，区分同名设备） */
+    private String tail4(String id) {
+        if (id == null || id.isEmpty()) {
+            return "";
+        }
+        return id.length() <= 4 ? id : id.substring(id.length() - 4);
+    }
+
+    /** 「其他设备」折叠分组标题（点击展开/收起） */
+    private View otherGroupHead(final int n) {
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        head.setPadding(Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 6));
+        head.setClickable(true);
+        head.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                otherExpanded = !otherExpanded;
+                render();
+            }
+        });
+        TextView t = Ui.text(this,
+                (otherExpanded ? "▾" : "▸") + " 其他设备 · " + n + " 套（点击" + (otherExpanded ? "收起" : "展开") + "）",
+                11.5f, Ui.ACCENT, true);
+        head.addView(t, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        return head;
+    }
+
+    private static boolean inNames(String[] names, String name) {
+        if (names == null) {
+            return false;
+        }
+        for (String n : names) {
+            if (n.equals(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 只存在于手环、本机还没有的课表：显示名字 + 提示（不需要手动点，进页面会自动读取） */
