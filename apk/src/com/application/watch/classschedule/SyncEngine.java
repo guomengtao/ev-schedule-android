@@ -75,6 +75,12 @@ public final class SyncEngine {
     public int courseCount = 0;
     public String lastExportJson;
 
+    /** 手环真实设备 ID（多设备隔离路由键）。连接成功后由 cacheDeviceId() 异步填充，
+     *  来源 get_device_id 回包；拿不到时留空，ScheduleStore 侧退化为 "legacy-unknown"。 */
+    public String watchDeviceId = "";
+    public String watchDeviceId4 = "";
+    public boolean watchDeviceFallback = false;
+
     // ======================= 多设备（多手环）支持 =======================
     // 一个账号下可能同时连着多台手环（如手环 + 手表），getConnectedNodes() 会返回多台。
     // 老代码直接取 nodes.get(0) → 多设备用户会连错机器。这里改成：记住上次选择；没记住就问用户。
@@ -166,6 +172,7 @@ public final class SyncEngine {
                          String[] labels, int[] states, String[] details) {
         nodeId = d.id;
         deviceName = d.name;
+        cacheDeviceId(); // 连接落定后取真实设备 ID，供课表多设备隔离路由
         states[1] = OK;
         details[1] = d.name + (note == null ? "" : "  " + note);
         emit(s, labels, states, details);
@@ -184,6 +191,12 @@ public final class SyncEngine {
     public boolean sdkReady() { return api != null; }
     public boolean hasNode() { return nodeId != null; }
     public String getNodeId() { return nodeId; }
+
+    /** 当前连接手环的真实设备 ID（多设备强隔离路由键）；空 = 还没取到 / 手环版本过低 */
+    public String currentDeviceId() { return watchDeviceId == null ? "" : watchDeviceId; }
+
+    /** 当前连接手环的展示名（如「小米手环 10 Pro」） */
+    public String currentDeviceName() { return deviceName == null ? "" : deviceName; }
     public boolean connected() { return hasNode() && versionName.length() > 0; }
 
     private final OnMessageReceivedListener rx = new OnMessageReceivedListener() {
@@ -367,6 +380,30 @@ public final class SyncEngine {
             @Override public void onError(String msg) {
                 outer.onError(msg);
             }
+        });
+    }
+
+    /** 连接落定后取手环真实设备 ID 并缓存；拿到后把升级前遗留的 legacy-unknown 课表
+     *  升级归位到本设备（pullMissingFromWatch 以真实 deviceId 触发一次兼容迁移）。 */
+    private void cacheDeviceId() {
+        if (nodeId == null) {
+            return;
+        }
+        getDeviceId(new Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(json);
+                    if (o.optBoolean("ok", false) && "get_device_id".equals(o.optString("action"))) {
+                        watchDeviceId = o.optString("deviceId");
+                        watchDeviceId4 = o.optString("deviceId4");
+                        watchDeviceFallback = o.optBoolean("fallback", false);
+                        pullMissingFromWatch(ctx); // deviceId 已就位：升级 legacy 记录
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            @Override public void onTimeout(String h) { }
+            @Override public void onError(String m) { }
         });
     }
 
@@ -595,7 +632,7 @@ public final class SyncEngine {
                                 }
                             } catch (Throwable ignored) {
                             }
-                            ScheduleStore.upsertFromWatch(c, name, sch);
+                            ScheduleStore.upsertFromWatch(c, currentDeviceId(), currentDeviceName(), name, sch);
                             notifyStatus();
                         }
                         @Override public void onTimeout(String h) { storeQuietly(c, sch); }
@@ -632,7 +669,7 @@ public final class SyncEngine {
             return;
         }
         final String name = bandScheduleNames[i];
-        if (ScheduleStore.find(c, "ev_watch_" + name) != null) { // 本机已有，跳过
+        if (ScheduleStore.findByDeviceName(c, currentDeviceId(), name) != null) { // 本机已有（按设备），跳过
             pullNextMissing(c, i + 1);
             return;
         }
@@ -643,7 +680,7 @@ public final class SyncEngine {
                     org.json.JSONObject d = o.optJSONObject("data");
                     org.json.JSONArray sch = (d == null) ? null : d.optJSONArray("schedule");
                     if (sch != null) {
-                        ScheduleStore.upsertFromWatch(c, name, sch); // 标记为手环课程
+                        ScheduleStore.upsertFromWatch(c, currentDeviceId(), currentDeviceName(), name, sch);
                         pulledCount++;
                     }
                 } catch (Throwable ignored) {
@@ -709,7 +746,7 @@ public final class SyncEngine {
 
     private void storeQuietly(Context c, org.json.JSONArray sch) {
         try {
-            ScheduleStore.upsertFromWatch(c, "", sch);
+            ScheduleStore.upsertFromWatch(c, currentDeviceId(), currentDeviceName(), "", sch);
         } catch (Throwable ignored) {
         }
         notifyStatus();

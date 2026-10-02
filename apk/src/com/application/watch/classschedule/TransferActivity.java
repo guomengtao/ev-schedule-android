@@ -508,6 +508,8 @@ public class TransferActivity extends Activity {
                     org.json.JSONArray schCache = (dd == null) ? null : dd.optJSONArray("schedule");
                     if (schCache != null) {
                         ScheduleStore.upsertFromWatch(TransferActivity.this,
+                                SyncEngine.get(TransferActivity.this).currentDeviceId(),
+                                SyncEngine.get(TransferActivity.this).currentDeviceName(),
                                 selectedName == null ? "" : selectedName, schCache);
                     }
                 } catch (Throwable ignored) {

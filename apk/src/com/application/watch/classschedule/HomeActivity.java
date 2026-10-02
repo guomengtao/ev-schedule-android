@@ -1221,15 +1221,21 @@ public class HomeActivity extends Activity {
                     }
                 } catch (Throwable ignored) {
                 }
-                ScheduleStore.upsertFromWatch(HomeActivity.this, name, sch);
+                ScheduleStore.upsertFromWatch(HomeActivity.this,
+                        SyncEngine.get(HomeActivity.this).currentDeviceId(),
+                        SyncEngine.get(HomeActivity.this).currentDeviceName(), name, sch);
                 renderWeek();
             }
             @Override public void onTimeout(String hint) {
-                ScheduleStore.upsertFromWatch(HomeActivity.this, "", sch);
+                ScheduleStore.upsertFromWatch(HomeActivity.this,
+                        SyncEngine.get(HomeActivity.this).currentDeviceId(),
+                        SyncEngine.get(HomeActivity.this).currentDeviceName(), "", sch);
                 renderWeek();
             }
             @Override public void onError(String msg) {
-                ScheduleStore.upsertFromWatch(HomeActivity.this, "", sch);
+                ScheduleStore.upsertFromWatch(HomeActivity.this,
+                        SyncEngine.get(HomeActivity.this).currentDeviceId(),
+                        SyncEngine.get(HomeActivity.this).currentDeviceName(), "", sch);
                 renderWeek();
             }
         });

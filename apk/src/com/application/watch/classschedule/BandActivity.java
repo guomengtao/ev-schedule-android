@@ -228,7 +228,9 @@ public class BandActivity extends Activity {
                                 }
                             } catch (Throwable ignored) {
                             }
-                            ScheduleStore.upsertFromWatch(BandActivity.this, name, sch);
+                            ScheduleStore.upsertFromWatch(BandActivity.this,
+                                    SyncEngine.get(BandActivity.this).currentDeviceId(),
+                                    SyncEngine.get(BandActivity.this).currentDeviceName(), name, sch);
                             resultView.setText("课表已同步 ✓" + (name.length() > 0 ? "（" + name + "）" : ""));
                             resultView.setTextColor(Ui.OK);
                         }
@@ -252,7 +254,9 @@ public class BandActivity extends Activity {
     }
 
     private void store(org.json.JSONArray sch) {
-        ScheduleStore.upsertFromWatch(BandActivity.this, "", sch);
+        ScheduleStore.upsertFromWatch(BandActivity.this,
+                SyncEngine.get(BandActivity.this).currentDeviceId(),
+                SyncEngine.get(BandActivity.this).currentDeviceName(), "", sch);
         resultView.setText("课表已同步 ✓（课表名未取到，用默认名）");
         resultView.setTextColor(Ui.OK);
     }

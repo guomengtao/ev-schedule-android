@@ -160,15 +160,16 @@ public class ScheduleListActivity extends Activity {
         String[] bandNames = SyncEngine.get(this).bandScheduleNames;
         if (bandNames != null && bandNames.length > 0) {
             int localMirror = 0;
+            String curDev = SyncEngine.get(this).currentDeviceId();
             for (int i = 0; i < bandNames.length; i++) {
-                if (ScheduleStore.find(this, "ev_watch_" + bandNames[i]) != null) {
+                if (ScheduleStore.findByDeviceName(this, curDev, bandNames[i]) != null) {
                     localMirror++;
                 }
             }
             listBox.addView(sectionHead("手环课表 · 手环上共 " + bandNames.length
                     + " 套 · 本地已存 " + localMirror + " 套"));
             for (int i = 0; i < bandNames.length; i++) {
-                ScheduleStore.Schedule mirror = ScheduleStore.find(this, "ev_watch_" + bandNames[i]);
+                ScheduleStore.Schedule mirror = ScheduleStore.findByDeviceName(this, curDev, bandNames[i]);
                 if (mirror != null) {
                     listBox.addView(scheduleCard(mirror, activeId));
                 } else {
@@ -437,7 +438,9 @@ public class ScheduleListActivity extends Activity {
                     try {
                         JSONObject o = new JSONObject(json);
                         if (o.optBoolean("ok", false)) {
-                            ScheduleStore.markSynced(ScheduleListActivity.this, s.id);
+                            SyncEngine e2 = SyncEngine.get(ScheduleListActivity.this);
+                            ScheduleStore.markSynced(ScheduleListActivity.this, s.id,
+                                    e2.currentDeviceId(), e2.currentDeviceName());
                             status("已同步到手环 ✓（覆盖手环当前课表）", Ui.OK);
                             render();
                         } else {
