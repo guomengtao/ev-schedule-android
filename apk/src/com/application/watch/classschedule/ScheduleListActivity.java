@@ -47,6 +47,8 @@ public class ScheduleListActivity extends Activity {
     /** 头部设备条：明确「当前某某手环的课表」+ 切换入口（P3 多设备分组） */
     private LinearLayout deviceBar;
     private TextView deviceBarTitle;
+    /** 当前手环对应的分组 key（deviceBar 点击展开/收起「它的课程」用） */
+    private String curDeviceGroupKey = null;
     /** 已展开的分组 key（deviceId / "legacy" / "local"）；默认空 = 全部折叠收敛视图 */
     private final Set<String> expandedGroups = new HashSet<String>();
 
@@ -127,7 +129,16 @@ public class ScheduleListActivity extends Activity {
         deviceBar.setClickable(true);
         deviceBar.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                startActivity(new Intent(ScheduleListActivity.this, BandActivity.class));
+                // 点击展开/收起「当前手环」对应的课程分组，而不是跳转到连接页
+                if (curDeviceGroupKey == null) {
+                    return;
+                }
+                if (expandedGroups.contains(curDeviceGroupKey)) {
+                    expandedGroups.remove(curDeviceGroupKey);
+                } else {
+                    expandedGroups.add(curDeviceGroupKey);
+                }
+                render();
             }
         });
         deviceBarTitle = Ui.text(this, "", 12.5f, Ui.TEXT, true);
@@ -173,6 +184,7 @@ public class ScheduleListActivity extends Activity {
 
     private void render() {
         listBox.removeAllViews();
+        curDeviceGroupKey = null;
         refreshSyncView();
         renderDeviceBar();
         final String activeId = ScheduleStore.activeId(this);
@@ -211,12 +223,17 @@ public class ScheduleListActivity extends Activity {
             boolean isCur = e.connected() && (curDev.isEmpty() ? "legacy".equals(key) : key.equals(curDev));
             String label;
             if (isCur) {
+                curDeviceGroupKey = key;
                 label = "当前手环：" + (curName.isEmpty() ? "当前手环" : curName)
                         + (tail4(curDev).isEmpty() ? "" : " ··" + tail4(curDev));
             } else if ("legacy".equals(key)) {
                 label = "未识别手环（旧数据，连接后归位）";
             } else {
                 label = devLabel(key, g);
+                // 已连接且组名与手环名一致 → 视为「它的课程」，deviceBar 点击展开此组
+                if (e.connected() && !curName.isEmpty() && label.startsWith(curName)) {
+                    curDeviceGroupKey = key;
+                }
             }
             listBox.addView(groupHeader(label, g.size(), key, isCur));
             if (expandedGroups.contains(key)) {
