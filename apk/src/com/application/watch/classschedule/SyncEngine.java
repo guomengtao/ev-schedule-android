@@ -66,6 +66,10 @@ public final class SyncEngine {
     private boolean listening;
     private Reply pending;
     private Runnable timeoutTask;
+    // 串行化发送队列：同一时刻只允许一个请求在途（pending 非空），后续请求排队而非覆盖 pending。
+    // 真机踩坑：连接流程的 ping 在途时 cacheDeviceId() 发 get_device_id，后者覆盖了 pending，
+    // 手环先回的 ping 回包被错发给 get_device_id 的 callback（action 不匹配）→ deviceId 恒空。
+    private final java.util.ArrayDeque<Runnable> sendQueue = new java.util.ArrayDeque<Runnable>();
 
     /** 最近一次成功同步到的手环信息 */
     public String deviceName = "";
@@ -212,6 +216,7 @@ public final class SyncEngine {
                     pending = null;
                     if (r != null) {
                         r.onReply(text);
+                        pumpNext(); // 回包已消费，放行队列里的下一个请求
                         return;
                     }
                     // 没有待回包的请求 → 这是手环主动 push，交观察者处理（不再静默丢弃）
@@ -223,6 +228,7 @@ public final class SyncEngine {
                     }
                     // 消息投递追踪：收到来自后台的推送时，自动回 ACK
                     ackIfNeeded(text);
+                    pumpNext();
                 }
             });
         }
@@ -269,7 +275,8 @@ public final class SyncEngine {
         }
     }
 
-    /** 发一条报文，等待回包（6 秒无回应判超时） */
+    /** 发一条报文，等待回包（6 秒无回应判超时）。
+     *  串行化：若已有请求在途（pending 非空），新请求排队等待而非覆盖，杜绝回包错配。 */
     public void send(final String json, final Reply cb) {
         if (api == null) {
             cb.onError("穿戴 SDK 不可用，请确认已安装「小米运动健康」");
@@ -279,6 +286,18 @@ public final class SyncEngine {
             cb.onError("还没有选中设备，请先完成连接");
             return;
         }
+        Runnable task = new Runnable() {
+            @Override public void run() { doSend(json, cb); }
+        };
+        if (pending != null) {
+            sendQueue.addLast(task);
+        } else {
+            task.run();
+        }
+    }
+
+    /** 真正的发送（仅在 pending 为空时调用） */
+    private void doSend(String json, final Reply cb) {
         lastSendAt = System.currentTimeMillis();
         ensureListener();
         pending = cb;
@@ -287,6 +306,7 @@ public final class SyncEngine {
                 timeoutTask = null;
                 pending = null;
                 cb.onTimeout("手环没有回应。请先在手表上打开一次「EV 课程表」，然后重试。");
+                pumpNext();
             }
         };
         main.postDelayed(timeoutTask, 6000);
@@ -296,17 +316,35 @@ public final class SyncEngine {
                         @Override public void onSuccess(Void v) { /* 受理 != 送达 */ }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override                         public void onFailure(Exception e) {
+                        @Override public void onFailure(Exception e) {
                             if (timeoutTask != null) {
                                 main.removeCallbacks(timeoutTask);
                                 timeoutTask = null;
                             }
                             pending = null;
                             cb.onError(humanize(e));
+                            pumpNext();
                         }
                     });
         } catch (Throwable t) {
+            if (timeoutTask != null) {
+                main.removeCallbacks(timeoutTask);
+                timeoutTask = null;
+            }
+            pending = null;
             cb.onError(humanize(t));
+            pumpNext();
+        }
+    }
+
+    /** 放行发送队列里的下一个请求（仅在无在途请求时） */
+    private void pumpNext() {
+        if (pending != null || sendQueue.isEmpty()) {
+            return;
+        }
+        Runnable next = sendQueue.pollFirst();
+        if (next != null) {
+            next.run();
         }
     }
 
@@ -391,8 +429,10 @@ public final class SyncEngine {
         if (nodeId == null) {
             return;
         }
+        android.util.Log.d("EVProbe", "cacheDeviceId: send get_device_id (nodeId=" + nodeId + ")");
         getDeviceId(new Reply() {
             @Override public void onReply(String json) {
+                android.util.Log.d("EVProbe", "cacheDeviceId reply: " + json);
                 try {
                     org.json.JSONObject o = new org.json.JSONObject(json);
                     if (o.optBoolean("ok", false) && "get_device_id".equals(o.optString("action"))) {
@@ -405,8 +445,8 @@ public final class SyncEngine {
                 } catch (Throwable ignored) {
                 }
             }
-            @Override public void onTimeout(String h) { }
-            @Override public void onError(String m) { }
+            @Override public void onTimeout(String h) { android.util.Log.d("EVProbe", "cacheDeviceId timeout: " + h); }
+            @Override public void onError(String m) { android.util.Log.d("EVProbe", "cacheDeviceId error: " + m); }
         });
     }
 
