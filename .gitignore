@@ -46,3 +46,8 @@ bandauth/out/
 bandauth/dist/
 bandauth/logs/
 bandauth/*.apk
+
+# ============ AI 工作记忆 / IDE 会话数据（本地保留，不入库） ============
+# 注意：只挡 memory/ 与 plans/；.codebuddy/rules/ 是团队共享的项目规则，三仓统一入库。
+.codebuddy/memory/
+.codebuddy/plans/
