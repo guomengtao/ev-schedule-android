@@ -107,6 +107,67 @@ public final class ScheduleStore {
         return legacy;
     }
 
+    /** 连接落定、拿到真实设备 ID 后，把升级前遗留的 sync 课表（deviceId 空或 "legacy-unknown"）
+     *  归位到当前设备：re-id 为 ev_watch_<deviceId>::<名称>，并按 name 消重（新 id 已存在则删旧的）。
+     *  只跑一次（deviceId 非空才生效），避免把「设备A的课表」误并到「设备B」。 */
+    public static synchronized void migrateLegacyToDevice(Context c, String devId, String devName) {
+        if (devId == null || devId.isEmpty()) {
+            return;
+        }
+        try {
+            JSONObject root = root(c);
+            JSONArray arr = root.optJSONArray("schedules");
+            if (arr == null) {
+                return;
+            }
+            JSONArray deleteIds = new JSONArray();
+            boolean changed = false;
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.optJSONObject(i);
+                if (o == null || !SOURCE_SYNC.equals(o.optString("source", ""))) {
+                    continue;
+                }
+                String did = o.optString("deviceId", "");
+                if (!did.isEmpty() && !"legacy-unknown".equals(did)) {
+                    continue; // 已是某真实设备，不动
+                }
+                String name = o.optString("name", "");
+                String newId = watchId(devId, name);
+                if (find(c, newId) != null && !newId.equals(o.optString("id"))) {
+                    deleteIds.put(o.optString("id")); // 新 id 已存在 → 删这条旧的
+                    continue;
+                }
+                o.put("id", newId);
+                o.put("deviceId", devId);
+                o.put("deviceName", devName == null ? "" : devName);
+                changed = true;
+            }
+            if (deleteIds.length() > 0) {
+                JSONArray kept = new JSONArray();
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject o = arr.optJSONObject(i);
+                    String id = (o == null) ? "" : o.optString("id", "");
+                    boolean drop = false;
+                    for (int k = 0; k < deleteIds.length(); k++) {
+                        if (deleteIds.optString(k).equals(id)) {
+                            drop = true;
+                            break;
+                        }
+                    }
+                    if (!drop) {
+                        kept.put(o);
+                    }
+                }
+                root.put("schedules", kept);
+                changed = true;
+            }
+            if (changed) {
+                saveRoot(c, root);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** 全部课表（按 createdAt 升序，先旧后新）；永远非 null */
     public static List<Schedule> list(Context c) {
         List<Schedule> out = new ArrayList<>();
@@ -226,8 +287,11 @@ public final class ScheduleStore {
         String id = watchId(dev, name);
         Schedule s = find(c, id);
         if (s == null && dev.length() > 0) {
-            // 已知设备 + 老数据可能以旧名（deviceId 空）存过 → 升级它
+            // 已知设备 + 老数据可能以旧格式（ev_watch_<名称>）或 legacy-unknown 形式存过 → 就地升级它
             Schedule old = find(c, "ev_watch_" + name);
+            if (old == null) {
+                old = find(c, watchId("legacy-unknown", name));
+            }
             if (old != null && (old.deviceId == null || old.deviceId.isEmpty()
                     || "legacy-unknown".equals(old.deviceId))) {
                 s = old;

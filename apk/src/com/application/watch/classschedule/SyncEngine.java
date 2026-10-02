@@ -172,7 +172,6 @@ public final class SyncEngine {
                          String[] labels, int[] states, String[] details) {
         nodeId = d.id;
         deviceName = d.name;
-        cacheDeviceId(); // 连接落定后取真实设备 ID，供课表多设备隔离路由
         states[1] = OK;
         details[1] = d.name + (note == null ? "" : "  " + note);
         emit(s, labels, states, details);
@@ -261,7 +260,10 @@ public final class SyncEngine {
         }
         try {
             api.addListener(nodeId, rx).addOnSuccessListener(new OnSuccessListener<Void>() {
-                @Override public void onSuccess(Void v) { listening = true; }
+                @Override public void onSuccess(Void v) {
+                    listening = true;
+                    cacheDeviceId(); // 监听就绪后再取真实设备 ID，保证回包能收到
+                }
             });
         } catch (Throwable ignored) {
         }
@@ -397,7 +399,8 @@ public final class SyncEngine {
                         watchDeviceId = o.optString("deviceId");
                         watchDeviceId4 = o.optString("deviceId4");
                         watchDeviceFallback = o.optBoolean("fallback", false);
-                        pullMissingFromWatch(ctx); // deviceId 已就位：升级 legacy 记录
+                        ScheduleStore.migrateLegacyToDevice(ctx, watchDeviceId, deviceName); // 老数据归位
+                        pullMissingFromWatch(ctx); // deviceId 已就位：把 legacy-unknown 记录升级
                     }
                 } catch (Throwable ignored) {
                 }
