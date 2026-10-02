@@ -6,6 +6,8 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
+import android.text.SpannableString;
+import android.text.style.ForegroundColorSpan;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -131,7 +133,7 @@ public class ScheduleListActivity extends Activity {
         deviceBarTitle = Ui.text(this, "", 12.5f, Ui.TEXT, true);
         deviceBar.addView(deviceBarTitle, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        deviceBar.addView(Ui.text(this, "切换 ›", 12f, Ui.ACCENT, true));
+        // 「切换 ›」按钮已移除：在线状态直接在标题前用绿色实心圆点标识，整条可点进连接页
         root.addView(deviceBar, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         root.addView(Ui.space(this, 8));
@@ -256,9 +258,17 @@ public class ScheduleListActivity extends Activity {
         }
         String name = e.currentDeviceName();
         String tail = tail4(curDev);
-        deviceBarTitle.setText("当前手环课表：" + (name.isEmpty() ? "当前手环" : name)
+        String title = "在线 · " + (name.isEmpty() ? "当前手环" : name)
                 + (tail.isEmpty() ? "" : " ··" + tail)
-                + (curDev.isEmpty() ? "（设备ID未取到）" : ""));
+                + (curDev.isEmpty() ? "（设备ID未取到）" : "");
+        deviceBarTitle.setText(withGreenDot(title));
+    }
+
+    /** 标题开头加一个绿色实心圆点（●），仅圆点着色，表示在线 */
+    private CharSequence withGreenDot(String text) {
+        SpannableString ss = new SpannableString("● " + text);
+        ss.setSpan(new ForegroundColorSpan(0xFF4CAF50), 0, 1, SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return ss;
     }
 
     /** 设备 ID 后 4 位（展示用，区分同名设备） */
