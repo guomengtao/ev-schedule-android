@@ -204,7 +204,9 @@ public class ScheduleListActivity extends Activity {
         for (Map.Entry<String, List<ScheduleStore.Schedule>> en : byDev.entrySet()) {
             final String key = en.getKey();
             List<ScheduleStore.Schedule> g = en.getValue();
-            boolean isCur = !curDev.isEmpty() && key.equals(curDev);
+            // 已连接时：deviceId 已知则精确匹配；未知（手环端未回 get_device_id）则把旧数据组视作当前设备，
+            // 否则头部条显示「已连接」而卡片还挂在「未识别手环」，自相矛盾。
+            boolean isCur = e.connected() && (curDev.isEmpty() ? "legacy".equals(key) : key.equals(curDev));
             String label;
             if (isCur) {
                 label = "当前手环：" + (curName.isEmpty() ? "当前手环" : curName)
@@ -244,15 +246,19 @@ public class ScheduleListActivity extends Activity {
         if (deviceBar == null) {
             return;
         }
-        String curDev = SyncEngine.get(this).currentDeviceId();
-        if (curDev.isEmpty()) {
+        SyncEngine e = SyncEngine.get(this);
+        String curDev = e.currentDeviceId();
+        // 判据用「连接状态」而非 deviceId：手环端未实现 get_device_id 时 deviceId 恒空，
+        // 但 interconnect 其实已连上（ConnectionBar 显示已连接），不能误报「未连接手环」。
+        if (!e.connected()) {
             deviceBarTitle.setText("未连接手环 · 课表按设备分组显示");
             return;
         }
-        String name = SyncEngine.get(this).currentDeviceName();
+        String name = e.currentDeviceName();
         String tail = tail4(curDev);
         deviceBarTitle.setText("当前手环课表：" + (name.isEmpty() ? "当前手环" : name)
-                + (tail.isEmpty() ? "" : " ··" + tail));
+                + (tail.isEmpty() ? "" : " ··" + tail)
+                + (curDev.isEmpty() ? "（设备ID未取到）" : ""));
     }
 
     /** 设备 ID 后 4 位（展示用，区分同名设备） */
