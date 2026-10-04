@@ -94,6 +94,8 @@ public class MessageActivity extends Activity {
     private LinearLayout emojiBox;                           // 表情容器
     private TextView typingHint;    // P3：对方输入态提示（「对方正在输入：草稿」）
     private TextView stateView;
+    private TextView devBarView;    // 手环设备状态条（电量/存储/充电·佩戴·睡眠）
+    private Runnable devTick;       // SyncEngine 状态回调（字段强引用，防弱引用被回收）
     private EditText inputView;
     private final SimpleDateFormat TS = new SimpleDateFormat("MM-dd HH:mm", Locale.US);
 
@@ -136,6 +138,18 @@ public class MessageActivity extends Activity {
         nav.setBackgroundColor(wxNavBg());
         root.addView(nav);
         root.addView(Ui.space(this, 2));
+
+        // 设备状态条：手环电量 / 存储 / 充电·佩戴·睡眠（SDK 直读 + 手环端 sysinfo）。
+        //   微信式克制：小字、次要色，贴着标题下方，不抢消息区。
+        devBarView = Ui.text(this, "未连接手环", 11f, wxTimeText(), false);
+        devBarView.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 4));
+        devBarView.setBackgroundColor(wxNavBg());
+        root.addView(devBarView);
+        devTick = new Runnable() {
+            @Override public void run() { updateDevBar(); }
+        };
+        SyncEngine.get(this).addStatusCallback(devTick);
+        updateDevBar();
 
         // 状态行：微信式「干净」——仅未连接 / 有待发送时显示，一切正常则隐藏（不留常驻说明）
         stateView = Ui.text(this, "", 11f, wxTimeText(), false);
@@ -323,6 +337,13 @@ public class MessageActivity extends Activity {
         // 刷新状态并尝试补发（断线期间写的留言在此刻发出）
         refreshState();
         flush();
+        // 顺手刷新手环设备状态（电量/连接/充电/佩戴/睡眠 + 存储）
+        SyncEngine e = SyncEngine.get(this);
+        if (e.connected()) {
+            e.queryDeviceState();
+            e.requestSysinfo();
+        }
+        updateDevBar();
     }
 
     // ======================= 状态 / 渲染 =======================
@@ -341,6 +362,52 @@ public class MessageActivity extends Activity {
             show = false;   // 一切正常：微信式干净界面，不显示常驻状态行
         }
         stateView.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
+    /**
+     * 设备状态条：电量 / 存储（可用）/ 充电·佩戴·睡眠。
+     * 数据来源：电量 & 四态 = 小米穿戴 SDK 直读（SyncEngine）；存储 = 手环端 sysinfo 回包。
+     * 没取到的项不显示（宁愿短，也不给假数据）。
+     */
+    private void updateDevBar() {
+        if (devBarView == null) {
+            return;
+        }
+        SyncEngine e = SyncEngine.get(this);
+        if (!e.connected()) {
+            devBarView.setText("未连接手环");
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        if (e.batteryPercent > 0) {
+            sb.append("电量 ").append(e.batteryPercent).append("%");
+        }
+        if (e.bandStorageKnown) {
+            if (sb.length() > 0) sb.append(" · ");
+            sb.append("存储 ").append(fmtBytes(e.bandAvailStorage)).append(" 可用");
+        }
+        if (e.bandChargingKnown && e.bandCharging) {
+            if (sb.length() > 0) sb.append(" · ");
+            sb.append("充电中");
+        }
+        if (e.bandWearingKnown) {
+            if (sb.length() > 0) sb.append(" · ");
+            sb.append(e.bandWearing ? "佩戴中" : "未佩戴");
+        }
+        if (e.bandSleepingKnown && e.bandSleeping) {
+            if (sb.length() > 0) sb.append(" · ");
+            sb.append("睡眠中");
+        }
+        devBarView.setText(sb.length() > 0 ? sb.toString() : "手环已连接");
+    }
+
+    /** 字节数人性化（B / KB / MB / GB）。 */
+    private static String fmtBytes(long b) {
+        if (b <= 0) return "—";
+        if (b >= 1073741824L) return String.format(Locale.US, "%.2f GB", b / 1073741824.0);
+        if (b >= 1048576L) return String.format(Locale.US, "%.1f MB", b / 1048576.0);
+        if (b >= 1024L) return (b / 1024) + " KB";
+        return b + " B";
     }
 
     private int countPending() {

@@ -25,6 +25,8 @@ public class BandActivity extends Activity {
     private int lastThemeVersion = 0;
 
     private TextView resultView, devStatusView, heroNameView, heroInfoView;
+    /** 设备状态卡的值视图（电量/连接/充电/佩戴/睡眠/存储） */
+    private TextView stConnView, stBatteryView, stChargeView, stWearView, stSleepView, stStorageView;
     private android.widget.Button heroActionBtn;
     private Runnable heroTick;
     private EditText nickView;
@@ -116,6 +118,11 @@ public class BandActivity extends Activity {
 
         // ===== 自动连接状态条（与首页同一数据源），置于昵称区上方 =====
         ConnectionBar.attach(this, root);
+        root.addView(Ui.space(this, 10));
+
+        // ===== 设备状态卡：电量/连接/充电/佩戴/睡眠（SDK 直读）+ 存储（手环端 sysinfo）=====
+        //       常驻显示（未连接时各值显示「—」），数据经 SyncEngine 状态回调刷新
+        root.addView(buildStatusCard());
         root.addView(Ui.space(this, 10));
 
         // ===== 以下四项都是「连上手环才有意义」的配置/入口，未连接时整块隐藏 =====
@@ -365,7 +372,9 @@ public class BandActivity extends Activity {
         updateHero();
         SyncEngine e = SyncEngine.get(this);
         if (e.connected()) {
-            e.requestBattery(); // 有结果会经状态回调刷新头部
+            e.requestBattery();     // 老路径（EV 上报），有结果经状态回调刷新头部
+            e.queryDeviceState();   // SDK 直读：电量/连接/充电/佩戴/睡眠
+            e.requestSysinfo();     // 手环端要一次存储/型号
         }
     }
 
@@ -402,6 +411,86 @@ public class BandActivity extends Activity {
         }
         // 昵称 / 首页设置 / 工具箱 / 留言：只在已连接时显示（未连接时整块收起）
         applyConnectionVisibility(e.connected());
+        updateStatus();
+    }
+
+    // ======================= 设备状态卡（电量/连接/充电/佩戴/睡眠/存储）=======================
+
+    /** 一行状态项：左标签 + 右值。 */
+    private View statusRow(String label, TextView value) {
+        LinearLayout r = new LinearLayout(this);
+        r.setOrientation(LinearLayout.HORIZONTAL);
+        r.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        r.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
+        TextView l = Ui.text(this, label, 13f, Ui.MUTED, false);
+        r.addView(l, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        r.addView(value);
+        return r;
+    }
+
+    /** 建设备状态卡（值视图存字段，由 updateStatus 刷新）。 */
+    private View buildStatusCard() {
+        LinearLayout card = Ui.card(this);
+        card.addView(Ui.text(this, "设备状态", 13f, Ui.TEXT, true));
+        card.addView(Ui.space(this, 2));
+
+        stConnView = Ui.text(this, "—", 13f, Ui.TEXT, true);
+        stBatteryView = Ui.text(this, "—", 13f, Ui.TEXT, true);
+        stChargeView = Ui.text(this, "—", 13f, Ui.TEXT, true);
+        stWearView = Ui.text(this, "—", 13f, Ui.TEXT, true);
+        stSleepView = Ui.text(this, "—", 13f, Ui.TEXT, true);
+        stStorageView = Ui.text(this, "—", 13f, Ui.TEXT, true);
+
+        card.addView(statusRow("连接", stConnView));
+        card.addView(statusRow("电量", stBatteryView));
+        card.addView(statusRow("充电", stChargeView));
+        card.addView(statusRow("佩戴", stWearView));
+        card.addView(statusRow("睡眠", stSleepView));
+        card.addView(statusRow("存储", stStorageView));
+        return card;
+    }
+
+    /** 按 SyncEngine 的最新设备状态刷新卡片。未取到的项一律显示「—」，绝不给假数据。 */
+    private void updateStatus() {
+        if (stConnView == null) {
+            return;
+        }
+        SyncEngine e = SyncEngine.get(this);
+        boolean on = e.connected();
+        stConnView.setText(on ? "已连接" : "未连接");
+        stConnView.setTextColor(on ? Ui.OK : Ui.MUTED);
+
+        stBatteryView.setText(e.batteryPercent > 0 ? (e.batteryPercent + "%") : "—");
+
+        if (e.bandChargingKnown) {
+            stChargeView.setText(e.bandCharging ? "充电中" : "未充电");
+            stChargeView.setTextColor(e.bandCharging ? Ui.ACCENT : Ui.TEXT);
+        } else {
+            stChargeView.setText("—");
+            stChargeView.setTextColor(Ui.TEXT);
+        }
+
+        stWearView.setText(e.bandWearingKnown ? (e.bandWearing ? "佩戴中" : "未佩戴") : "—");
+
+        if (e.bandSleepingKnown) {
+            stSleepView.setText(e.bandSleeping ? "睡眠中" : "清醒");
+        } else {
+            stSleepView.setText("—");
+        }
+
+        stStorageView.setText(e.bandStorageKnown
+                ? (fmtBytes(e.bandAvailStorage) + " 可用 / " + fmtBytes(e.bandTotalStorage))
+                : "—");
+    }
+
+    /** 字节数人性化（B / KB / MB / GB）。 */
+    private static String fmtBytes(long b) {
+        if (b <= 0) return "—";
+        if (b >= 1073741824L) return String.format(java.util.Locale.US, "%.2f GB", b / 1073741824.0);
+        if (b >= 1048576L) return String.format(java.util.Locale.US, "%.1f MB", b / 1048576.0);
+        if (b >= 1024L) return (b / 1024) + " KB";
+        return b + " B";
     }
 
     /** 未连接手环时隐藏「连接后才有意义」的区块（昵称 / 首页设置 / 工具箱 / 留言），

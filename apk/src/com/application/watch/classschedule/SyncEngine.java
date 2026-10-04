@@ -9,7 +9,12 @@ import com.xiaomi.xms.wearable.Wearable;
 import com.xiaomi.xms.wearable.auth.Permission;
 import com.xiaomi.xms.wearable.message.MessageApi;
 import com.xiaomi.xms.wearable.message.OnMessageReceivedListener;
+import com.xiaomi.xms.wearable.node.DataItem;
+import com.xiaomi.xms.wearable.node.DataQueryResult;
+import com.xiaomi.xms.wearable.node.DataSubscribeResult;
 import com.xiaomi.xms.wearable.node.Node;
+import com.xiaomi.xms.wearable.node.NodeApi;
+import com.xiaomi.xms.wearable.node.OnDataChangedListener;
 import com.xiaomi.xms.wearable.notify.NotifyApi;
 import com.xiaomi.xms.wearable.tasks.OnFailureListener;
 import com.xiaomi.xms.wearable.tasks.OnSuccessListener;
@@ -850,9 +855,83 @@ public final class SyncEngine {
         });
     }
 
-    /** 手环电量（0=未知；小米穿戴 SDK 无电量接口，只能由手环侧 EV 上报）。 */
+    /** 手环电量（0=未知）。两路来源：① 小米穿戴 SDK {@link NodeApi#query} 直读（首选）；
+     *  ② 手环侧 EV 上报 {@code action=get_battery}（老路径，EV 暂不支持 → 静默）。 */
     public int batteryPercent = 0;
     public int batteryDays = 0;
+
+    // ======================= 设备状态（小米穿戴 SDK 直读，见手机读取手环能力分析）=======================
+    // query 支持：连接 / 电量 / 充电 / 佩戴 / 睡眠 5 项；subscribe 只支持后 4 项中的连接/充电/佩戴/睡眠
+    //（电量不可订阅，靠 query 拉取或进页面时刷）。
+    // 每项单独记「是否已拿到过真实值」——SDK 可能只回填被查询的那一项，
+    // 用单一标志会导致「没查过的项」被当成 false 显示（如充电→未充电），故逐项标记。
+    /** 连接状态已获取 */
+    public boolean bandConnKnown = false;
+    /** 电量已获取（等价于 batteryPercent > 0） */
+    public boolean bandBatteryKnown = false;
+    /** 充电状态已获取 */
+    public boolean bandChargingKnown = false;
+    /** 佩戴状态已获取 */
+    public boolean bandWearingKnown = false;
+    /** 睡眠状态已获取 */
+    public boolean bandSleepingKnown = false;
+    /** 存储信息已获取（来自手环端 sysinfo） */
+    public boolean bandStorageKnown = false;
+    /** 连接状态（SDK query ITEM_CONNECTION） */
+    public boolean bandConnected = false;
+    /** 充电中（SDK query ITEM_CHARGING） */
+    public boolean bandCharging = false;
+    /** 佩戴中（SDK query ITEM_WEARING） */
+    public boolean bandWearing = false;
+    /** 睡眠中（SDK query ITEM_SLEEP） */
+    public boolean bandSleeping = false;
+
+    /** 手环存储（来自手环端 EV {@code action=sysinfo} 回包；0=未知） */
+    public long bandTotalStorage = 0;
+    public long bandAvailStorage = 0;
+    /** 手环型号（sysinfo 回包，来自 device.getInfo().model） */
+    public String bandModel = "";
+
+    /** 已订阅设备状态变化（避免重复订阅） */
+    private boolean bandSubscribed = false;
+
+    /** 设备状态变化监听：连接 / 充电 / 佩戴 / 睡眠（电量不可订阅）。 */
+    private final OnDataChangedListener bandDataListener = new OnDataChangedListener() {
+        @Override public void onDataChanged(String nid, DataItem item, DataSubscribeResult data) {
+            if (data == null || item == null) {
+                return;
+            }
+            try {
+                if (item == DataItem.ITEM_CONNECTION) {
+                    bandConnected = (data.getConnectedStatus() == DataSubscribeResult.RESULT_CONNECTION_CONNECTED);
+                    bandConnKnown = true;
+                } else if (item == DataItem.ITEM_CHARGING) {
+                    int s = data.getChargingStatus();
+                    if (s == DataSubscribeResult.RESULT_CHARGING_START) bandCharging = true;
+                    else if (s == DataSubscribeResult.RESULT_CHARGING_QUIT
+                            || s == DataSubscribeResult.RESULT_CHARGING_FINISH) bandCharging = false;
+                    else return;
+                    bandChargingKnown = true;
+                } else if (item == DataItem.ITEM_WEARING) {
+                    int s = data.getWearingStatus();
+                    if (s == DataSubscribeResult.RESULT_WEARING_ON) bandWearing = true;
+                    else if (s == DataSubscribeResult.RESULT_WEARING_OFF) bandWearing = false;
+                    else return;
+                    bandWearingKnown = true;
+                } else if (item == DataItem.ITEM_SLEEP) {
+                    int s = data.getSleepStatus();
+                    if (s == DataSubscribeResult.RESULT_SLEEP_IN) bandSleeping = true;
+                    else if (s == DataSubscribeResult.RESULT_SLEEP_OUT) bandSleeping = false;
+                    else return;
+                    bandSleepingKnown = true;
+                } else {
+                    return;
+                }
+                notifyStatus();
+            } catch (Throwable ignored) {
+            }
+        }
+    };
 
     /**
      * 向手环 EV 要电量（前向兼容：EV 侧暂不支持 → 超时静默失败，界面不显示，绝不给假数据）。
@@ -872,6 +951,146 @@ public final class SyncEngine {
                         batteryDays = o.optInt("days", o.optInt("lastFullDays", 0));
                         notifyStatus();
                     }
+                } catch (Throwable ignored) {
+                }
+            }
+            @Override public void onTimeout(String h) { }
+            @Override public void onError(String m) { }
+        });
+    }
+
+    /**
+     * 拉一次设备状态（连接 / 电量 / 充电 / 佩戴 / 睡眠）。小米穿戴 SDK {@code NodeApi.query} 直读，
+     * 需 {@code DEVICE_MANAGER} 权限（连接流程第 3 步已申请）。结果经状态回调通知；
+     * 单项失败（老版本 / 该机型不支持）静默，不影响其它项。
+     */
+    public void queryDeviceState() {
+        if (nodeId == null) {
+            return;
+        }
+        final NodeApi na;
+        try {
+            na = Wearable.getNodeApi(ctx);
+        } catch (Throwable t) {
+            return;
+        }
+        DataItem[] items = {DataItem.ITEM_CONNECTION, DataItem.ITEM_BATTERY,
+                DataItem.ITEM_CHARGING, DataItem.ITEM_WEARING, DataItem.ITEM_SLEEP};
+        for (final DataItem item : items) {
+            try {
+                na.query(nodeId, item)
+                        .addOnSuccessListener(new OnSuccessListener<DataQueryResult>() {
+                            @Override public void onSuccess(DataQueryResult r) {
+                                applyQueryResult(item, r);
+                                notifyStatus();
+                            }
+                        })
+                        .addOnFailureListener(new OnFailureListener() {
+                            @Override public void onFailure(Exception e) {
+                                // 单条查询失败不致命：忽略（该机型/版本不支持的项拿不到就留零值）
+                            }
+                        });
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    /** 把一条 query 结果并入对应字段（DataQueryResult 各项与 DataItem 一一对应）。 */
+    private void applyQueryResult(DataItem item, DataQueryResult r) {
+        if (r == null) {
+            return;
+        }
+        if (item == DataItem.ITEM_CONNECTION) {
+            bandConnected = r.isConnected;
+            bandConnKnown = true;
+        } else if (item == DataItem.ITEM_BATTERY) {
+            if (r.battery > 0) {
+                batteryPercent = r.battery;
+                bandBatteryKnown = true;
+            }
+        } else if (item == DataItem.ITEM_CHARGING) {
+            bandCharging = r.isCharging;
+            bandChargingKnown = true;
+        } else if (item == DataItem.ITEM_WEARING) {
+            bandWearing = r.isWearing;
+            bandWearingKnown = true;
+        } else if (item == DataItem.ITEM_SLEEP) {
+            bandSleeping = r.isSleeping;
+            bandSleepingKnown = true;
+        }
+    }
+
+    /**
+     * 订阅设备状态变化（连接 / 充电 / 佩戴 / 睡眠）。电量**不可订阅**（SDK 限制），
+     * 靠 {@link #queryDeviceState()} 拉取。幂等；需 {@code DEVICE_MANAGER} 权限。
+     */
+    public void subscribeDeviceState() {
+        if (nodeId == null || bandSubscribed) {
+            return;
+        }
+        final NodeApi na;
+        try {
+            na = Wearable.getNodeApi(ctx);
+        } catch (Throwable t) {
+            return;
+        }
+        bandSubscribed = true;
+        DataItem[] items = {DataItem.ITEM_CONNECTION, DataItem.ITEM_CHARGING,
+                DataItem.ITEM_WEARING, DataItem.ITEM_SLEEP};
+        for (DataItem item : items) {
+            try {
+                na.subscribe(nodeId, item, bandDataListener);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    /** 连接落到新设备 / 连接失败时清设备状态与订阅标记（下次连接会重新拉取 + 订阅）。 */
+    private void resetBandState() {
+        bandSubscribed = false;
+        bandConnKnown = false;
+        bandBatteryKnown = false;
+        bandChargingKnown = false;
+        bandWearingKnown = false;
+        bandSleepingKnown = false;
+        bandStorageKnown = false;
+        bandConnected = false;
+        bandCharging = false;
+        bandWearing = false;
+        bandSleeping = false;
+        bandTotalStorage = 0;
+        bandAvailStorage = 0;
+        bandModel = "";
+        batteryPercent = 0;
+        batteryDays = 0;
+    }
+
+    /**
+     * 向手环 EV 要系统信息（存储空间 / 型号）。手环端 {@code action=sysinfo} 回包：
+     * {@code {ok:true, action:"sysinfo", totalStorage, availableStorage, model}}。
+     * 老版本 EV 不认此 action → 超时静默，UI 不显示存储项（绝不给假数据）。
+     */
+    public void requestSysinfo() {
+        if (nodeId == null) {
+            return;
+        }
+        send("{\"action\":\"sysinfo\"}", new Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(json);
+                    if (!o.optBoolean("ok", false)) {
+                        return;
+                    }
+                    long total = o.optLong("totalStorage", 0);
+                    long avail = o.optLong("availableStorage", 0);
+                    String model = o.optString("model", "");
+                    if (total > 0) {
+                        bandTotalStorage = total;
+                        bandStorageKnown = true;
+                    }
+                    if (avail > 0) bandAvailStorage = avail;
+                    if (model != null && model.length() > 0) bandModel = model;
+                    notifyStatus();
                 } catch (Throwable ignored) {
                 }
             }
@@ -971,6 +1190,15 @@ public final class SyncEngine {
             connectProgress = "连接失败：" + hint;
         } else {
             connectProgress = "已连接 · " + versionName;
+        }
+        // 连接成功：拉一次设备状态（电量/连接/充电/佩戴/睡眠）并订阅其变化；顺带要一次存储。
+        // 失败：清掉设备状态，避免拿死链数据谎报（与上面清 versionName 同理）。
+        if (ok) {
+            queryDeviceState();
+            subscribeDeviceState();
+            requestSysinfo();
+        } else {
+            resetBandState();
         }
         try {
             Stats.connectEnd(ctx, ok, failStep, failStep > 0 ? failDetail : hint);
