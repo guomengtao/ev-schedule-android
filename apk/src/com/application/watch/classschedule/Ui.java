@@ -513,7 +513,7 @@ public final class Ui {
                 R.drawable.ic_tab_watch, R.drawable.ic_tab_settings};
         final int[] iconsFilled = {R.drawable.ic_tab_home_filled, R.drawable.ic_tab_schedule_filled,
                 R.drawable.ic_tab_watch_filled, R.drawable.ic_tab_settings_filled};
-        final String[] labels = {"首页", "课程表", "手环", "设置"};
+        final String[] labels = {"首页", "课表库", "手环", "设置"};
         final Class[] targets = {HomeActivity.class, ScheduleListActivity.class,
                 BandActivity.class, SettingsActivity.class};
 

@@ -47,8 +47,12 @@ public class HomeActivity extends Activity {
     private TextView greetingView, pageTitleView, weekLabelView;
     /** 连接迷你条容器（与错误卡互斥显示，修"同屏两处说未连接"）；§4.2 起改为「瞬时反馈」：显示后自动淡出 */
     private LinearLayout miniBarView;
-    /** §4.2 顶栏常驻连接状态圆点（绿=已连接 / 蓝=连接中 / 灰=未连接 / 红=失败），点按进「手环」页 */
+    /** §D5 顶栏连接状态胶囊：圆点（绿=已连接 / 蓝=连接中 / 灰=未连接 / 红=失败）+ 文字，点按进「手环」页 */
     private View statusDotView;
+    private TextView statusPillText;
+    private android.widget.FrameLayout statusPillBtn;
+    /** §D2 「接下来」焦点卡容器（renderFocusCard 填充） */
+    private LinearLayout focusCardView;
     private LinearLayout dateStripView, deviceCardView;
     private TextView deviceNameView, deviceStatusView, batteryView;
     private int selectedDay = CourseCache.todayIndex();
@@ -178,24 +182,16 @@ public class HomeActivity extends Activity {
         root.setPadding(Ui.dp(this, Ui.GAP_LG), Ui.dp(this, Ui.GAP_SM),
                 Ui.dp(this, Ui.GAP_LG), Ui.dp(this, Ui.GAP_SM));
 
-        // ---- 头部：头像 + 问候 + 标题 + 周切换 ----
+        // ---- §D2 焦点卡「接下来」：把「我现在该干嘛」从"两次定位"变"一次阅读" ----
+        focusCardView = new LinearLayout(this);
+        focusCardView.setOrientation(LinearLayout.VERTICAL);
+        root.addView(focusCardView);
+        root.addView(Ui.space(this, Ui.GAP_LG));
+
+        // ---- 头部：本周课表 + 周切换（周导航行，位于焦点卡之下）----
         buildHeader(root);
 
-        // ---- 周日期条 ----
-        // 格子用 weight 均分宽度（原 43dp 固定宽 × 7 + 间隔会超出 360dp 屏宽，最后一格被裁掉）
-        // §3.2 列对齐：左让出「课表卡内边距 GAP_MD(12) + 时间列 TIME_COL_W(36) = 48dp」、
-        // 右让出卡内边距 12dp，使 7 个日期格与下方课表卡的 7 个天列严格同列
-        //（改前日期条满宽、网格被时间列推右 48dp，两排星期横坐标对不上）。
-        dateStripView = new LinearLayout(this);
-        dateStripView.setOrientation(LinearLayout.HORIZONTAL);
-        dateStripView.setPadding(Ui.dp(this, Ui.GAP_MD + TIME_COL_W), 0,
-                Ui.dp(this, Ui.GAP_MD), 0);
-        root.addView(dateStripView);
-        // §4.3 两级纵向节奏：「日期条 + 课表」是一组紧凑信息组（组内 8dp），
-        // 与上方头部、下方快捷区之间才用 16dp（组间）—— 分组感出来，页面更「高级」。
-        root.addView(Ui.space(this, Ui.GAP_SM));
-
-        // ---- 周课表网格（带时间轴） ----
+        // ---- 周课表网格（§D3 日期条已下沉为网格卡表头，删掉网格内重复星期行）----
         weekBox = new LinearLayout(this);
         weekBox.setOrientation(LinearLayout.VERTICAL);
         root.addView(weekBox);
@@ -239,13 +235,9 @@ public class HomeActivity extends Activity {
 
         root.addView(Ui.space(this, Ui.GAP_SM));
 
-        // 顶栏：居中标题 + 右上角 ⊕ 圆钮（微信式下拉菜单：导出课程/导入课程/呼叫手环）
+        // 顶栏：§D1 删掉居中「Ev课程表」标题（App 名零信息量，且与「本周课表」构成双标题）；
+        // 右上角 ⊕ 圆钮保留（微信式下拉菜单：导出课程/导入课程/呼叫手环）
         android.widget.FrameLayout header = new android.widget.FrameLayout(this);
-        TextView hTitle = Ui.textMediumLh(this, "Ev课程表", Ui.SP_TITLE, Ui.TEXT, Ui.LH_TITLE);
-        hTitle.setGravity(android.view.Gravity.CENTER);
-        header.addView(hTitle, new android.widget.FrameLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT));
         ImageView plusBtn = new ImageView(this);
         plusBtn.setImageResource(R.drawable.ic_plus);
         plusBtn.setColorFilter(Ui.ACCENT);
@@ -265,15 +257,27 @@ public class HomeActivity extends Activity {
         pbP.rightMargin = Ui.dp(this, Ui.GAP_SM);
         header.addView(plusBtn, pbP);
 
-        // §4.2 连接状态圆点：紧贴 ⊕ 左侧；44dp 热区（视觉 10dp 圆点），点按进「手环」页
-        android.widget.FrameLayout statusBtn = new android.widget.FrameLayout(this);
-        statusBtn.setClickable(true);
-        statusBtn.setContentDescription("手环连接状态");
+        // §D5 连接状态胶囊：圆点 + 文字（10dp 圆点几乎不可发现 → 加字），44dp 热区，点按进「手环」页
+        statusPillBtn = new android.widget.FrameLayout(this);
+        statusPillBtn.setClickable(true);
+        statusPillBtn.setContentDescription("手环连接状态");
+        LinearLayout pill = new LinearLayout(this);
+        pill.setOrientation(LinearLayout.HORIZONTAL);
+        pill.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        pill.setBackground(Ui.round(Ui.CARD2, 999, Ui.LINE, this));
+        pill.setPadding(Ui.dp(this, 9), Ui.dp(this, 4), Ui.dp(this, 9), Ui.dp(this, 4));
         statusDotView = new View(this);
-        statusDotView.setBackground(Ui.round(Ui.MUTED, 5, 0, this));
-        statusBtn.addView(statusDotView, new android.widget.FrameLayout.LayoutParams(
-                Ui.dp(this, 10), Ui.dp(this, 10), android.view.Gravity.CENTER));
-        statusBtn.setOnClickListener(new View.OnClickListener() {
+        statusDotView.setBackground(Ui.round(Ui.MUTED, 4, 0, this));
+        LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(Ui.dp(this, 7), Ui.dp(this, 7));
+        dotLp.rightMargin = Ui.dp(this, 5);
+        pill.addView(statusDotView, dotLp);
+        statusPillText = Ui.textMediumLh(this, "未连接", Ui.SP_CAPTION, Ui.MUTED, Ui.LH_MICRO);
+        pill.addView(statusPillText);
+        statusPillBtn.addView(pill, new android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.CENTER));
+        statusPillBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 startActivity(new Intent(HomeActivity.this, BandActivity.class));
             }
@@ -282,7 +286,7 @@ public class HomeActivity extends Activity {
                 Ui.dp(this, Ui.TOUCH_MIN), Ui.dp(this, Ui.TOUCH_MIN),
                 android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.END);
         sbP.rightMargin = Ui.dp(this, Ui.GAP_SM + Ui.TOUCH_MIN);
-        header.addView(statusBtn, sbP);
+        header.addView(statusPillBtn, sbP);
 
         // §4.1 问候上移至顶栏左侧：原本「Hi，同学」独占正文首行，而 360dp 屏下标题行可用宽仅 170dp、
         // 右侧周导航固定 157dp —— 问候无法与「本周课表」同行（实测仅剩 0.7dp 余量），且字号阶梯
@@ -298,9 +302,9 @@ public class HomeActivity extends Activity {
                 android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.START);
         gp.leftMargin = Ui.dp(this, Ui.GAP_SM);
         header.addView(greetingView, gp);
-        // 顶栏固定 52dp 高，避免标题行高变化引起整页抖动
+        // §D1 顶栏 52 → 44dp（删掉居中标题后无需容纳 17sp 标题行；固定高避免整页抖动）
         root.addView(header, 0, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 52)));
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 44)));
         setContentView(Ui.wrapWithBottomBar(this, root, 0));
         renderWeek();
     }
@@ -314,34 +318,29 @@ public class HomeActivity extends Activity {
     private LinearLayout buildQuickBox() {
         LinearLayout box = Ui.card(this);
         box.setBackground(Ui.round(Ui.CARD, Ui.R_CARD, Ui.LINE, this));
-        box.setPadding(Ui.dp(this, Ui.GAP_MD), Ui.dp(this, Ui.GAP_MD),
-                Ui.dp(this, Ui.GAP_MD), Ui.dp(this, Ui.GAP_MD));
+        box.setPadding(Ui.dp(this, Ui.GAP_SM), Ui.dp(this, Ui.GAP_SM),
+                Ui.dp(this, Ui.GAP_SM), Ui.dp(this, Ui.GAP_SM));
 
-        LinearLayout row1 = new LinearLayout(this);
-        row1.setOrientation(LinearLayout.HORIZONTAL);
-        row1.addView(quickCell(R.drawable.ic_smartphone, "呼叫手环", new View.OnClickListener() {
+        // §D4 快捷 2×2 → 4 联横条（竖省 ≈70dp）；标签 4 字收 2 字（呼叫/上课/留言/下课）
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.addView(quickCell(R.drawable.ic_smartphone, "呼叫", new View.OnClickListener() {
             @Override public void onClick(View v) { callBand(); }
         }), cellLp());
-        row1.addView(quickCell(R.drawable.ic_bell_ring, "上课了", new View.OnClickListener() {
+        row.addView(quickCell(R.drawable.ic_bell_ring, "上课", new View.OnClickListener() {
             @Override public void onClick(View v) {
                 classNotify("上课了", "class_start");
             }
         }), cellLp());
-        box.addView(row1);
-
-        box.addView(Ui.space(this, Ui.GAP_SM));
-
-        LinearLayout row2 = new LinearLayout(this);
-        row2.setOrientation(LinearLayout.HORIZONTAL);
-        row2.addView(quickCell(R.drawable.ic_tab_message, "留言", new View.OnClickListener() {
+        row.addView(quickCell(R.drawable.ic_tab_message, "留言", new View.OnClickListener() {
             @Override public void onClick(View v) { quickMessage(); }
         }), cellLp());
-        row2.addView(quickCell(R.drawable.ic_bell, "下课了", new View.OnClickListener() {
+        row.addView(quickCell(R.drawable.ic_bell, "下课", new View.OnClickListener() {
             @Override public void onClick(View v) {
                 classNotify("下课了", "class_end");
             }
         }), cellLp());
-        box.addView(row2);
+        box.addView(row);
 
         return box;
     }
@@ -565,6 +564,13 @@ public class HomeActivity extends Activity {
             return;
         }
         dateStripView.removeAllViews();
+        // §D3 日期条下沉为网格卡表头：左侧留出与网格时间列同宽的空档（36dp），
+        // 7 格与下方天列严格同列；同一张卡、同一内边距 → 对齐问题从根上消失。
+        TextView sp = new TextView(this);
+        sp.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, TIME_COL_W),
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        dateStripView.addView(sp);
+
         int today = CourseCache.todayIndex();
         java.util.Calendar cal = java.util.Calendar.getInstance();
         cal.add(java.util.Calendar.DAY_OF_MONTH, -today + weekOffset * 7);
@@ -572,26 +578,23 @@ public class HomeActivity extends Activity {
 
         for (int d = 0; d < 7; d++) {
             boolean sel = (d == selectedDay);
-            int cellH = Ui.dp(this, 64);
+            int cellH = Ui.dp(this, 54);
 
             // 假期 / 调休角标：「休」= 放假，「班」= 调休补课
             java.util.Calendar dayCal = (java.util.Calendar) cal.clone();
             String badge = Holiday.badge(this, dayCal);
 
-            // 外格占满 1/7 列宽（pitch 与网格天列一致 → 两排星期严格同列）；
-            // 内卡留左右各 2dp 缝 → 视觉 4dp 间距，既有分隔感又不错位。
             android.widget.FrameLayout cell = new android.widget.FrameLayout(this);
-            cell.setClipChildren(false);   // 内卡阴影不被外格裁掉
+            cell.setClipChildren(false);
 
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setGravity(android.view.Gravity.CENTER);
+            // §3.1 选中格改 ACCENT 实底矩形；非选中格透明（不铺白、不去阴影，直接透出卡底）
             if (sel) {
                 card.setBackground(Ui.round(Ui.ACCENT, Ui.R_CTRL, 0, this));
             } else {
-                card.setBackground(Ui.round(Ui.CARD, Ui.R_CTRL, 0, this));
-                // 阴影 4 → 2：选中态已有 ACCENT 实心区分，非选中不必再靠重阴影
-                card.setElevation(Ui.dp(this, 2));
+                card.setBackground(Ui.round(0x00000000, Ui.R_CTRL, 0, this));
             }
             android.widget.FrameLayout.LayoutParams clp = new android.widget.FrameLayout.LayoutParams(
                     android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
@@ -600,8 +603,6 @@ public class HomeActivity extends Activity {
             clp.rightMargin = Ui.dp(this, 2);
             card.setLayoutParams(clp);
 
-            // 星期字只留「一」…「日」：不再与休/班拼排，消除「一休 / 六班」误读（§3.3）。
-            // 文字水平居中（之前 Ui.text 默认靠左，视觉上歪）
             TextView wv = Ui.textMediumLh(this, weekLabels[d], Ui.SP_CAPTION,
                     sel ? Ui.ON_ACCENT : Ui.MUTED, Ui.LH_MICRO);
             wv.setGravity(android.view.Gravity.CENTER);
@@ -626,8 +627,8 @@ public class HomeActivity extends Activity {
                 blp.topMargin = Ui.dp(this, 3);
                 blp.rightMargin = Ui.dp(this, 3);
                 bd.setLayoutParams(blp);
-                // ⚠️ 必须比内卡（elevation 2）更高：同一 FrameLayout 里带 elevation 的子 View
-                // 会盖在没有 elevation 的兄弟之上（Z 序优先于添加顺序），否则角标被卡片压住看不见。
+                // ⚠️ 必须比选中实底（无 elevation）更高：同一 FrameLayout 里带 elevation 的子 View
+                // 会盖在没有 elevation 的兄弟之上（Z 序优先于添加顺序），否则角标被压住看不见。
                 bd.setElevation(Ui.dp(this, 3));
                 cell.addView(bd);
             }
@@ -644,6 +645,184 @@ public class HomeActivity extends Activity {
             dateStripView.addView(cell, new LinearLayout.LayoutParams(0, cellH, 1f));
             cal.add(java.util.Calendar.DAY_OF_MONTH, 1);
         }
+    }
+
+    /**
+     * §D2 焦点卡「接下来」——本方案的核心新增。
+     *
+     * 首页只回答「我现在该干嘛」：把「下一节课是什么 / 还有多久 / 在哪」从网格里的
+     * 「找到今天那一列、再从上往下扫」两次定位，压缩成一次阅读。
+     * 三态：进行中 / 有下一节 / 今天没课（含放假，复用 {@link Holiday#greeting} 祝福语）。
+     * 倒计时：进行中→「还剩 N 分钟」；≤60 分钟→「还有 N 分钟」；>60 分钟→「HH:MM 开始」。
+     */
+    private void renderFocusCard() {
+        if (legacy || focusCardView == null) {
+            return;
+        }
+        focusCardView.removeAllViews();
+
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        boolean holiday = Holiday.resolveToday(this) == Holiday.HOLIDAY;
+
+        LinearLayout card = Ui.card(this);
+        card.setBackground(Ui.round(Ui.CARD, Ui.R_CARD, Ui.LINE, this));
+        card.setElevation(Ui.dp(this, 4));
+        card.setPadding(Ui.dp(this, 13), Ui.dp(this, 14), Ui.dp(this, 13), Ui.dp(this, 14));
+
+        // ---- 放假态：复用 Holiday 祝福语（与手环端 holiday-preset 同源）----
+        if (holiday) {
+            card.setBackground(Ui.round(Ui.OK_LIGHT, Ui.R_CARD, 0, this));
+            card.addView(Ui.textLh(this, "今天 · 假期", Ui.SP_CAPTION, Ui.OK, false, Ui.LH_CAPTION));
+            String greet = Holiday.greeting(this, cal);
+            TextView main = Ui.textMediumLh(this, greet.length() > 0 ? greet : "今天休息",
+                    Ui.SP_TITLE, Ui.OK, Ui.LH_TITLE);
+            main.setPadding(0, Ui.dp(this, 4), 0, 0);
+            card.addView(main);
+            String name = Holiday.holidayName(this, cal);
+            TextView sub = Ui.textLh(this, (name.length() > 0 ? name : "假期") + " · 今天没有课，好好休息",
+                    Ui.SP_MICRO, Ui.MUTED, false, Ui.LH_CAPTION);
+            sub.setPadding(0, Ui.dp(this, 2), 0, 0);
+            card.addView(sub);
+            focusCardView.addView(card);
+            return;
+        }
+
+        ScheduleStore.Schedule s = ScheduleStore.active(this);
+        java.util.List<CourseCache.Course> today = (s == null)
+                ? new java.util.ArrayList<CourseCache.Course>()
+                : CourseCache.coursesOfDay(s.courses, CourseCache.todayIndex());
+
+        // 按开始时间排序（第 N 节 = 排序后序号）
+        java.util.Collections.sort(today, new java.util.Comparator<CourseCache.Course>() {
+            @Override public int compare(CourseCache.Course a, CourseCache.Course b) {
+                int[] ma = CourseCache.minutes(a.time);
+                int[] mb = CourseCache.minutes(b.time);
+                int sa = ma == null ? Integer.MAX_VALUE : ma[0];
+                int sb = mb == null ? Integer.MAX_VALUE : mb[0];
+                return (sa < sb) ? -1 : (sa > sb ? 1 : 0);
+            }
+        });
+        int total = today.size();
+        int now = CourseCache.nowMinutes();
+
+        CourseCache.Course current = null, next = null;
+        int currentIdx = 0, nextIdx = 0, done = 0;
+        for (int i = 0; i < total; i++) {
+            int[] m = CourseCache.minutes(today.get(i).time);
+            if (m == null) continue;
+            if (now >= m[1]) done++;
+            if (current == null && now >= m[0] && now < m[1]) { current = today.get(i); currentIdx = i; }
+        }
+        if (current == null) {
+            int best = Integer.MAX_VALUE;
+            for (int i = 0; i < total; i++) {
+                int[] m = CourseCache.minutes(today.get(i).time);
+                if (m == null) continue;
+                if (m[0] > now && m[0] < best) { best = m[0]; next = today.get(i); nextIdx = i; }
+            }
+        }
+
+        // ---- 今天一节都没有 ----
+        if (total == 0) {
+            card.addView(Ui.textLh(this, "今天", Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION));
+            TextView main = Ui.textMediumLh(this, "今天没有课", Ui.SP_TITLE, Ui.TEXT, Ui.LH_TITLE);
+            main.setPadding(0, Ui.dp(this, 4), 0, 0);
+            card.addView(main);
+            TextView sub = Ui.textLh(this, "好好休息一下", Ui.SP_MICRO, Ui.MUTED, false, Ui.LH_CAPTION);
+            sub.setPadding(0, Ui.dp(this, 2), 0, 0);
+            card.addView(sub);
+            focusCardView.addView(card);
+            return;
+        }
+
+        CourseCache.Course show;
+        boolean running;
+        String kicker;
+        if (current != null) {
+            show = current; running = true;
+            int[] cm = CourseCache.minutes(current.time);
+            kicker = "进行中 · 第" + (currentIdx + 1) + "节"
+                    + (cm != null ? "　" + CourseCache.hm(cm[0]) + "–" + CourseCache.hm(cm[1]) : "");
+        } else if (next != null) {
+            show = next; running = false;
+            int[] nm = CourseCache.minutes(next.time);
+            kicker = "接下来 · 第" + (nextIdx + 1) + "节"
+                    + (nm != null ? "　" + CourseCache.hm(nm[0]) + " 开始" : "");
+        } else {
+            show = today.get(total - 1); running = false;
+            kicker = "今天的课都上完了 🎉 · 最后一节";
+        }
+        final CourseCache.Course showFinal = show;
+        int[] sm = CourseCache.minutes(show.time);
+        int start = sm == null ? -1 : sm[0];
+        int end = sm == null ? -1 : sm[1];
+
+        card.addView(Ui.textLh(this, kicker, Ui.SP_CAPTION,
+                running ? Ui.ACCENT : Ui.MUTED, false, Ui.LH_CAPTION));
+
+        // 主行：课名（SP_DISPLAY 22sp，全页唯一最大字，视觉锚点）+ 倒计时
+        LinearLayout titleRow = new LinearLayout(this);
+        titleRow.setOrientation(LinearLayout.HORIZONTAL);
+        titleRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView name = Ui.textMediumLh(this, show.name, Ui.SP_DISPLAY, Ui.TEXT, Ui.LH_DISPLAY);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        titleRow.addView(name, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        String cd = "";
+        if (running && end >= 0) {
+            cd = "还剩 " + Math.max(0, end - now) + " 分钟";
+        } else if (!running && start >= 0) {
+            int diff = start - now;
+            if (diff > 0) {
+                cd = (diff <= 60) ? ("还有 " + diff + " 分钟") : (CourseCache.hm(start) + " 开始");
+            }
+        }
+        if (cd.length() > 0) {
+            titleRow.addView(Ui.textMediumLh(this, cd, Ui.SP_BODY, Ui.ACCENT, Ui.LH_BODY));
+        }
+        titleRow.setPadding(0, Ui.dp(this, 4), 0, 0);
+        card.addView(titleRow);
+
+        // 次行：地点 · 教师
+        StringBuilder meta = new StringBuilder();
+        if (show.location != null && show.location.length() > 0) meta.append("📍 ").append(show.location);
+        if (show.teacher != null && show.teacher.length() > 0) {
+            if (meta.length() > 0) meta.append("　");
+            meta.append("👤 ").append(show.teacher);
+        }
+        if (meta.length() > 0) {
+            TextView mv = Ui.textLh(this, meta.toString(), Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
+            mv.setPadding(0, Ui.dp(this, 2), 0, 0);
+            card.addView(mv);
+        }
+
+        // 今日进度条（已完成 / 今日总节数）
+        if (total > 1) {
+            card.addView(Ui.space(this, Ui.GAP_SM));
+            LinearLayout track = new LinearLayout(this);
+            track.setOrientation(LinearLayout.HORIZONTAL);
+            track.setBackground(Ui.round(Ui.LINE, 2, 0, this));
+            float frac = (float) (done + (running ? 1 : 0)) / (float) total;
+            if (frac < 0.04f) frac = 0.04f;
+            if (frac > 1f) frac = 1f;
+            View fill = new View(this);
+            fill.setBackground(Ui.round(Ui.ACCENT, 2, 0, this));
+            View rest = new View(this);
+            track.addView(fill, new LinearLayout.LayoutParams(0, Ui.dp(this, 4), frac));
+            track.addView(rest, new LinearLayout.LayoutParams(0, Ui.dp(this, 4), 1f - frac));
+            card.addView(track);
+            TextView pv = Ui.textLh(this, "今日 " + done + "/" + total + " 节",
+                    Ui.SP_MICRO, Ui.MUTED, false, Ui.LH_CAPTION);
+            pv.setPadding(0, Ui.dp(this, 4), 0, 0);
+            card.addView(pv);
+        }
+
+        card.setClickable(true);
+        card.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { showCourseDetail(showFinal); }
+        });
+        focusCardView.addView(card);
     }
 
     /** 渲染当前激活课表的周视图（带时间轴） */
@@ -663,7 +842,7 @@ public class HomeActivity extends Activity {
                     + (sun.get(java.util.Calendar.MONTH) + 1) + "."
                     + sun.get(java.util.Calendar.DAY_OF_MONTH));
         }
-        renderDateStrip();
+        renderFocusCard();
 
         // 标题位双态：当前周=普通标题（📅 中性色，不可点、无按压态）；非当前周=「回到本周 ↩」
         // （主题色 + 水波纹按压，整块可点，语义 contentDescription=回到今天所在周）。
@@ -703,31 +882,9 @@ public class HomeActivity extends Activity {
 
         weekBox.removeAllViews();
 
-        // ── 假期 / 调休提示（移植自 EV 首页的祝福卡 + 调休提示条）──
+        // ── 调休提示（假期祝福卡已上移至焦点卡「接下来」的放假态，避免同屏两处说放假）──
         int overrideToday = Holiday.resolveToday(this);
-        if (overrideToday == Holiday.HOLIDAY) {
-            java.util.Calendar todayCal = java.util.Calendar.getInstance();
-            String name = Holiday.holidayName(this, todayCal);
-            String greet = Holiday.greeting(this, todayCal);
-            // 祝福卡（对齐手环端 EV 的「祝福卡」）：主行=祝福语，次行=假期名 + 无课说明
-            LinearLayout hc = new LinearLayout(this);
-            hc.setOrientation(LinearLayout.VERTICAL);
-            hc.setPadding(Ui.dp(this, Ui.GAP_MD), Ui.dp(this, Ui.GAP_SM),
-                    Ui.dp(this, Ui.GAP_MD), Ui.dp(this, Ui.GAP_SM));
-            hc.setBackground(Ui.round(Ui.OK_LIGHT, Ui.GAP_SM, 0, this));
-            if (greet.length() > 0) {
-                TextView gt = Ui.textMediumLh(this, greet, Ui.SP_BODY, Ui.OK, Ui.LH_BODY);
-                hc.addView(gt);
-            }
-            TextView sub = Ui.textLh(this, (name.length() > 0 ? name : "假期") + " · 今天休息，没有课",
-                    Ui.SP_MICRO, Ui.MUTED, false, Ui.LH_CAPTION);
-            if (greet.length() > 0) {
-                sub.setPadding(0, Ui.dp(this, 2), 0, 0);
-            }
-            hc.addView(sub);
-            weekBox.addView(hc);
-            weekBox.addView(Ui.space(this, Ui.GAP_SM));
-        } else if (overrideToday >= 0) {
+        if (overrideToday >= 0) {
             TextView b = Ui.textLh(this, "今天调休，按" + CourseCache.WEEK[overrideToday] + "课表",
                     Ui.SP_CAPTION, Ui.WARN, false, Ui.LH_CAPTION);
             b.setPadding(Ui.dp(this, Ui.GAP_MD), Ui.dp(this, Ui.GAP_SM),
@@ -868,36 +1025,19 @@ public class HomeActivity extends Activity {
         // 阴影 6 → 4：与「日期格 2」形成层次，避免整页过重
         wrapper.setElevation(Ui.dp(this, 4));
 
-        // header row: empty + day labels
-        LinearLayout headerRow = new LinearLayout(this);
-        headerRow.setOrientation(LinearLayout.HORIZONTAL);
-        // time column spacer in header
-        TextView timeSpacer = new TextView(this);
-        timeSpacer.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, TIME_COL_W),
-                LinearLayout.LayoutParams.WRAP_CONTENT));
-        headerRow.addView(timeSpacer);
+        // §D3 表头 = 日期条（二合一）：日期格已含「星期字 + 日期数字 + 休/班角标」，
+        // 不再另起一行「一二三四五六日」——从根上消除重复文本与横向对齐问题。
+        dateStripView = new LinearLayout(this);
+        dateStripView.setOrientation(LinearLayout.HORIZONTAL);
+        wrapper.addView(dateStripView);
+        renderDateStrip();
+        wrapper.addView(Ui.space(this, Ui.GAP_XS));
 
         // 每列对应的日期（含 weekOffset），用于假期 / 调休判定
         java.util.Calendar gridMon = java.util.Calendar.getInstance();
         gridMon.add(java.util.Calendar.DAY_OF_MONTH, -CourseCache.todayIndex() + weekOffset * 7);
 
         boolean thisWeek = (weekOffset == 0);
-        for (int d = 0; d < 7; d++) {
-            boolean isToday = thisWeek && d == today;
-            // 表头只留星期字「一」…「日」：休/班角标已由上方日期条右上角小点承担，
-            // 不再拼进表头文本，避免「一休 / 六班」被读成一个词（§3.3）。
-            int headColor = isToday ? Ui.ON_ACCENT : Ui.MUTED;
-            TextView hl = Ui.textMediumLh(this, heads[d], Ui.SP_CAPTION, headColor, Ui.LH_MICRO);
-            hl.setGravity(android.view.Gravity.CENTER);
-            hl.setPadding(0, Ui.dp(this, Ui.GAP_XS), 0, Ui.dp(this, Ui.GAP_XS));
-            if (isToday) {
-                hl.setBackground(Ui.round(Ui.ACCENT, Ui.R_CTRL, 0, this));
-            }
-            headerRow.addView(hl, new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        }
-        wrapper.addView(headerRow);
-        wrapper.addView(Ui.space(this, Ui.GAP_XS));
 
         // body: time col + 7 day cols
         LinearLayout body = new LinearLayout(this);
@@ -940,6 +1080,10 @@ public class HomeActivity extends Activity {
                 continue;
             }
 
+            // §3.2 今天列加主色淡底（圆角 6）：一眼定位「今天在哪一列」
+            if (thisWeek && d == today) {
+                dayCol.setBackground(Ui.round(Ui.ACCENT_LIGHT, 6, 0, this));
+            }
             dayCol.setPadding(Ui.dp(this, Ui.COL_PAD), Ui.dp(this, Ui.COL_PAD),
                     Ui.dp(this, Ui.COL_PAD), Ui.dp(this, Ui.COL_PAD));
 
@@ -1366,7 +1510,7 @@ public class HomeActivity extends Activity {
         } else {
             connectingLabel = "正在连接手环…";
             miniStatus("● " + connectingLabel, Ui.MUTED);
-            setStatusDot(Ui.ACCENT, "连接中");
+            setStatusPill(Ui.ACCENT, "连接中", "正在连接手环");
         }
         startTicking();
 
@@ -1550,7 +1694,7 @@ public class HomeActivity extends Activity {
             }
             // §4.2 稳态只点绿状态点（连接详情在「手环」页），不再常驻一条「已连接 …」文案；
             // 套数/版本仍进无障碍描述，长按读屏或点圆点进「手环」页都能看到。
-            setStatusDot(Ui.OK, "已连接 " + e.deviceName + " · v" + e.versionName + " · " + sets);
+            setStatusPill(Ui.OK, "已连接", "已连接 " + e.deviceName + " · v" + e.versionName + " · " + sets);
             e.refreshBandScheduleCount(); // 清单一到，状态回调会把文案刷成真实套数
             // update device card
             if (deviceNameView != null && e.deviceName != null && e.deviceName.length() > 0) {
@@ -1577,7 +1721,7 @@ public class HomeActivity extends Activity {
         } else {
             miniStatus("● 未连接手环", Ui.ERR);
             // 红 ⟺ 连接失败（与 refreshMiniFromEngine 的「错误卡在屏」判定同义），描述同步为「连接失败」
-            setStatusDot(Ui.ERR, "连接失败");
+            setStatusPill(Ui.ERR, "连接失败", "连接失败");
         }
         hintView.setText(hint);
         errorCard.setVisibility(View.VISIBLE);
@@ -1619,13 +1763,18 @@ public class HomeActivity extends Activity {
         ui.postDelayed(miniFade, 2600);
     }
 
-    /** §4.2 顶栏连接状态圆点：颜色 + 无障碍描述 */
-    private void setStatusDot(int color, String desc) {
-        if (statusDotView == null) {
-            return;
+    /** §D5 顶栏连接状态胶囊：圆点颜色 + 胶囊文字（label）+ 无障碍描述（desc） */
+    private void setStatusPill(int color, String label, String desc) {
+        if (statusDotView != null) {
+            statusDotView.setBackground(Ui.round(color, 4, 0, this));
         }
-        statusDotView.setBackground(Ui.round(color, 5, 0, this));
-        statusDotView.setContentDescription("手环连接状态：" + desc);
+        if (statusPillText != null) {
+            statusPillText.setText(label);
+            statusPillText.setTextColor(color);
+        }
+        if (statusPillBtn != null) {
+            statusPillBtn.setContentDescription("手环连接状态：" + desc);
+        }
     }
 
     /** 迷你条按引擎状态刷新（状态回调驱动；与 ConnectionBar 同一数据源）。 */
@@ -1634,16 +1783,17 @@ public class HomeActivity extends Activity {
         SyncEngine e = SyncEngine.get(this);
         if (e.connected()) {
             // 稳态：只把顶栏状态点点绿，不再常驻一条「已连接 …」文案（连接详情在「手环」页）
-            setStatusDot(Ui.OK, "已连接" + (e.deviceName != null && e.deviceName.length() > 0 ? " " + e.deviceName : ""));
+            setStatusPill(Ui.OK, "已连接", "已连接" + (e.deviceName != null && e.deviceName.length() > 0 ? " " + e.deviceName : ""));
         } else if (e.autoRetryRunning()) {
-            setStatusDot(Ui.ACCENT, "重连中");
+            setStatusPill(Ui.ACCENT, "重连中", "重连中");
             String p = e.connectProgress();
             miniStatus("● " + (p.length() > 0 ? p : "重连中…"), Ui.ACCENT);
         } else {
             // 未连接：错误卡在屏（上次连接失败）→ 红；否则（从未连上/闲置）→ 灰。
             // 用错误卡的可见性而非调用顺序判定，避免「红 ↔ 灰」因谁最后执行而闪烁。
             boolean failed = (errorCard != null && errorCard.getVisibility() == View.VISIBLE);
-            setStatusDot(failed ? Ui.ERR : Ui.MUTED, failed ? "连接失败" : "未连接手环");
+            setStatusPill(failed ? Ui.ERR : Ui.MUTED, failed ? "连接失败" : "未连接",
+                    failed ? "连接失败" : "未连接手环");
         }
     }
 
