@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Ev 课程表 · 手机 App 首页 全新设计原型 v1</title>
+<style>
+  :root{
+    /* ===== 浅色「晴空蓝」—— 取自 Ui.java 权威 token ===== */
+    --l-bg:#F4F7FB; --l-canvas:#E9EAEF; --l-card:#FFFFFF; --l-card2:#EAF0F8;
+    --l-line:#E3EAF3; --l-text:#0F172A; --l-muted:#64748B;
+    --l-accent:#2F6BFF; --l-accentLight:#EBF0FF;
+    --l-ok:#16A34A; --l-warn:#F59E0B; --l-err:#DC2626; --l-onAccent:#FFFFFF;
+    --l-okLight:rgba(34,197,94,.18); --l-warnLight:rgba(253,230,138,.25);
+    /* ===== 深色「夜幕蓝」 ===== */
+    --d-bg:#0B1020; --d-card:#151C30; --d-card2:#1C2542; --d-line:#27314C;
+    --d-text:#E9EEF9; --d-muted:#8695B4; --d-accent:#5B9BFF; --d-accentLight:#1A2544;
+    --d-ok:#34C759; --d-warn:#FFB020; --d-err:#FF6B6B;
+    /* 课程区分色（7 色，与 Ui.COURSE_COLORS 一致） */
+    --c-blue:#5B6CF9; --c-green:#33C77A; --c-orange:#FF9E42; --c-purple:#9C6BF7;
+    --c-cyan:#35C4D6; --c-pink:#FF7AA8; --c-red:#FF6B6B;
+    /* 文档底板 */
+    --doc-bg:#eef1f6; --doc-fg:#1a2233; --doc-muted:#5c6779; --doc-line:#d5dbe6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--doc-bg); color:var(--doc-fg);
+    padding:40px 24px 80px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;letter-spacing:.2px}
+  h2{font-size:19px;font-weight:600;margin:52px 0 6px;padding-top:18px;border-top:2px solid var(--doc-line)}
+  h2 .num{color:var(--l-accent);font-weight:600;margin-right:8px}
+  h3{font-size:15px;font-weight:600;margin:26px 0 10px}
+  .sub{color:var(--doc-muted);font-size:13.5px;margin-top:8px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12px;padding:4px 10px;border-radius:999px;background:#fff;border:1px solid var(--doc-line);color:var(--doc-muted)}
+  .chip b{color:var(--l-accent);font-weight:600}
+
+  /* ===== 手机框 ===== */
+  .frames{display:flex;flex-wrap:wrap;gap:34px;margin-top:26px;align-items:flex-start}
+  .frame{width:360px}
+  .frame .cap{font-size:12.5px;color:var(--doc-muted);margin-bottom:9px;display:flex;align-items:center;gap:7px}
+  .frame .cap b{color:var(--doc-fg);font-weight:600}
+  .tag{font-size:10.5px;padding:2px 7px;border-radius:5px;background:var(--l-accentLight);color:var(--l-accent);font-weight:600}
+  .tag.dark{background:#20293f;color:#8fb4ff}
+  .screen{
+    width:360px;height:640px;border-radius:22px;overflow:hidden;position:relative;
+    box-shadow:0 18px 40px -12px rgba(20,32,60,.32),0 0 0 1px rgba(20,32,60,.06);
+    display:flex;flex-direction:column;
+  }
+
+  /* ---- 通用原子 ---- */
+  .L{background:var(--l-canvas)} .D{background:var(--d-bg)}
+  .body{flex:1;overflow:hidden;display:flex;flex-direction:column}
+  .pad{padding:0 16px}
+  .grow{flex:1}
+
+  /* ---- 顶栏 44dp ---- */
+  .topbar{height:44px;display:flex;align-items:center;gap:8px;padding:0 16px;flex:0 0 auto}
+  .greet{font-size:13px;color:var(--l-muted);font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .greet b{color:var(--l-text);font-weight:600}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;
+    padding:4px 9px;border-radius:999px;background:var(--l-okLight);color:var(--l-ok);white-space:nowrap}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+  .pill.off{background:rgba(100,116,139,.14);color:var(--l-muted)}
+  .pill.err{background:rgba(220,38,38,.12);color:var(--l-err)}
+  .pill.accent{background:var(--l-accentLight);color:var(--l-accent)}
+  .icbtn{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+    background:var(--l-card2);flex:0 0 auto}
+  .icbtn svg{width:17px;height:17px;stroke:var(--l-muted);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- 焦点卡「接下来」 ---- */
+  .focus{margin:0 16px;background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;
+    padding:13px 14px 12px;box-shadow:0 4px 14px -8px rgba(20,32,60,.18)}
+  .focus .row1{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .kicker{font-size:11.5px;color:var(--l-muted);letter-spacing:.2px}
+  .kicker b{color:var(--l-accent);font-weight:600}
+  .eta{font-size:11.5px;color:var(--l-accent);font-weight:600;white-space:nowrap}
+  .focus .title{font-size:22px;font-weight:600;color:var(--l-text);margin-top:5px;line-height:1.27;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .focus .sub{font-size:12.5px;color:var(--l-muted);margin-top:3px;display:flex;align-items:center;gap:6px}
+  .sep{color:var(--l-line)}
+  .bar{margin-top:11px;height:4px;border-radius:2px;background:var(--l-accentLight);overflow:hidden}
+  .bar i{display:block;height:100%;width:60%;border-radius:2px;background:var(--l-accent)}
+  .prog{display:flex;justify-content:space-between;margin-top:6px;font-size:10.5px;color:var(--l-muted)}
+
+  /* 焦点卡 · 放假态 */
+  .focus.holiday{background:var(--l-okLight);border-color:transparent}
+  .focus.holiday .title{font-size:17px;color:var(--l-ok);white-space:normal}
+  .focus.holiday .sub{color:var(--l-muted)}
+  .focus .holi-name{font-weight:600;color:var(--l-ok)}
+
+  /* ---- 周导航行 28dp ---- */
+  .wkbar{display:flex;align-items:center;gap:8px;padding:0 16px;margin-top:16px}
+  .wkbar .lab{font-size:15px;font-weight:600;color:var(--l-text);flex:1}
+  .nav{display:flex;align-items:center;gap:2px}
+  .nav .arw{width:28px;height:28px;border-radius:9px;background:var(--l-card2);display:flex;
+    align-items:center;justify-content:center}
+  .nav .arw svg{width:15px;height:15px;stroke:var(--l-muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .nav .range{font-size:11.5px;color:var(--l-muted);padding:0 6px;white-space:nowrap}
+
+  /* ---- 网格卡（表头 = 日期条，二合一）---- */
+  .grid{margin:8px 16px 0;background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;
+    padding:10px 12px 12px;box-shadow:0 4px 14px -8px rgba(20,32,60,.18)}
+  .ghead{display:flex;align-items:stretch;padding-bottom:8px;border-bottom:1px solid var(--l-line)}
+  .spacer{width:36px;flex:0 0 36px}
+  .dcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:2px 0;position:relative}
+  .dcol .w{font-size:10.5px;color:var(--l-muted);line-height:1.2}
+  .dcol .d{font-size:16px;font-weight:600;color:var(--l-text);line-height:1.1}
+  .dcol .badge{position:absolute;top:-1px;right:6px;width:14px;height:14px;border-radius:4px;
+    font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .badge.rest{background:var(--l-okLight);color:var(--l-ok)}
+  .badge.work{background:var(--l-warnLight);color:#B45309}
+  .dcol.sel .d{color:var(--l-onAccent)}
+  .dcol.sel .w{color:rgba(255,255,255,.92)}
+  .dcol.sel::before{content:"";position:absolute;inset:0 2px;border-radius:10px;background:var(--l-accent);z-index:-1}
+  .dcol.sel{isolation:isolate}
+
+  .gbody{margin-top:8px}
+  .grow-line{display:flex}
+  .tcell{width:36px;flex:0 0 36px;display:flex;align-items:center;justify-content:center;
+    font-size:10.5px;color:var(--l-muted);height:48px}
+  .cols{flex:1;display:flex;position:relative}
+  .col{flex:1;position:relative;padding:0 1px}
+  .col.today{background:var(--l-accentLight);border-radius:6px}
+  .blk{height:44px;margin:2px 1px;border-radius:4px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:1px;text-align:center;padding:0 2px}
+  .blk .n{font-size:11.5px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .blk .p{font-size:9.5px;line-height:1.1;opacity:.92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .blk.now{outline:2px solid var(--l-accent);outline-offset:-2px}
+  .empty{height:48px}
+
+  /* ---- 设备工具条 ---- */
+  .tools{margin:16px 16px 0;display:flex;gap:8px}
+  .tool{flex:1;background:var(--l-card);border:1px solid var(--l-line);border-radius:12px;
+    padding:9px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .tool .ic{width:34px;height:34px;border-radius:10px;background:var(--l-accentLight);
+    display:flex;align-items:center;justify-content:center}
+  .tool .ic svg{width:18px;height:18px;stroke:var(--l-accent);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .tool .lb{font-size:11.5px;color:var(--l-text);font-weight:500}
+  .toolbar-off{margin:16px 16px 0;display:flex;align-items:center;gap:8px;
+    background:var(--l-card);border:1px solid var(--l-line);border-radius:12px;padding:11px 13px}
+  .toolbar-off .ic{width:26px;height:26px;border-radius:8px;background:var(--l-card2);display:flex;
+    align-items:center;justify-content:center;flex:0 0 auto}
+  .toolbar-off .ic svg{width:15px;height:15px;stroke:var(--l-muted);fill:none;stroke-width:1.9;stroke-linecap:round}
+  .toolbar-off .t{font-size:12.5px;color:var(--l-muted);flex:1}
+  .toolbar-off .go{font-size:12.5px;color:var(--l-accent);font-weight:600;white-space:nowrap}
+
+  /* ---- 底栏 62dp ---- */
+  .tabbar{height:62px;flex:0 0 auto;display:flex;align-items:center;background:var(--l-card);
+    border-top:1px solid var(--l-line)}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--l-muted)}
+  .tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .tab .t{font-size:10.5px}
+  .tab.on{color:var(--l-accent)}
+  .tab.on .t{font-weight:600}
+
+  /* ---- 深色覆盖 ---- */
+  .D .greet{color:var(--d-muted)} .D .greet b{color:var(--d-text)}
+  .D .pill{background:rgba(52,199,89,.16);color:var(--d-ok)}
+  .D .icbtn{background:var(--d-card2)} .D .icbtn svg{stroke:var(--d-muted)}
+  .D .focus{background:var(--d-card);border-color:var(--d-line);box-shadow:none}
+  .D .kicker{color:var(--d-muted)} .D .kicker b{color:var(--d-accent)}
+  .D .focus .title{color:var(--d-text)} .D .focus .sub{color:var(--d-muted)}
+  .D .eta{color:var(--d-accent)} .D .bar{background:var(--d-accentLight)} .D .bar i{background:var(--d-accent)}
+  .D .prog{color:var(--d-muted)} .D .sep{color:var(--d-line)}
+  .D .wkbar .lab{color:var(--d-text)}
+  .D .nav .arw{background:var(--d-card2)} .D .nav .arw svg{stroke:var(--d-muted)}
+  .D .nav .range{color:var(--d-muted)}
+  .D .grid{background:var(--d-card);border-color:var(--d-line);box-shadow:none}
+  .D .ghead{border-bottom-color:var(--d-line)}
+  .D .dcol .w{color:var(--d-muted)} .D .dcol .d{color:var(--d-text)}
+  .D .dcol.sel::before{background:var(--d-accent)}
+  .D .tcell{color:var(--d-muted)}
+  .D .col.today{background:var(--d-accentLight)}
+  .D .blk.now{outline-color:var(--d-accent)}
+  .D .tool{background:var(--d-card);border-color:var(--d-line)}
+  .D .tool .ic{background:var(--d-accentLight)} .D .tool .ic svg{stroke:var(--d-accent)}
+  .D .tool .lb{color:var(--d-text)}
+  .D .tabbar{background:var(--d-card);border-top-color:var(--d-line)}
+  .D .tab{color:var(--d-muted)} .D .tab.on{color:var(--d-accent)}
+
+  /* ---- 表格 ---- */
+  table{border-collapse:collapse;width:100%;margin-top:14px;font-size:13px;background:#fff;border-radius:10px;overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--doc-line);vertical-align:top}
+  th{background:#f7f9fc;font-weight:600;font-size:12.5px;color:var(--doc-muted)}
+  td code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:#f1f4f9;
+    padding:1px 5px;border-radius:4px;color:#2F6BFF}
+  tr:last-child td{border-bottom:none}
+  .ok{color:#15803d;font-weight:600}.no{color:#b91c1c;font-weight:600}
+  .swatch{display:inline-block;width:13px;height:13px;border-radius:4px;vertical-align:-2px;margin-right:6px;border:1px solid rgba(0,0,0,.08)}
+
+  /* ---- IA 对比图 ---- */
+  .ia{display:flex;gap:26px;flex-wrap:wrap;margin-top:18px}
+  .iacol{flex:1;min-width:300px;background:#fff;border:1px solid var(--doc-line);border-radius:12px;padding:16px 18px}
+  .iacol h4{font-size:13px;margin-bottom:10px;color:var(--doc-muted);font-weight:600;letter-spacing:.3px}
+  .iaitem{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;padding:5px 0;border-bottom:1px dashed #eaeef5}
+  .iaitem:last-child{border-bottom:none}
+  .iaitem .k{flex:0 0 18px;height:18px;border-radius:5px;background:#f0f3f9;color:var(--doc-muted);
+    font-size:10.5px;display:flex;align-items:center;justify-content:center;font-weight:600;margin-top:1px}
+  .iaitem.del .k{background:#fdecec;color:#b91c1c}
+  .iaitem.del{color:#9aa4b5;text-decoration:line-through;text-decoration-color:#d9bfbf}
+  .iaitem.add .k{background:#e7f6ec;color:#15803d}
+  .iaitem .d{color:var(--doc-muted);font-size:11.5px}
+  .note{background:#fff;border-left:3px solid var(--l-accent);border-radius:0 10px 10px 0;
+    padding:13px 17px;margin-top:16px;font-size:13px}
+  .note.warn{border-left-color:var(--l-warn)}
+  .note.good{border-left-color:var(--l-ok)}
+  .note b{font-weight:600}
+  ul.tight{margin:8px 0 0 20px;font-size:13px}
+  ul.tight li{margin:4px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Ev 课程表 · 手机 App 首页「全新设计」原型 <span style="color:var(--l-accent)">v1</span></h1>
+  <p class="sub">对象：EVSyncProbe（Android）<code style="font-size:12px;background:#fff;padding:2px 6px;border-radius:5px;border:1px solid var(--doc-line)">HomeActivity</code> · 画布 360×640&nbsp;dp（真机 BLN-AL20 1080×1920@480dpi）· 下列原型 <b>1&nbsp;dp = 1&nbsp;px</b>，标注数值可直接换算成代码。</p>
+  <div class="meta">
+    <span class="chip">配色沿用 <b>Ui.java</b> 晴空蓝 / 夜幕蓝双主题</span>
+    <span class="chip">间距 <b>4dp</b> 栅格</span>
+    <span class="chip">圆角 <b>4 / 12 / 14</b> 三档</span>
+    <span class="chip">字号 <b>7</b> 档阶梯</span>
+    <span class="chip">热区 <b>≥44dp</b></span>
+    <span class="chip">对比度 <b>WCAG AA</b></span>
+  </div>
+
+  <!-- ============ 1. 诊断 ============ -->
+  <h2><span class="num">01</span>现状诊断：不是"不好看"，是"没层级"</h2>
+  <p class="sub">逐行核对 <code>HomeActivity.buildUi()</code> 后的结论——现有首页把 5 类信息（身份 / 时间导航 / 课表 / 设备动作 / 连接状态）平铺成 8 个等高区块，用户视线没有落点。</p>
+
+  <div class="ia">
+    <div class="iacol">
+      <h4>现状（自上而下 8 块，权重相等）</h4>
+      <div class="iaitem"><span class="k">1</span><div>顶栏：问候 + <b>「Ev课程表」居中大标题</b> + 10dp 状态点 + ⊕<br><span class="d">App 名对用户零信息量；状态点 10dp 太隐蔽，多数人不知道能点</span></div></div>
+      <div class="iaitem"><span class="k">2</span><div>正文首行又一个大标题「本周课表」 + 周切换 ◀ ▶<br><span class="d">与顶栏标题语义重复，全页出现两个"标题"</span></div></div>
+      <div class="iaitem"><span class="k">3</span><div>日期条（64dp 高卡片 × 7）<span class="d"> — 星期日历</span></div></div>
+      <div class="iaitem"><span class="k">4</span><div>网格表头（36dp spacer + 一二三四五六日）<span class="d"> — 星期日历，与 ③ 重复一遍</span></div></div>
+      <div class="iaitem"><span class="k">5</span><div>课表名行：🔁课表名 + [单] + ✏️</div></div>
+      <div class="iaitem"><span class="k">6</span><div>周课表网格</div></div>
+      <div class="iaitem"><span class="k">7</span><div>快捷 2×2（呼叫手环 / 上课了 / 留言 / 下课了）<span class="d"> — 4 个入口占 1/4 屏高</span></div></div>
+      <div class="iaitem"><span class="k">8</span><div>迷你状态条（瞬时） / 错误卡（按需）</div></div>
+    </div>
+    <div class="iacol">
+      <h4>三个结构性问题</h4>
+      <div class="iaitem"><span class="k">A</span><div><b>双标题、双日历</b><br><span class="d">「Ev课程表」+「本周课表」两个标题；日期条 + 网格表头两份"一二三四五六日"。约 100dp 竖向空间用于重复信息。</span></div></div>
+      <div class="iaitem"><span class="k">B</span><div><b>最高频的问题没有答案</b><br><span class="d">用户打开 App 第一句问的是「我下一节课是什么」。现有页面只能靠"在 7×N 小格子里找今天那一列"回答，今天列仅有一层淡蓝底。</span></div></div>
+      <div class="iaitem"><span class="k">C</span><div><b>设备动作与课表抢视觉</b><br><span class="d">快捷 2×2 与课表等宽等高；且"留言"是页面跳转、"呼叫/上课/下课"是设备命令，三者不同域却同权重。</span></div></div>
+      <div class="note warn" style="margin-top:14px">
+        <b>底栏还有一个隐藏的语义冲突</b><br>
+        <code>首页（周课表）</code> 与 <code>课程表 tab</code> 在用户认知里是同一件事。建议把 tab 文案改为 <b>「课表库」</b>（它实为多套课表的管理列表 <code>ScheduleListActivity</code>），冲突即消。
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2. 设计主张 ============ -->
+  <h2><span class="num">02</span>设计主张：一屏「<span style="color:var(--l-accent)">现在</span> → <span style="color:var(--l-accent)">本周</span>」</h2>
+  <p class="sub">首页只回答两个问题，按重要性排序：<b>① 我现在该干嘛（接下来）</b> ② <b>这周整体什么样（课表）</b>。其余全部降级为"随手可及"。</p>
+
+  <table>
+    <tr><th style="width:110px">决策</th><th>做什么</th><th style="width:280px">为什么</th></tr>
+    <tr><td><b>D1 去 App 名</b></td><td>顶栏删掉「Ev课程表」，改为 <b>问候 + 状态胶囊 + 设置</b>，高度 52→44dp</td><td>用户不会忘记自己在用哪个 App；省下的注意力全给内容</td></tr>
+    <tr><td><b>D2 新增「接下来」</b></td><td>课表上方加一张焦点卡：下一节课名 / 时间 / 地点 / 距开课倒计时 / 今日进度</td><td>把最高频问题提到首屏第一个视觉落点；这也是日历类 App 的通行范式</td></tr>
+    <tr><td><b>D3 时间导航三合一</b></td><td>周切换 ▼ 与日期条合并成一行；<b>日期条下沉为网格卡的表头</b>，删掉网格里重复的星期行</td><td>消除重复的"一二三四五六日"；日期与列天然同卡同内边距，对齐问题从根上消失</td></tr>
+    <tr><td><b>D4 设备条独立下沉</b></td><td>2×2 四宫格 → <b>一条 4 联工具条</b>（呼叫 / 上课 / 留言 / 下课），未连接时收缩为一行提示</td><td>竖省约 70dp；标签从 4 字收到 2 字，扫读更快</td></tr>
+    <tr><td><b>D5 状态点 → 胶囊</b></td><td>顶栏 10dp 圆点改为 <b>「● 已连接」文字胶囊</b>（绿/蓝/灰/红）</td><td>10dp 圆点是不可发现控件；带文字后既可读又明确可点</td></tr>
+  </table>
+
+  <!-- ============ 3. 高保真原型 ============ -->
+  <h2><span class="num">03</span>高保真原型</h2>
+  <p class="sub">四态：浅色·已连接（主图） / 浅色·未连接 / 浅色·放假 / 深色·已连接。</p>
+
+  <div class="frames">
+
+    <!-- ========== F1 浅色 · 已连接 ========== -->
+    <div class="frame">
+      <div class="cap"><b>① 浅色 · 已连接</b><span class="tag">主图</span></div>
+      <div class="screen L">
+        <div class="body">
+          <div class="topbar">
+            <div class="greet">Hi，<b>小明</b></div>
+            <div class="grow"></div>
+            <div class="pill"><span class="dot"></span>已连接</div>
+            <div class="icbtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+          </div>
+
+          <!-- 焦点卡 -->
+          <div class="focus">
+            <div class="row1">
+              <div class="kicker">接下来 · <b>第 3 节 10:00–11:35</b></div>
+              <div class="eta">还有 12 分钟</div>
+            </div>
+            <div class="title">大学物理</div>
+            <div class="sub">教三 B202 <span class="sep">·</span> 王老师</div>
+            <div class="bar"><i></i></div>
+            <div class="prog"><span>今日进度 3 / 5 节</span><span>11:35 下课</span></div>
+          </div>
+
+          <!-- 周导航 -->
+          <div class="wkbar">
+            <div class="lab">本周课表</div>
+            <div class="nav">
+              <div class="arw"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></div>
+              <div class="range">9.29–10.05</div>
+              <div class="arw"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+            </div>
+          </div>
+
+          <!-- 网格卡：表头即日期条 -->
+          <div class="grid">
+            <div class="ghead">
+              <div class="spacer"></div>
+              <div class="dcol"><span class="w">一</span><span class="d">29</span></div>
+              <div class="dcol"><span class="w">二</span><span class="d">30</span></div>
+              <div class="dcol"><span class="w">三</span><span class="d">1</span></div>
+              <div class="dcol"><span class="w">四</span><span class="d">2</span></div>
+              <div class="dcol sel"><span class="w">五</span><span class="d">3</span></div>
+              <div class="dcol"><span class="w">六</span><span class="d">4</span><span class="badge rest">休</span></div>
+              <div class="dcol"><span class="w">日</span><span class="d">5</span></div>
+            </div>
+            <div class="gbody">
+              <div class="grow-line">
+                <div class="tcell">08:00</div>
+                <div class="cols">
+                  <div class="col"><div class="blk" style="background:#5B6CF9;color:#fff"><span class="n">高等数学</span><span class="p">A101</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#33C77A;color:#101828"><span class="n">英语</span><span class="p">C302</span></div></div>
+                  <div class="col"><div class="blk" style="background:#FF9E42;color:#101828"><span class="n">体育</span><span class="p">操场</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">10:00</div>
+                <div class="cols">
+                  <div class="col"><div class="blk" style="background:#9C6BF7;color:#fff"><span class="n">数据结构</span><span class="p">A203</span></div></div>
+                  <div class="col"><div class="blk" style="background:#5B6CF9;color:#fff"><span class="n">高数</span><span class="p">A101</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#35C4D6;color:#101828"><span class="n">物理</span><span class="p">B202</span></div></div>
+                  <div class="col today"><div class="blk now" style="background:#FF7AA8;color:#fff"><span class="n">大学物理</span><span class="p">B202</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">14:00</div>
+                <div class="cols">
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#FF9E42;color:#101828"><span class="n">线代</span><span class="p">A105</span></div></div>
+                  <div class="col"><div class="blk" style="background:#33C77A;color:#101828"><span class="n">英语</span><span class="p">C302</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#FF6B6B;color:#fff"><span class="n">实验</span><span class="p">D401</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">16:00</div>
+                <div class="cols">
+                  <div class="col"></div>
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#9C6BF7;color:#fff"><span class="n">思政</span><span class="p">E201</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"></div>
+                  <div class="col"></div>
+                  <div class="col"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 设备工具条 -->
+          <div class="tools">
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></div><div class="lb">呼叫</div></div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="12" y1="2" x2="12" y2="5"/></svg></div><div class="lb">上课</div></div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div><div class="lb">留言</div></div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="2" y1="2" x2="22" y2="22"/></svg></div><div class="lb">下课</div></div>
+          </div>
+        </div>
+
+        <div class="tabbar">
+          <div class="tab on"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span class="t">首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg><span class="t">课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="3.2"/><path d="M9.5 6.5h5"/></svg><span class="t">手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span class="t">设置</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== F2 浅色 · 未连接 ========== -->
+    <div class="frame">
+      <div class="cap"><b>② 浅色 · 未连接</b><span class="tag">降级态</span></div>
+      <div class="screen L">
+        <div class="body">
+          <div class="topbar">
+            <div class="greet">Hi，<b>小明</b></div>
+            <div class="grow"></div>
+            <div class="pill off"><span class="dot"></span>未连接</div>
+            <div class="icbtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+          </div>
+
+          <div class="focus">
+            <div class="row1">
+              <div class="kicker">接下来 · <b>第 3 节 10:00–11:35</b></div>
+              <div class="eta">还有 12 分钟</div>
+            </div>
+            <div class="title">大学物理</div>
+            <div class="sub">教三 B202 <span class="sep">·</span> 王老师</div>
+            <div class="bar"><i></i></div>
+            <div class="prog"><span>今日进度 3 / 5 节</span><span>11:35 下课</span></div>
+          </div>
+
+          <div class="wkbar">
+            <div class="lab">本周课表</div>
+            <div class="nav">
+              <div class="arw"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></div>
+              <div class="range">9.29–10.05</div>
+              <div class="arw"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="ghead">
+              <div class="spacer"></div>
+              <div class="dcol"><span class="w">一</span><span class="d">29</span></div>
+              <div class="dcol"><span class="w">二</span><span class="d">30</span></div>
+              <div class="dcol"><span class="w">三</span><span class="d">1</span></div>
+              <div class="dcol"><span class="w">四</span><span class="d">2</span></div>
+              <div class="dcol sel"><span class="w">五</span><span class="d">3</span></div>
+              <div class="dcol"><span class="w">六</span><span class="d">4</span><span class="badge rest">休</span></div>
+              <div class="dcol"><span class="w">日</span><span class="d">5</span></div>
+            </div>
+            <div class="gbody">
+              <div class="grow-line">
+                <div class="tcell">08:00</div>
+                <div class="cols">
+                  <div class="col"><div class="blk" style="background:#5B6CF9;color:#fff"><span class="n">高等数学</span><span class="p">A101</span></div></div>
+                  <div class="col"></div><div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#33C77A;color:#101828"><span class="n">英语</span><span class="p">C302</span></div></div>
+                  <div class="col"><div class="blk" style="background:#FF9E42;color:#101828"><span class="n">体育</span><span class="p">操场</span></div></div>
+                  <div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">10:00</div>
+                <div class="cols">
+                  <div class="col"><div class="blk" style="background:#9C6BF7;color:#fff"><span class="n">数据结构</span><span class="p">A203</span></div></div>
+                  <div class="col"><div class="blk" style="background:#5B6CF9;color:#fff"><span class="n">高数</span><span class="p">A101</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#35C4D6;color:#101828"><span class="n">物理</span><span class="p">B202</span></div></div>
+                  <div class="col today"><div class="blk now" style="background:#FF7AA8;color:#fff"><span class="n">大学物理</span><span class="p">B202</span></div></div>
+                  <div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">14:00</div>
+                <div class="cols">
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#FF9E42;color:#101828"><span class="n">线代</span><span class="p">A105</span></div></div>
+                  <div class="col"><div class="blk" style="background:#33C77A;color:#101828"><span class="n">英语</span><span class="p">C302</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#FF6B6B;color:#fff"><span class="n">实验</span><span class="p">D401</span></div></div>
+                  <div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">16:00</div>
+                <div class="cols">
+                  <div class="col"></div><div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#9C6BF7;color:#fff"><span class="n">思政</span><span class="p">E201</span></div></div>
+                  <div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 设备条降级为一行提示 -->
+          <div class="toolbar-off">
+            <div class="ic"><svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="3.2"/></svg></div>
+            <div class="t">手环未连接 · 课表来自本机</div>
+            <div class="go">去连接 ›</div>
+          </div>
+        </div>
+
+        <div class="tabbar">
+          <div class="tab on"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span class="t">首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg><span class="t">课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="3.2"/><path d="M9.5 6.5h5"/></svg><span class="t">手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span class="t">设置</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== F3 浅色 · 放假 ========== -->
+    <div class="frame">
+      <div class="cap"><b>③ 浅色 · 今天放假</b><span class="tag">祝福态</span></div>
+      <div class="screen L">
+        <div class="body">
+          <div class="topbar">
+            <div class="greet">Hi，<b>小明</b></div>
+            <div class="grow"></div>
+            <div class="pill"><span class="dot"></span>已连接</div>
+            <div class="icbtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+          </div>
+
+          <!-- 放假态：焦点卡换成祝福卡 -->
+          <div class="focus holiday">
+            <div class="row1">
+              <div class="kicker" style="color:var(--l-ok)">假期 · 今天休息</div>
+            </div>
+            <div class="title">国庆快乐，祝祖国繁荣昌盛 🇨🇳</div>
+            <div class="sub"><span class="holi-name">国庆节</span> · 今天没有课，好好休息</div>
+          </div>
+
+          <div class="wkbar">
+            <div class="lab">本周课表</div>
+            <div class="nav">
+              <div class="arw"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></div>
+              <div class="range">9.29–10.05</div>
+              <div class="arw"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="ghead">
+              <div class="spacer"></div>
+              <div class="dcol"><span class="w">一</span><span class="d">29</span></div>
+              <div class="dcol"><span class="w">二</span><span class="d">30</span></div>
+              <div class="dcol"><span class="w">三</span><span class="d">1</span></div>
+              <div class="dcol"><span class="w">四</span><span class="d">2</span></div>
+              <div class="dcol sel"><span class="w">五</span><span class="d">3</span><span class="badge rest">休</span></div>
+              <div class="dcol"><span class="w">六</span><span class="d">4</span></div>
+              <div class="dcol"><span class="w">日</span><span class="d">5</span></div>
+            </div>
+            <div class="gbody">
+              <div class="grow-line">
+                <div class="tcell">08:00</div>
+                <div class="cols">
+                  <div class="col"><div class="blk" style="background:#5B6CF9;color:#fff"><span class="n">高等数学</span><span class="p">A101</span></div></div>
+                  <div class="col"></div><div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#33C77A;color:#101828"><span class="n">英语</span><span class="p">C302</span></div></div>
+                  <div class="col" style="background:var(--l-okLight);border-radius:6px"><div class="blk" style="background:transparent;color:var(--l-ok)"><span class="n" style="font-size:11.5px">国庆</span></div></div>
+                  <div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">10:00</div>
+                <div class="cols">
+                  <div class="col"><div class="blk" style="background:#9C6BF7;color:#fff"><span class="n">数据结构</span><span class="p">A203</span></div></div>
+                  <div class="col"><div class="blk" style="background:#5B6CF9;color:#fff"><span class="n">高数</span><span class="p">A101</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#35C4D6;color:#101828"><span class="n">物理</span><span class="p">B202</span></div></div>
+                  <div class="col" style="background:var(--l-okLight);border-radius:6px"></div>
+                  <div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">14:00</div>
+                <div class="cols">
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#FF9E42;color:#101828"><span class="n">线代</span><span class="p">A105</span></div></div>
+                  <div class="col"><div class="blk" style="background:#33C77A;color:#101828"><span class="n">英语</span><span class="p">C302</span></div></div>
+                  <div class="col"></div>
+                  <div class="col" style="background:var(--l-okLight);border-radius:6px"></div>
+                  <div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">16:00</div>
+                <div class="cols">
+                  <div class="col"></div><div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#9C6BF7;color:#fff"><span class="n">思政</span><span class="p">E201</span></div></div>
+                  <div class="col"></div>
+                  <div class="col" style="background:var(--l-okLight);border-radius:6px"></div>
+                  <div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tools">
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></div><div class="lb">呼叫</div></div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="12" y1="2" x2="12" y2="5"/></svg></div><div class="lb">上课</div></div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div><div class="lb">留言</div></div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="2" y1="2" x2="22" y2="22"/></svg></div><div class="lb">下课</div></div>
+          </div>
+        </div>
+
+        <div class="tabbar">
+          <div class="tab on"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span class="t">首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg><span class="t">课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="3.2"/><path d="M9.5 6.5h5"/></svg><span class="t">手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span class="t">设置</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== F4 深色 ========== -->
+    <div class="frame">
+      <div class="cap"><b>④ 深色 · 已连接</b><span class="tag dark">夜幕蓝</span></div>
+      <div class="screen L D">
+        <div class="body">
+          <div class="topbar">
+            <div class="greet">Hi，<b>小明</b></div>
+            <div class="grow"></div>
+            <div class="pill"><span class="dot"></span>已连接</div>
+            <div class="icbtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+          </div>
+
+          <div class="focus">
+            <div class="row1">
+              <div class="kicker">接下来 · <b>第 3 节 10:00–11:35</b></div>
+              <div class="eta">还有 12 分钟</div>
+            </div>
+            <div class="title">大学物理</div>
+            <div class="sub">教三 B202 <span class="sep">·</span> 王老师</div>
+            <div class="bar"><i></i></div>
+            <div class="prog"><span>今日进度 3 / 5 节</span><span>11:35 下课</span></div>
+          </div>
+
+          <div class="wkbar">
+            <div class="lab">本周课表</div>
+            <div class="nav">
+              <div class="arw"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></div>
+              <div class="range">9.29–10.05</div>
+              <div class="arw"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="ghead">
+              <div class="spacer"></div>
+              <div class="dcol"><span class="w">一</span><span class="d">29</span></div>
+              <div class="dcol"><span class="w">二</span><span class="d">30</span></div>
+              <div class="dcol"><span class="w">三</span><span class="d">1</span></div>
+              <div class="dcol"><span class="w">四</span><span class="d">2</span></div>
+              <div class="dcol sel"><span class="w">五</span><span class="d">3</span></div>
+              <div class="dcol"><span class="w">六</span><span class="d">4</span><span class="badge rest">休</span></div>
+              <div class="dcol"><span class="w">日</span><span class="d">5</span></div>
+            </div>
+            <div class="gbody">
+              <div class="grow-line">
+                <div class="tcell">08:00</div>
+                <div class="cols">
+                  <div class="col"><div class="blk" style="background:#5B6CF9;color:#fff"><span class="n">高等数学</span><span class="p">A101</span></div></div>
+                  <div class="col"></div><div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#33C77A;color:#101828"><span class="n">英语</span><span class="p">C302</span></div></div>
+                  <div class="col"><div class="blk" style="background:#FF9E42;color:#101828"><span class="n">体育</span><span class="p">操场</span></div></div>
+                  <div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">10:00</div>
+                <div class="cols">
+                  <div class="col"><div class="blk" style="background:#9C6BF7;color:#fff"><span class="n">数据结构</span><span class="p">A203</span></div></div>
+                  <div class="col"><div class="blk" style="background:#5B6CF9;color:#fff"><span class="n">高数</span><span class="p">A101</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#35C4D6;color:#101828"><span class="n">物理</span><span class="p">B202</span></div></div>
+                  <div class="col today"><div class="blk now" style="background:#FF7AA8;color:#fff"><span class="n">大学物理</span><span class="p">B202</span></div></div>
+                  <div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">14:00</div>
+                <div class="cols">
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#FF9E42;color:#101828"><span class="n">线代</span><span class="p">A105</span></div></div>
+                  <div class="col"><div class="blk" style="background:#33C77A;color:#101828"><span class="n">英语</span><span class="p">C302</span></div></div>
+                  <div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#FF6B6B;color:#fff"><span class="n">实验</span><span class="p">D401</span></div></div>
+                  <div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+              <div class="grow-line">
+                <div class="tcell">16:00</div>
+                <div class="cols">
+                  <div class="col"></div><div class="col"></div>
+                  <div class="col"><div class="blk" style="background:#9C6BF7;color:#fff"><span class="n">思政</span><span class="p">E201</span></div></div>
+                  <div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tools">
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></div><div class="lb">呼叫</div></div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="12" y1="2" x2="12" y2="5"/></svg></div><div class="lb">上课</div></div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div><div class="lb">留言</div></div>
+            <div class="tool"><div class="ic"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="2" y1="2" x2="22" y2="22"/></svg></div><div class="lb">下课</div></div>
+          </div>
+        </div>
+
+        <div class="tabbar">
+          <div class="tab on"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span class="t">首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg><span class="t">课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="3.2"/><path d="M9.5 6.5h5"/></svg><span class="t">手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span class="t">设置</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ 4. 规格 ============ -->
+  <h2><span class="num">04</span>组件规格（可直接换算成代码）</h2>
+
+  <h3>4.1 布局尺寸</h3>
+  <table>
+    <tr><th style="width:200px">元素</th><th style="width:150px">尺寸</th><th>说明</th></tr>
+    <tr><td>页面左右内边距</td><td><code>16dp</code></td><td>沿用现 <code>GAP_LG</code>；窄屏 360dp 下的安全值</td></tr>
+    <tr><td>顶栏</td><td><code>高 44dp</code></td><td>原 52dp；问候左、状态胶囊 + 设置右；居中不再放标题</td></tr>
+    <tr><td>「接下来」焦点卡</td><td><code>圆角 14 / 内边距 13,14,12</code></td><td><code>R_CARD</code>；阴影 <code>0 4 14 -8</code>（水平偏移 0、模糊 14）</td></tr>
+    <tr><td>进度条</td><td><code>高 4dp / 圆角 2</code></td><td>轨道 <code>ACCENT_LIGHT</code>、填充 <code>ACCENT</code></td></tr>
+    <tr><td>周导航行</td><td><code>高 28dp</code>，距焦点卡 <code>16dp</code></td><td>左「本周课表」15sp/600；右 ◀ 28×28 圆角 9 + 周范围 11.5sp</td></tr>
+    <tr><td>网格卡</td><td><code>圆角 14 / 内边距 10,12,12</code></td><td>距周导航行 <code>8dp</code>（同一信息组内）</td></tr>
+    <tr><td>时间列</td><td><code>宽 36dp</code>、行高 <code>48dp</code></td><td>沿用 <code>TIME_COL_W</code> / <code>ROW_PITCH</code></td></tr>
+    <tr><td>课程块</td><td><code>高 44dp / 外边距 2,1 / 圆角 4</code></td><td>行高恒 <code>ROW_PITCH=48</code>，上下各留 2dp</td></tr>
+    <tr><td>今天列</td><td><code>ACCENT_LIGHT 底 + 圆角 6</code></td><td>由"整格淡蓝"升级为"列内独立底色块"，今天更明确</td></tr>
+    <tr><td>设备工具条</td><td><code>4 等分 / 高 62dp / 间距 8</code></td><td>距网格卡 <code>16dp</code>；图标底 <code>34×34</code> 圆角 10</td></tr>
+    <tr><td>底栏</td><td><code>高 62dp</code></td><td>沿用 <code>BAR_HEIGHT_DP</code></td></tr>
+  </table>
+
+  <h3>4.2 色彩（全部取自 <code>Ui.java</code>，无新增色）</h3>
+  <table>
+    <tr><th style="width:150px">Token</th><th style="width:110px">浅色</th><th style="width:110px">深色</th><th>用途</th></tr>
+    <tr><td><code>ACCENT</code></td><td><span class="swatch" style="background:#2F6BFF"></span>#2F6BFF</td><td><span class="swatch" style="background:#5B9BFF"></span>#5B9BFF</td><td>主色：今天列、进度、倒计时、选中 tab</td></tr>
+    <tr><td><code>ACCENT_LIGHT</code></td><td><span class="swatch" style="background:#EBF0FF"></span>#EBF0FF</td><td><span class="swatch" style="background:#1A2544"></span>#1A2544</td><td>今天列底、图标底、进度轨道</td></tr>
+    <tr><td><code>TEXT</code></td><td><span class="swatch" style="background:#0F172A"></span>#0F172A</td><td><span class="swatch" style="background:#E9EEF9"></span>#E9EEF9</td><td>主文字</td></tr>
+    <tr><td><code>MUTED</code></td><td><span class="swatch" style="background:#64748B"></span>#64748B</td><td><span class="swatch" style="background:#8695B4"></span>#8695B4</td><td>次级文字（地点、星期、周范围）</td></tr>
+    <tr><td><code>OK</code> / <code>OK_LIGHT</code></td><td><span class="swatch" style="background:#16A34A"></span>#16A34A</td><td><span class="swatch" style="background:#34C759"></span>#34C759</td><td>已连接胶囊、祝福卡、休角标</td></tr>
+    <tr><td><code>WARN</code></td><td><span class="swatch" style="background:#F59E0B"></span>#F59E0B</td><td><span class="swatch" style="background:#FFB020"></span>#FFB020</td><td>调休、班角标</td></tr>
+    <tr><td><code>ERR</code></td><td><span class="swatch" style="background:#DC2626"></span>#DC2626</td><td><span class="swatch" style="background:#FF6B6B"></span>#FF6B6B</td><td>连接失败胶囊</td></tr>
+  </table>
+  <div class="note">
+    <b>可达性核对</b>：正文 <code>#0F172A</code> on <code>#FFFFFF</code> = 17.9:1 ✅；次级 <code>#64748B</code> on <code>#FFFFFF</code> = 5.0:1 ✅（AA 正文线 4.5:1）；主色 <code>#2F6BFF</code> on <code>#FFFFFF</code> = 4.6:1 ✅。课程色块字色沿用现成 <code>Ui.onCourseColor()</code> 亮度 0.45 阈值自动选深/白，全部 ≥ 3:1（大字标准）。
+  </div>
+
+  <h3>4.3 字号（沿用 7 档，无新增）</h3>
+  <table>
+    <tr><th style="width:150px">Token</th><th style="width:90px">字号</th><th>本页用途</th></tr>
+    <tr><td><code>SP_DISPLAY</code></td><td>22sp</td><td>焦点卡课名（全页唯一最大字 = 视觉锚点；单行 + 省略号兜底）</td></tr>
+    <tr><td><code>SP_TITLE</code></td><td>17sp</td><td>放假态祝福语</td></tr>
+    <tr><td><code>SP_NUM</code></td><td>16sp</td><td>日期数字（表头）</td></tr>
+    <tr><td><code>SP_SUBTITLE</code></td><td>15sp</td><td>「本周课表」区标题</td></tr>
+    <tr><td><code>SP_BODY</code></td><td>13sp</td><td>问候称呼、课名行</td></tr>
+    <tr><td><code>SP_CAPTION</code></td><td>11.5sp</td><td>胶囊、倒计时、周范围、工具条标签、课程块课名</td></tr>
+    <tr><td><code>SP_MICRO</code></td><td>10.5sp</td><td>时间轴、星期字、进度说明、地点小字</td></tr>
+  </table>
+  <div class="note good">
+    <b>字号阶梯零新增</b>：本方案<b>不引入任何新字号档</b>——全页只用既有的 7 档。焦点卡课名取 <code>SP_DISPLAY 22sp</code>（唯一最大字），与 15sp 区标题拉开 2 档，层级来自<b>档位差</b>而非「加一档 20sp」。
+  </div>
+
+  <h3>4.4 交互与状态</h3>
+  <table>
+    <tr><th style="width:170px">控件</th><th>行为</th></tr>
+    <tr><td>状态胶囊（顶栏）</td><td>绿 已连接 / 蓝 连接中·重连中 / 灰 未连接 / 红 连接失败。热区整颗胶囊 <b>≥44dp</b>，点按 → 「手环」页</td></tr>
+    <tr><td>倒计时「还有 12 分钟」</td><td>距下一节课开课 &lt; 60 分钟时显示；≥ 60 分钟显示「14:00 开始」；正在上课显示「进行中 · 还剩 25 分钟」</td></tr>
+    <tr><td>焦点卡整体</td><td>点按 → 该课详情（沿用现 <code>showCourseDetail</code>）</td></tr>
+    <tr><td>今日进度条</td><td>宽 = 已完成节数 / 今日总节数；今日 0 节课时整卡降级为「今天没有课」中性态</td></tr>
+    <tr><td>日期格</td><td>点按切换选中日（与现逻辑一致）；选中格 = ACCENT 实底 + 白字；今天 = 默认选中</td></tr>
+    <tr><td>周范围标签</td><td>非本周时变主色「回到本周 ↩」，点按回到 <code>weekOffset=0</code></td></tr>
+    <tr><td>设备工具条</td><td>未连接 → 整条替换为「手环未连接 · 课表来自本机 / 去连接 ›」（D4）</td></tr>
+    <tr><td>瞬时反馈</td><td>沿用现有 <code>flashStatus</code>：文案 2.6s 淡出，稳态不常驻</td></tr>
+  </table>
+
+</div>
+</body>
+</html>
