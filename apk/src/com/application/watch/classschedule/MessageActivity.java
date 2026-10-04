@@ -189,7 +189,7 @@ public class MessageActivity extends Activity {
         for (int i = 0; i < items.length(); i++) {
             JSONObject o = items.optJSONObject(i);
             if (o != null && "out".equals(o.optString("dir"))
-                    && !"sent".equals(o.optString("status"))) {
+                    && "pending".equals(o.optString("status", "pending"))) {
                 n++;
             }
         }
@@ -226,8 +226,9 @@ public class MessageActivity extends Activity {
             prevTs = ts;
 
             boolean out = "out".equals(o.optString("dir"));
-            boolean sent = "sent".equals(o.optString("status"));
-            listBox.addView(bubbleRow(out, sent, o.optString("text"), maxW));
+            // P2：三态 —— pending(待发送) / sent(已送达) / read(已读，手环已回执)
+            String status = o.optString("status", "pending");
+            listBox.addView(bubbleRow(out, status, o.optString("text"), maxW));
             listBox.addView(Ui.space(this, 6));
         }
         scrollToBottom();
@@ -244,7 +245,7 @@ public class MessageActivity extends Activity {
     }
 
     /** 单条气泡行：头像 + 气泡（我方在右、对方在左），对方一侧用 spacer 把气泡推向另一侧 */
-    private View bubbleRow(boolean out, boolean sent, String text, int maxW) {
+    private View bubbleRow(boolean out, String status, String text, int maxW) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(android.view.Gravity.BOTTOM);
@@ -268,9 +269,22 @@ public class MessageActivity extends Activity {
         bubble.addView(body);
 
         if (out) {
-            // 我方气泡内的送达状态（已送达 = 手环回了 chat_ack；待发送 = 尚未确认）
-            TextView st = Ui.text(this, sent ? "已送达" : "待发送", 10f,
-                    sent ? 0xB3FFFFFF : 0xFFFFE08A, false);
+            // 我方气泡内的送达状态（P2 三态）：
+            //   待发送 = 尚未确认；已送达 = 手环回了 chat_ack；已读 = 手环回了 chat_read（真·看见）
+            //   ⚠️「已读」只可能来自手环上报，手机端绝不推断（手环没进页面就永远停在「已送达」）。
+            String stLabel;
+            int stColor;
+            if ("read".equals(status)) {
+                stLabel = "已读";
+                stColor = 0xFF9BE3B0;      // 淡绿：已读
+            } else if ("sent".equals(status)) {
+                stLabel = "已送达";
+                stColor = 0xB3FFFFFF;      // 半透明白：已送达
+            } else {
+                stLabel = "待发送";
+                stColor = 0xFFFFE08A;      // 淡黄：待发送
+            }
+            TextView st = Ui.text(this, stLabel, 10f, stColor, false);
             st.setPadding(0, Ui.dp(this, 3), 0, 0);
             st.setGravity(android.view.Gravity.END);
             bubble.addView(st);
@@ -626,10 +640,81 @@ public class MessageActivity extends Activity {
     static void installObserver(final Activity host) {
         SyncEngine.get(host).setObserver(new SyncEngine.Observer() {
             @Override public void onMessage(String json) {
+                // P2：先看是不是手环的「已读回执」（chat_read）。
+                //     是 → handleUnsolicited 内部会升级本地状态（sent→read）并 return，
+                //     这里再补一次重渲染，让气泡状态实时可见。
+                boolean read = isReadReceipt(json);
                 handleUnsolicited(host, json);
+                if (read && host instanceof MessageActivity) {
+                    MessageActivity ma = (MessageActivity) host;
+                    ma.load();
+                    ma.render();
+                    ma.refreshState();
+                }
             }
         });
     }
+
+    /** 是否手环已读回执（{"action":"chat_read",...}） */
+    private static boolean isReadReceipt(String json) {
+        try {
+            return "chat_read".equals(new JSONObject(json).optString("action"));
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * P2 已读回执：手环**进入留言页并渲染完**后上报 {"action":"chat_read","ids":[...]}，
+     * 把这些 id 对应的「我方 out 消息」从 sent 升为 read（只升不降，幂等）。
+     *
+     * ⚠️ 纪律（方案验收核心）：已读**只能**由手环上报驱动，手机端绝不因「已发出」而推断。
+     *    手环没开机 / 没进页面 → 永远停在「已送达」，这才是真实状态。
+     *
+     * @return true = 本条是已读回执（已消费，调用方不要再把它送进留言流）
+     */
+    private static synchronized boolean applyReadReceipt(Context ctx, String json) {
+        try {
+            JSONObject o = new JSONObject(json);
+            if (!"chat_read".equals(o.optString("action"))) {
+                return false;
+            }
+            JSONArray ids = o.optJSONArray("ids");
+            if (ids == null || ids.length() == 0) {
+                return true;    // 是已读回执但无 ids：消费掉，不进留言流、不提醒
+            }
+            SharedPreferences sp = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+            JSONArray arr;
+            try {
+                arr = new JSONArray(sp.getString(KEY, "[]"));
+            } catch (Throwable t) {
+                arr = new JSONArray();
+            }
+            boolean changed = false;
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject it = arr.optJSONObject(i);
+                if (it == null || !"out".equals(it.optString("dir"))) {
+                    continue;
+                }
+                String id = it.optString("id");
+                for (int j = 0; j < ids.length(); j++) {
+                    if (id.equals(ids.optString(j)) && !"read".equals(it.optString("status"))) {
+                        it.put("status", "read");
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+            if (changed) {
+                sp.edit().putString(KEY, arr.toString()).apply();
+            }
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 记录已提醒过的 id；返回 true = 首次见到（应提醒），false = 重复（应丢弃） */
 
     /**
      * 处理手环主动发来的留言。
@@ -637,6 +722,10 @@ public class MessageActivity extends Activity {
      */
     static void handleUnsolicited(final Context ctx, String json) {
         try {
+            // P2 已读回执（{"action":"chat_read",...}）：升级本地 out 消息状态后消费掉，不进留言流
+            if (applyReadReceipt(ctx, json)) {
+                return;
+            }
             // 工具箱遥控指令（{"action":"cmd",...}）优先消费，不进留言流
             if (CommandRouter.handle(ctx, json)) {
                 return;

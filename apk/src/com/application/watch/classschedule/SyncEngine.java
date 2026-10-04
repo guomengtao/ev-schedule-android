@@ -216,14 +216,16 @@ public final class SyncEngine {
             final String text = (message == null) ? "" : new String(message, Charset.forName("UTF-8"));
             main.post(new Runnable() {
                 @Override public void run() {
-                    // ⚠️ 手环主动 push（cmd / chat）即使在途请求（pending != null）也绝不能当回包吞掉：
+                    // ⚠️ 手环主动 push（cmd / chat / chat_read）即使在途请求（pending != null）也绝不能当回包吞掉：
                     //    手机侧恰有请求在飞（课表同步 / 留言发送等，各占 6 秒窗口）时，
                     //    手环点「找手机」会石沉大海 —— 2026-10-04 真机实测：消息到达 8 次、cmd 执行 0 次。
+                    //    chat_read（P2 已读回执）同理：它是手环「看见了」的通知，不是任何请求的回包，
+                    //    若被 pending 吞掉，用户会看到「消息明明读了却一直显示已送达」。
                     boolean unsolicited = false;
                     try {
                         org.json.JSONObject o = new org.json.JSONObject(text);
                         String a = o.optString("action", "");
-                        unsolicited = "cmd".equals(a) || "chat".equals(a);
+                        unsolicited = "cmd".equals(a) || "chat".equals(a) || "chat_read".equals(a);
                     } catch (Throwable ignored) {
                     }
                     android.util.Log.i("EVSync", "rx: " + text);
