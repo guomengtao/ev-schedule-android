@@ -45,8 +45,10 @@ public class HomeActivity extends Activity {
     private int phase = PHASE_CONNECT;
 
     private TextView greetingView, pageTitleView, weekLabelView;
-    /** 连接迷你条容器（与错误卡互斥显示，修"同屏两处说未连接"） */
+    /** 连接迷你条容器（与错误卡互斥显示，修"同屏两处说未连接"）；§4.2 起改为「瞬时反馈」：显示后自动淡出 */
     private LinearLayout miniBarView;
+    /** §4.2 顶栏常驻连接状态圆点（绿=已连接 / 蓝=连接中 / 灰=未连接 / 红=失败），点按进「手环」页 */
+    private View statusDotView;
     private LinearLayout dateStripView, deviceCardView;
     private TextView deviceNameView, deviceStatusView, batteryView;
     private int selectedDay = CourseCache.todayIndex();
@@ -189,7 +191,9 @@ public class HomeActivity extends Activity {
         dateStripView.setPadding(Ui.dp(this, Ui.GAP_MD + TIME_COL_W), 0,
                 Ui.dp(this, Ui.GAP_MD), 0);
         root.addView(dateStripView);
-        root.addView(Ui.space(this, Ui.GAP_LG));
+        // §4.3 两级纵向节奏：「日期条 + 课表」是一组紧凑信息组（组内 8dp），
+        // 与上方头部、下方快捷区之间才用 16dp（组间）—— 分组感出来，页面更「高级」。
+        root.addView(Ui.space(this, Ui.GAP_SM));
 
         // ---- 周课表网格（带时间轴） ----
         weekBox = new LinearLayout(this);
@@ -205,13 +209,14 @@ public class HomeActivity extends Activity {
 
         // ---- 设备卡已移至「手环」页（连接管理集中在设备作用域页；首页只留迷你状态条） ----
 
-        // ---- 连接状态迷你条 ----
+        // ---- 连接状态条（§4.2 改为「瞬时反馈」：显示后 2.6s 自动收起，稳态只留顶栏状态圆点）----
         LinearLayout bar = Ui.card(this);
         bar.setBackground(Ui.round(Ui.CARD, Ui.R_CTRL, Ui.LINE, this));
         bar.setPadding(Ui.dp(this, Ui.GAP_MD), Ui.dp(this, 10),
                 Ui.dp(this, Ui.GAP_MD), Ui.dp(this, 10));
-        miniStatusView = Ui.textLh(this, "● 正在连接手环…", Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
+        miniStatusView = Ui.textLh(this, "", Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
         bar.addView(miniStatusView);
+        bar.setVisibility(View.GONE);   // 无常驻文案：由 miniStatus/flashStatus 按需显示
         miniBarView = bar;
         root.addView(bar);
         root.addView(Ui.space(this, Ui.GAP_MD));
@@ -259,6 +264,40 @@ public class HomeActivity extends Activity {
                 android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.END);
         pbP.rightMargin = Ui.dp(this, Ui.GAP_SM);
         header.addView(plusBtn, pbP);
+
+        // §4.2 连接状态圆点：紧贴 ⊕ 左侧；44dp 热区（视觉 10dp 圆点），点按进「手环」页
+        android.widget.FrameLayout statusBtn = new android.widget.FrameLayout(this);
+        statusBtn.setClickable(true);
+        statusBtn.setContentDescription("手环连接状态");
+        statusDotView = new View(this);
+        statusDotView.setBackground(Ui.round(Ui.MUTED, 5, 0, this));
+        statusBtn.addView(statusDotView, new android.widget.FrameLayout.LayoutParams(
+                Ui.dp(this, 10), Ui.dp(this, 10), android.view.Gravity.CENTER));
+        statusBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(HomeActivity.this, BandActivity.class));
+            }
+        });
+        android.widget.FrameLayout.LayoutParams sbP = new android.widget.FrameLayout.LayoutParams(
+                Ui.dp(this, Ui.TOUCH_MIN), Ui.dp(this, Ui.TOUCH_MIN),
+                android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.END);
+        sbP.rightMargin = Ui.dp(this, Ui.GAP_SM + Ui.TOUCH_MIN);
+        header.addView(statusBtn, sbP);
+
+        // §4.1 问候上移至顶栏左侧：原本「Hi，同学」独占正文首行，而 360dp 屏下标题行可用宽仅 170dp、
+        // 右侧周导航固定 157dp —— 问候无法与「本周课表」同行（实测仅剩 0.7dp 余量），且字号阶梯
+        // 不允许把 22sp 标题再降档。顶栏左侧有 ~216dp 空余，问候移入后正文首行即页面标题，
+        // 既消除「问候 + 标题」的重复，又省下一行高度。maxWidth + 省略号兜底，绝不挤压居中标题。
+        greetingView = Ui.textLh(this, "Hi，同学", Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
+        greetingView.setMaxWidth(Ui.dp(this, 110));
+        greetingView.setSingleLine(true);
+        greetingView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        android.widget.FrameLayout.LayoutParams gp = new android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.START);
+        gp.leftMargin = Ui.dp(this, Ui.GAP_SM);
+        header.addView(greetingView, gp);
         // 顶栏固定 52dp 高，避免标题行高变化引起整页抖动
         root.addView(header, 0, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 52)));
@@ -321,14 +360,20 @@ public class HomeActivity extends Activity {
         cell.setOrientation(LinearLayout.VERTICAL);
         cell.setGravity(android.view.Gravity.CENTER);
         cell.setClickable(true);
-        cell.setBackground(Ui.round(Ui.CARD2, Ui.R_CTRL, Ui.LINE, this));
+        // §4.4 卡片底 CARD2 → CARD（白）：浅色下 CARD2(#EAF0F8) 与主卡 CARD(#FFF) 对比过弱，
+        // 抬到白底才有「卡片」感，也才衬得出下面那块主色淡底图标。
+        cell.setBackground(Ui.round(Ui.CARD, Ui.R_CTRL, Ui.LINE, this));
         int pad = Ui.dp(this, Ui.GAP_SM);
         cell.setPadding(pad, pad, pad, pad);
 
+        // §4.4 图标底色改用主色淡底块（ACCENT_LIGHT）→ 四个快捷入口有「可点」暗示；
+        // 24dp 图标 + 8dp 内距 = 40dp 淡底方块。
         ImageView ic = new ImageView(this);
         ic.setImageResource(icon);
         ic.setColorFilter(Ui.ACCENT);
-        cell.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 24), Ui.dp(this, 24)));
+        ic.setBackground(Ui.round(Ui.ACCENT_LIGHT, Ui.R_CTRL, 0, this));
+        ic.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8));
+        cell.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 40), Ui.dp(this, 40)));
 
         TextView t = Ui.textLh(this, label, Ui.SP_CAPTION, Ui.TEXT, false, Ui.LH_CAPTION);
         t.setGravity(android.view.Gravity.CENTER);
@@ -342,18 +387,17 @@ public class HomeActivity extends Activity {
     private void buildHeader(LinearLayout root) {
         // 旧顶行（字母 E 头像 + 右上角闹钟入口）已按需求整行删除；
         // 右上角功能入口由顶栏的 ⊕ 圆钮承担（onCreate 里，微信式下拉菜单）
-        root.addView(Ui.space(this, Ui.GAP_SM));
+        // §4.1 问候已上移顶栏左侧（见 buildUi 的顶栏段），本行首行即页面标题
+        root.addView(Ui.space(this, Ui.GAP_XS));
 
-        // titleRow: greeting + page title + week switcher
+        // titleRow: page title + week switcher
         LinearLayout titleRow = new LinearLayout(this);
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
         titleRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
         LinearLayout greetingBlock = new LinearLayout(this);
-        greetingBlock.setOrientation(LinearLayout.VERTICAL);
-        greetingView = Ui.textLh(this, "Hi，同学", Ui.SP_BODY, Ui.MUTED, false, Ui.LH_BODY);
-        greetingView.setPadding(0, 0, 0, Ui.dp(this, Ui.GAP_XS));
-        greetingBlock.addView(greetingView);
+        greetingBlock.setOrientation(LinearLayout.HORIZONTAL);
+        greetingBlock.setGravity(android.view.Gravity.CENTER_VERTICAL);
         // 26sp → 22sp：26 与下方 64dp 日期条同屏时严重抢焦点，降档后主视觉回归课表网格
         pageTitleView = Ui.textMediumLh(this, "本周课表", Ui.SP_DISPLAY, Ui.TEXT, Ui.LH_DISPLAY);
         // 标题位复用为「状态/操作」双态切换（显隐在 renderWeek 里控制）：
@@ -1322,6 +1366,7 @@ public class HomeActivity extends Activity {
         } else {
             connectingLabel = "正在连接手环…";
             miniStatus("● " + connectingLabel, Ui.MUTED);
+            setStatusDot(Ui.ACCENT, "连接中");
         }
         startTicking();
 
@@ -1466,7 +1511,7 @@ public class HomeActivity extends Activity {
                     }
                     SyncEngine.get(HomeActivity.this).lastExportJson = json;
                     syncScheduleToStore(sch);
-                    miniStatus("● 课表已同步 ✓", Ui.OK);
+                    flashStatus("● 课表已同步 ✓", Ui.OK);
                 } catch (Throwable t) {
                     miniStatus("同步失败：回包无法解析", Ui.ERR);
                 }
@@ -1503,8 +1548,9 @@ public class HomeActivity extends Activity {
                 }
                 sets = "本地已存 " + local + " 套（以手环为准）";
             }
-            miniStatus("● 已连接 " + e.deviceName + "  ·  v" + e.versionName
-                    + "  ·  " + sets, Ui.OK);
+            // §4.2 稳态只点绿状态点（连接详情在「手环」页），不再常驻一条「已连接 …」文案；
+            // 套数/版本仍进无障碍描述，长按读屏或点圆点进「手环」页都能看到。
+            setStatusDot(Ui.OK, "已连接 " + e.deviceName + " · v" + e.versionName + " · " + sets);
             e.refreshBandScheduleCount(); // 清单一到，状态回调会把文案刷成真实套数
             // update device card
             if (deviceNameView != null && e.deviceName != null && e.deviceName.length() > 0) {
@@ -1530,6 +1576,8 @@ public class HomeActivity extends Activity {
             actionsView.setVisibility(View.VISIBLE);
         } else {
             miniStatus("● 未连接手环", Ui.ERR);
+            // 红 ⟺ 连接失败（与 refreshMiniFromEngine 的「错误卡在屏」判定同义），描述同步为「连接失败」
+            setStatusDot(Ui.ERR, "连接失败");
         }
         hintView.setText(hint);
         errorCard.setVisibility(View.VISIBLE);
@@ -1545,6 +1593,7 @@ public class HomeActivity extends Activity {
         if (miniStatusView == null) {
             return;
         }
+        ui.removeCallbacks(miniFade);   // 新的即时反馈取消上一条的自动收起
         miniStatusView.setText(s);
         miniStatusView.setTextColor(color);
         if (miniBarView != null) {
@@ -1552,19 +1601,49 @@ public class HomeActivity extends Activity {
         }
     }
 
+    /** §4.2 状态条的自动收起任务（瞬时反馈用） */
+    private final Runnable miniFade = new Runnable() {
+        @Override public void run() {
+            if (miniBarView != null) {
+                miniBarView.setVisibility(View.GONE);
+            }
+        }
+    };
+
+    /**
+     * §4.2 瞬时反馈：显示状态条并在 2.6s 后自动收起。
+     * 用于「已送达 ✓ / 已同步 ✓」这类一次性结果 —— 首页稳态不留常驻条（连接详情在「手环」页）。
+     */
+    private void flashStatus(String s, int color) {
+        miniStatus(s, color);
+        ui.postDelayed(miniFade, 2600);
+    }
+
+    /** §4.2 顶栏连接状态圆点：颜色 + 无障碍描述 */
+    private void setStatusDot(int color, String desc) {
+        if (statusDotView == null) {
+            return;
+        }
+        statusDotView.setBackground(Ui.round(color, 5, 0, this));
+        statusDotView.setContentDescription("手环连接状态：" + desc);
+    }
+
     /** 迷你条按引擎状态刷新（状态回调驱动；与 ConnectionBar 同一数据源）。 */
     private void refreshMiniFromEngine() {
         applyQuickBoxVisibility();
         SyncEngine e = SyncEngine.get(this);
         if (e.connected()) {
-            int n = e.bandScheduleCount;
-            String sets = (n >= 0) ? ("手环课表 " + n + " 套") : ("课表 " + e.courseCount + " 节");
-            if (miniStatusView != null && miniStatusView.getText().toString().contains("已连接")) {
-                miniStatus("● 已连接 " + e.deviceName + "  ·  v" + e.versionName + "  ·  " + sets, Ui.OK);
-            }
+            // 稳态：只把顶栏状态点点绿，不再常驻一条「已连接 …」文案（连接详情在「手环」页）
+            setStatusDot(Ui.OK, "已连接" + (e.deviceName != null && e.deviceName.length() > 0 ? " " + e.deviceName : ""));
         } else if (e.autoRetryRunning()) {
+            setStatusDot(Ui.ACCENT, "重连中");
             String p = e.connectProgress();
             miniStatus("● " + (p.length() > 0 ? p : "重连中…"), Ui.ACCENT);
+        } else {
+            // 未连接：错误卡在屏（上次连接失败）→ 红；否则（从未连上/闲置）→ 灰。
+            // 用错误卡的可见性而非调用顺序判定，避免「红 ↔ 灰」因谁最后执行而闪烁。
+            boolean failed = (errorCard != null && errorCard.getVisibility() == View.VISIBLE);
+            setStatusDot(failed ? Ui.ERR : Ui.MUTED, failed ? "连接失败" : "未连接手环");
         }
     }
 
