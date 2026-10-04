@@ -57,6 +57,8 @@ public class ScheduleListActivity extends Activity {
     private TextView deviceBarTitle;
     /** 当前手环对应的分组 key（deviceBar 点击展开/收起「它的课程」用） */
     private String curDeviceGroupKey = null;
+    /** 当前设备分组内的课表套数（-1 = 无当前分组）：设备条据此显示「· N 套」，与分组标题行合并为一行 */
+    private int curGroupCount = -1;
     /** 已展开的分组 key（deviceId / "legacy" / "local"）；默认空 = 全部折叠收敛视图 */
     private final Set<String> expandedGroups = new HashSet<String>();
 
@@ -234,6 +236,7 @@ public class ScheduleListActivity extends Activity {
     private void render() {
         listBox.removeAllViews();
         curDeviceGroupKey = null;
+        curGroupCount = -1;
         refreshSyncView();
         renderDeviceBar();
         final String activeId = ScheduleStore.activeId(this);
@@ -268,56 +271,70 @@ public class ScheduleListActivity extends Activity {
             g.add(s);
         }
 
-        // 手环分组（当前设备优先，其余按出现顺序），每组默认折叠
-        for (Map.Entry<String, List<ScheduleStore.Schedule>> en : byDev.entrySet()) {
+        // 手环分组：当前设备组置顶，其余按出现顺序；每组默认折叠。
+        // 当前设备组**不再单独渲染标题行**——顶部「在线 · 设备」条（deviceBar）就是它的组头，
+        // 点击该条展开/收起，故其卡片紧随设备条渲染（这就是「在线条 + 当前手环行」两行合并为一行的落地）。
+        final List<Map.Entry<String, List<ScheduleStore.Schedule>>> groups =
+                new ArrayList<Map.Entry<String, List<ScheduleStore.Schedule>>>(byDev.entrySet());
+        // 认当前设备组：deviceId 已知走精确匹配；未知（手环端未回 get_device_id）才用
+        // 「设备展示名精确相等」兜底，绝不前缀猜测
+        //（「小米手环」与「小米手环 9 Pro」前缀重叠，startsWith 会互相串组）。
+        Map.Entry<String, List<ScheduleStore.Schedule>> curEntry = null;
+        for (Map.Entry<String, List<ScheduleStore.Schedule>> en : groups) {
+            String key = en.getKey();
+            boolean isCur = e.connected() && (curDev.isEmpty() ? "legacy".equals(key) : key.equals(curDev));
+            if (!isCur && e.connected() && curDev.isEmpty() && !curName.isEmpty()
+                    && curName.equals(devName(en.getValue()))) {
+                // 仅当手环端未回 get_device_id（curDev 为空）时，才按「设备展示名精确相等」兜底归组
+                isCur = true;
+            }
+            if (isCur) {
+                curEntry = en;
+                break;
+            }
+        }
+        if (curEntry != null) {
+            // 设备条即该组组头：补上「· N 套」与展开箭头
+            curDeviceGroupKey = curEntry.getKey();
+            curGroupCount = curEntry.getValue().size();
+            renderDeviceBar();
+            addGroupBody(curEntry.getKey(), curEntry.getValue(), activeId);
+        }
+        // 其余手环分组（未识别 legacy / 其它设备）：照旧各自渲染标题行
+        for (Map.Entry<String, List<ScheduleStore.Schedule>> en : groups) {
+            if (en == curEntry) {
+                continue;
+            }
             final String key = en.getKey();
             List<ScheduleStore.Schedule> g = en.getValue();
-            // 已连接时：deviceId 已知则精确匹配；未知（手环端未回 get_device_id）则把旧数据组视作当前设备，
-            // 否则头部条显示「已连接」而卡片还挂在「未识别手环」，自相矛盾。
-            boolean isCur = e.connected() && (curDev.isEmpty() ? "legacy".equals(key) : key.equals(curDev));
-            String label;
-            if (isCur) {
-                curDeviceGroupKey = key;
-                label = "当前手环：" + (curName.isEmpty() ? "当前手环" : curName)
-                        + (tail4(curDev).isEmpty() ? "" : " ··" + tail4(curDev));
-            } else if ("legacy".equals(key)) {
-                label = "未识别手环（旧数据，连接后归位）";
-            } else {
-                label = devLabel(key, g);
-                // 仅当手环端未回 get_device_id（curDev 为空）时，才按「设备展示名精确相等」
-                // 兜底归组；deviceId 已知时一律走上面的精确匹配，绝不前缀猜测
-                //（「小米手环」与「小米手环 9 Pro」前缀重叠，startsWith 会互相串组）。
-                if (e.connected() && curDev.isEmpty() && !curName.isEmpty()
-                        && curName.equals(devName(g))) {
-                    curDeviceGroupKey = key;
-                }
-            }
-            listBox.addView(groupHeader(label, g.size(), key, isCur));
-            if (expandedGroups.contains(key)) {
-                for (ScheduleStore.Schedule s : g) {
-                    listBox.addView(scheduleCard(s, activeId));
-                    listBox.addView(Ui.space(this, 8));
-                }
-            } else {
-                listBox.addView(Ui.space(this, 6));
-            }
+            String label = "legacy".equals(key)
+                    ? "未识别手环（旧数据，连接后归位）"
+                    : devLabel(key, g);
+            listBox.addView(groupHeader(label, g.size(), key, false));
+            addGroupBody(key, g, activeId);
         }
         // 本地课程分组
         if (!local.isEmpty()) {
             listBox.addView(divider());
             listBox.addView(groupHeader("本地课程", local.size(), "local", false));
-            if (expandedGroups.contains("local")) {
-                for (ScheduleStore.Schedule s : local) {
-                    listBox.addView(scheduleCard(s, activeId));
-                    listBox.addView(Ui.space(this, 8));
-                }
-            } else {
-                listBox.addView(Ui.space(this, 6));
-            }
+            addGroupBody("local", local, activeId);
         }
     }
 
-    /** 头部设备条文案：已连接 → 「当前手环课表：XX ··后4位」；未连接 → 提示 */
+    /** 渲染某分组的课程卡片：展开态才渲染卡片，折叠态只留一条空隙（当前设备组与其余分组共用） */
+    private void addGroupBody(String key, List<ScheduleStore.Schedule> g, String activeId) {
+        if (expandedGroups.contains(key)) {
+            for (ScheduleStore.Schedule s : g) {
+                listBox.addView(scheduleCard(s, activeId));
+                listBox.addView(Ui.space(this, 8));
+            }
+        } else {
+            listBox.addView(Ui.space(this, 6));
+        }
+    }
+
+    /** 头部设备条文案：已连接 → 「● 在线 · 设备名 ··后4位 · N 套 ▸」；未连接 → 提示
+     *  （该条同时充当「当前手环」分组头，与列表里的分组标题行合并为一行） */
     private void renderDeviceBar() {
         if (deviceBar == null) {
             return;
@@ -332,8 +349,13 @@ public class ScheduleListActivity extends Activity {
         }
         String name = e.currentDeviceName();
         String tail = tail4(curDev);
+        String count = curGroupCount >= 0 ? " · " + curGroupCount + " 套" : "";
+        String arrow = curDeviceGroupKey != null
+                ? (expandedGroups.contains(curDeviceGroupKey) ? "   ▾" : "   ▸")
+                : "";
         String title = "在线 · " + (name.isEmpty() ? "当前手环" : name)
                 + (tail.isEmpty() ? "" : " ··" + tail)
+                + count + arrow
                 + (curDev.isEmpty() ? "（设备ID未取到）" : "");
         deviceBarTitle.setText(withGreenDot(title));
     }
