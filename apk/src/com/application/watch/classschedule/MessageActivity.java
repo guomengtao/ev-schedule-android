@@ -15,6 +15,7 @@ import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -53,12 +54,17 @@ public class MessageActivity extends Activity {
 
     private static final String PREF = "ev_message_queue";
     private static final String KEY = "items";
+    /** P1：快捷短语（两端各自本地维护；跨端下发 phrases 留到 P3） */
+    private static final String PHRASE_KEY = "phrases";
+    private static final String[] DEFAULT_PHRASES = {"在上课", "马上到", "稍后回你", "到了", "好的"};
+    private static final int PHRASE_MAX_LEN = 20;
     /** 已提醒过的消息 id（去重的唯一依据） */
     private static final String SEEN_KEY = "seen_ids";
     private static final int SEEN_MAX = 500;
 
     private LinearLayout listBox;
     private ScrollView scrollBox;   // P0：气泡流需在发送/接收后自动滚到底
+    private LinearLayout phraseBox; // P1：快捷短语横滑条
     private TextView stateView;
     private EditText inputView;
     private final SimpleDateFormat TS = new SimpleDateFormat("MM-dd HH:mm", Locale.US);
@@ -88,6 +94,16 @@ public class MessageActivity extends Activity {
         root.addView(scrollBox, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
+        // P1：快捷短语横滑条（钉在输入栏上方，与手环端 phrase-swiper 交互一致）
+        HorizontalScrollView phraseScroll = new HorizontalScrollView(this);
+        phraseScroll.setHorizontalScrollBarEnabled(false);
+        phraseBox = new LinearLayout(this);
+        phraseBox.setOrientation(LinearLayout.HORIZONTAL);
+        phraseScroll.addView(phraseBox);
+        root.addView(phraseScroll, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        root.addView(Ui.space(this, 6));
+
         LinearLayout sendRow = new LinearLayout(this);
         sendRow.setOrientation(LinearLayout.HORIZONTAL);
         inputView = new EditText(this);
@@ -113,6 +129,7 @@ public class MessageActivity extends Activity {
         });
         root.addView(clearLink);
 
+        renderPhrases();
         setContentView(Ui.fixedWithBottomBar(this, root, -1));
         installObserver(this);
         load();
@@ -295,6 +312,11 @@ public class MessageActivity extends Activity {
             return;
         }
         inputView.setText("");
+        sendText(text);
+    }
+
+    /** 输入框与快捷短语共用的发送通道（P1 抽出） */
+    private void sendText(String text) {
         JSONObject item = new JSONObject();
         try {
             item.put("id", UUID.randomUUID().toString().substring(0, 8));
@@ -310,6 +332,156 @@ public class MessageActivity extends Activity {
         render();
         refreshState();
         flush();
+    }
+
+    // ======================= 快捷短语（P1：纯本地） =======================
+
+    /** 读取短语列表（无记录/损坏时回落到默认五条） */
+    private JSONArray loadPhrases() {
+        try {
+            JSONArray arr = new JSONArray(
+                    getSharedPreferences(PREF, MODE_PRIVATE).getString(PHRASE_KEY, ""));
+            if (arr.length() > 0) {
+                return arr;
+            }
+        } catch (Throwable ignored) {
+        }
+        JSONArray def = new JSONArray();
+        for (String p : DEFAULT_PHRASES) {
+            def.put(p);
+        }
+        return def;
+    }
+
+    private void savePhrases(JSONArray arr) {
+        getSharedPreferences(PREF, MODE_PRIVATE).edit()
+                .putString(PHRASE_KEY, arr.toString()).apply();
+    }
+
+    /** 重建横滑短语条：若干短语 chip + 末尾「＋自定义」 */
+    private void renderPhrases() {
+        if (phraseBox == null) {
+            return;
+        }
+        phraseBox.removeAllViews();
+        JSONArray list = loadPhrases();
+        for (int i = 0; i < list.length(); i++) {
+            String p = list.optString(i);
+            if (p.length() > 0) {
+                phraseBox.addView(phraseChip(p));
+            }
+        }
+        phraseBox.addView(addChip());
+    }
+
+    /** 短语 chip：点击＝直接发送，长按＝编辑/删除 */
+    private View phraseChip(final String p) {
+        TextView t = Ui.text(this, p, 12.5f, Ui.TEXT, false);
+        t.setPadding(Ui.dp(this, 13), Ui.dp(this, 7), Ui.dp(this, 13), Ui.dp(this, 7));
+        t.setBackground(Ui.round(Ui.CARD2, 15, Ui.LINE, this));
+        t.setClickable(true);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, Ui.dp(this, 8), 0);
+        t.setLayoutParams(lp);
+        t.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { sendText(p); }
+        });
+        t.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override public boolean onLongClick(View v) { showPhraseMenu(p); return true; }
+        });
+        return t;
+    }
+
+    /** 末尾「＋自定义」chip：新增短语 */
+    private View addChip() {
+        TextView t = Ui.text(this, "＋ 自定义", 12.5f, Ui.ACCENT, true);
+        t.setPadding(Ui.dp(this, 13), Ui.dp(this, 7), Ui.dp(this, 13), Ui.dp(this, 7));
+        t.setBackground(Ui.round(Ui.ACCENT_LIGHT, 15, 0, this));
+        t.setClickable(true);
+        t.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { editPhrase(null); }
+        });
+        return t;
+    }
+
+    /** 长按短语 → 编辑 / 删除 */
+    private void showPhraseMenu(final String p) {
+        new AlertDialog.Builder(this)
+                .setTitle(p)
+                .setItems(new String[]{"编辑", "删除"},
+                        new android.content.DialogInterface.OnClickListener() {
+                    @Override public void onClick(android.content.DialogInterface d, int which) {
+                        if (which == 0) {
+                            editPhrase(p);
+                        } else {
+                            deletePhrase(p);
+                        }
+                    }
+                })
+                .show();
+    }
+
+    /** 新增（oldText=null）或编辑短语；保存时按文本定位替换，找不到则追加 */
+    private void editPhrase(final String oldText) {
+        final EditText et = new EditText(this);
+        et.setText(oldText == null ? "" : oldText);
+        et.setHint("最多 " + PHRASE_MAX_LEN + " 字");
+        et.setTextColor(Ui.TEXT);
+        et.setHintTextColor(Ui.MUTED);
+        et.setPadding(Ui.dp(this, 16), Ui.dp(this, 10), Ui.dp(this, 16), Ui.dp(this, 10));
+        if (oldText != null && oldText.length() > 0) {
+            et.setSelection(oldText.length());
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(oldText == null ? "新增快捷短语" : "编辑快捷短语")
+                .setView(et)
+                .setPositiveButton("保存", new android.content.DialogInterface.OnClickListener() {
+                    @Override public void onClick(android.content.DialogInterface d, int w) {
+                        String v = et.getText().toString().trim();
+                        if (v.length() == 0) {
+                            return;
+                        }
+                        if (v.length() > PHRASE_MAX_LEN) {
+                            v = v.substring(0, PHRASE_MAX_LEN);
+                        }
+                        JSONArray list = loadPhrases();
+                        JSONArray next = new JSONArray();
+                        boolean replaced = false;
+                        for (int i = 0; i < list.length(); i++) {
+                            String cur = list.optString(i);
+                            if (oldText != null && !replaced && cur.equals(oldText)) {
+                                next.put(v);
+                                replaced = true;
+                            } else {
+                                next.put(cur);
+                            }
+                        }
+                        if (!replaced) {
+                            next.put(v);   // 新增，或原项已不存在
+                        }
+                        savePhrases(next);
+                        renderPhrases();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void deletePhrase(String p) {
+        JSONArray list = loadPhrases();
+        JSONArray next = new JSONArray();
+        boolean removed = false;
+        for (int i = 0; i < list.length(); i++) {
+            String cur = list.optString(i);
+            if (!removed && cur.equals(p)) {
+                removed = true;   // 只删第一条匹配
+            } else {
+                next.put(cur);
+            }
+        }
+        savePhrases(next);
+        renderPhrases();
     }
 
     /** 逐条补发所有 pending 留言（SyncEngine 同一时刻只等一个回包，必须串行） */
