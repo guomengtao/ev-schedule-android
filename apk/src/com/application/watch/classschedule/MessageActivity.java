@@ -10,8 +10,12 @@ import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Vibrator;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -47,6 +51,7 @@ import java.util.UUID;
  *   手机 → 手环  {"action":"chat","id":"…","text":"…","ts":…}
  *   手环 → 手机  {"ok":true,"action":"chat_ack","id":"…","ts":…}   送达确认
  *   手环 → 手机  {"action":"chat","id":"…","text":"…","ts":…}      手环发来的留言
+ *   双向        {"action":"typing","state":"start|upd|stop","text":"…","ts":…}  输入态 + 草稿（P3）
  */
 public class MessageActivity extends Activity {
 
@@ -58,6 +63,18 @@ public class MessageActivity extends Activity {
     private static final String PHRASE_KEY = "phrases";
     private static final String[] DEFAULT_PHRASES = {"在上课", "马上到", "稍后回你", "到了", "好的"};
     private static final int PHRASE_MAX_LEN = 20;
+
+    // ---- P3 输入态（typing）参数（见 docs 方案 §3.3） ----
+    /** 开关（双端可关）：关掉后既不显示对方输入态，也不上报自己的输入态 */
+    private static final String TYPING_ENABLED_KEY = "typing_enabled";
+    /** 发送节流：≥800ms 一条，且文本变化才发（interconnect 是事件推送，高频小包会丢） */
+    private static final long TYPING_THROTTLE_MS = 800;
+    /** 草稿文本上限（超出截断，避免报文过大） */
+    private static final int TYPING_MAX_LEN = 40;
+    /** 收到对方 typing 时若 now-ts>3s → 丢弃（乱序/延迟的草稿显示出来反而是错的） */
+    private static final long TYPING_EXPIRE_MS = 3000;
+    /** 对方 5s 无新包 → 自动清掉输入态（防「卡住一直显示正在输入」） */
+    private static final long TYPING_CLEAR_MS = 5000;
     /** 已提醒过的消息 id（去重的唯一依据） */
     private static final String SEEN_KEY = "seen_ids";
     private static final int SEEN_MAX = 500;
@@ -65,9 +82,19 @@ public class MessageActivity extends Activity {
     private LinearLayout listBox;
     private ScrollView scrollBox;   // P0：气泡流需在发送/接收后自动滚到底
     private LinearLayout phraseBox; // P1：快捷短语横滑条
+    private TextView typingHint;    // P3：对方输入态提示（「对方正在输入：草稿」）
     private TextView stateView;
     private EditText inputView;
     private final SimpleDateFormat TS = new SimpleDateFormat("MM-dd HH:mm", Locale.US);
+
+    // ---- P3 输入态运行时状态 ----
+    private boolean typingEnabled = true;      // 双端可关
+    private long lastTypingSentAt = 0;         // 发送节流
+    private String lastTypingText = null;      // 文本没变不发
+    private boolean peerTypingActive = false;  // 对方正在输入
+    private String peerTypingText = "";        // 对方草稿（实时可见）
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private Runnable peerTypingClear;
 
     /** 队列项：{id, dir:"out"|"in", text, ts, status:"pending"|"sent"} —— 按时间顺序 */
     private JSONArray items = new JSONArray();
@@ -94,6 +121,12 @@ public class MessageActivity extends Activity {
         root.addView(scrollBox, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
+        // P3：对方输入态提示（钉在短语条上方；有内容才显示）
+        typingHint = Ui.text(this, "", 11.5f, Ui.ACCENT, false);
+        typingHint.setPadding(0, Ui.dp(this, 2), 0, Ui.dp(this, 2));
+        typingHint.setVisibility(View.GONE);
+        root.addView(typingHint);
+
         // P1：快捷短语横滑条（钉在输入栏上方，与手环端 phrase-swiper 交互一致）
         HorizontalScrollView phraseScroll = new HorizontalScrollView(this);
         phraseScroll.setHorizontalScrollBarEnabled(false);
@@ -111,6 +144,14 @@ public class MessageActivity extends Activity {
         inputView.setTextSize(13f);
         inputView.setTextColor(Ui.TEXT);
         inputView.setHintTextColor(Ui.MUTED);
+        // P3：输入变化 → 节流上报输入态（草稿实时同步给手环）
+        inputView.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void afterTextChanged(Editable s) {
+                onTypingChanged(s == null ? "" : s.toString());
+            }
+        });
         sendRow.addView(inputView, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         Button send = Ui.button(this, "发送", true, new View.OnClickListener() {
@@ -125,8 +166,25 @@ public class MessageActivity extends Activity {
         LinearLayout footRow = new LinearLayout(this);
         footRow.setOrientation(LinearLayout.HORIZONTAL);
         footRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        footRow.addView(Ui.text(this, "长按短语可编辑或删除", 11f, Ui.MUTED, false),
+        footRow.addView(Ui.text(this, "长按短语可编辑", 10.5f, Ui.MUTED, false),
                 new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        final TextView typingToggle = Ui.text(this, "", 11f, Ui.MUTED, false);
+        typingToggle.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 10), Ui.dp(this, 8));
+        typingToggle.setClickable(true);
+        updateTypingToggleLabel(typingToggle);
+        typingToggle.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                typingEnabled = !typingEnabled;
+                saveTypingEnabled();
+                updateTypingToggleLabel(typingToggle);
+                if (!typingEnabled) {          // 关掉：立刻清掉本端显示的对方输入态
+                    peerTypingActive = false;
+                    peerTypingText = "";
+                    renderTypingHint();
+                }
+            }
+        });
+        footRow.addView(typingToggle);
         TextView clearLink = Ui.text(this, "清空记录", 11.5f, Ui.MUTED, false);
         clearLink.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8));
         clearLink.setClickable(true);
@@ -137,6 +195,7 @@ public class MessageActivity extends Activity {
         root.addView(footRow);
 
         renderPhrases();
+        typingEnabled = loadTypingEnabled();
         setContentView(Ui.fixedWithBottomBar(this, root, -1));
         installObserver(this);
         load();
@@ -352,7 +411,135 @@ public class MessageActivity extends Activity {
         save();
         render();
         refreshState();
+        stopUserTyping();   // P3：本端已发出 → 立即通知对方清掉草稿
         flush();
+    }
+
+    // ======================= 输入态（P3：typing，双端可关） =======================
+
+    private boolean loadTypingEnabled() {
+        return getSharedPreferences(PREF, MODE_PRIVATE).getBoolean(TYPING_ENABLED_KEY, true);
+    }
+
+    private void saveTypingEnabled() {
+        getSharedPreferences(PREF, MODE_PRIVATE).edit()
+                .putBoolean(TYPING_ENABLED_KEY, typingEnabled).apply();
+    }
+
+    private void updateTypingToggleLabel(TextView tv) {
+        tv.setText(typingEnabled ? "输入态 开" : "输入态 关");
+        tv.setTextColor(typingEnabled ? Ui.ACCENT : Ui.MUTED);
+    }
+
+    /** 输入框内容变化：节流（≥800ms）+ 文本变化才发；空串发 stop。 */
+    private void onTypingChanged(String text) {
+        if (!typingEnabled) {
+            return;
+        }
+        String t = text == null ? "" : text;
+        if (t.length() > TYPING_MAX_LEN) {
+            t = t.substring(0, TYPING_MAX_LEN);
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastTypingSentAt < TYPING_THROTTLE_MS) {
+            return;                       // 节流：小包太密会丢
+        }
+        if (t.equals(lastTypingText)) {
+            return;                       // 文本没变不发
+        }
+        lastTypingSentAt = now;
+        lastTypingText = t;
+        sendTyping(t.length() == 0 ? "stop" : "upd", t);
+    }
+
+    /** 发送成功后立即通知对方清掉输入态（避免草稿残留在对面）。 */
+    private void stopUserTyping() {
+        if (!typingEnabled) {
+            return;
+        }
+        lastTypingText = "";
+        lastTypingSentAt = System.currentTimeMillis();
+        sendTyping("stop", null);
+    }
+
+    /** 发一条 typing 报文：走「无状态发送」，绝不占用 pending/超时窗口，也不阻塞留言发送。 */
+    private void sendTyping(String state, String text) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("action", "typing");
+            o.put("state", state);
+            if (text != null) {
+                o.put("text", text);
+            }
+            o.put("ts", System.currentTimeMillis());
+            SyncEngine.get(this).sendStateless(o.toString());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 对方输入态（由手环 typing 报文驱动）。
+     * @return true = 本条是 typing（已消费，调用方不要再送进留言流/不提醒）
+     */
+    boolean onPeerTyping(String json) {
+        try {
+            JSONObject o = new JSONObject(json);
+            if (!"typing".equals(o.optString("action"))) {
+                return false;
+            }
+            if (!typingEnabled) {
+                return true;              // 已关：消费掉但不显示
+            }
+            long ts = o.optLong("ts", 0);
+            if (ts > 0 && System.currentTimeMillis() - ts > TYPING_EXPIRE_MS) {
+                return true;              // 过期/乱序 → 丢弃
+            }
+            if ("stop".equals(o.optString("state", "upd"))) {
+                peerTypingActive = false;
+                peerTypingText = "";
+            } else {
+                String t = o.optString("text", "");
+                if (t.length() > TYPING_MAX_LEN) {
+                    t = t.substring(0, TYPING_MAX_LEN);
+                }
+                peerTypingActive = true;
+                peerTypingText = t;
+            }
+            renderTypingHint();
+            schedulePeerTypingClear();
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private void renderTypingHint() {
+        if (typingHint == null) {
+            return;
+        }
+        if (!peerTypingActive) {
+            typingHint.setVisibility(View.GONE);
+            return;
+        }
+        typingHint.setText(peerTypingText.length() > 0
+                ? ("对方正在输入：" + peerTypingText)
+                : "对方正在输入…");
+        typingHint.setVisibility(View.VISIBLE);
+    }
+
+    /** 5s 无新包 → 自动清掉输入态（防「卡住一直显示正在输入」）。 */
+    private void schedulePeerTypingClear() {
+        if (peerTypingClear != null) {
+            uiHandler.removeCallbacks(peerTypingClear);
+        }
+        peerTypingClear = new Runnable() {
+            @Override public void run() {
+                peerTypingActive = false;
+                peerTypingText = "";
+                renderTypingHint();
+            }
+        };
+        uiHandler.postDelayed(peerTypingClear, TYPING_CLEAR_MS);
     }
 
     // ======================= 快捷短语（P1：纯本地） =======================
@@ -640,6 +827,11 @@ public class MessageActivity extends Activity {
     static void installObserver(final Activity host) {
         SyncEngine.get(host).setObserver(new SyncEngine.Observer() {
             @Override public void onMessage(String json) {
+                // P3：输入态（typing）优先消费 —— 只更新「对方正在输入」提示，绝不进留言流/不提醒
+                if (host instanceof MessageActivity
+                        && ((MessageActivity) host).onPeerTyping(json)) {
+                    return;
+                }
                 // P2：先看是不是手环的「已读回执」（chat_read）。
                 //     是 → handleUnsolicited 内部会升级本地状态（sent→read）并 return，
                 //     这里再补一次重渲染，让气泡状态实时可见。

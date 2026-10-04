@@ -225,7 +225,8 @@ public final class SyncEngine {
                     try {
                         org.json.JSONObject o = new org.json.JSONObject(text);
                         String a = o.optString("action", "");
-                        unsolicited = "cmd".equals(a) || "chat".equals(a) || "chat_read".equals(a);
+                        unsolicited = "cmd".equals(a) || "chat".equals(a) || "chat_read".equals(a)
+                                || "typing".equals(a);
                     } catch (Throwable ignored) {
                     }
                     android.util.Log.i("EVSync", "rx: " + text);
@@ -297,6 +298,12 @@ public final class SyncEngine {
             api.sendMessage(nodeId, json.getBytes(Charset.forName("UTF-8")));
         } catch (Throwable ignored) {
         }
+    }
+
+    /** 对外暴露的「无状态发送」：用于 typing 这类高频状态报文 —— 绝不占用 pending / 6s 超时窗口，
+     *  也不会与课表同步/留言发送抢唯一的在途槽位（否则输入态会把真正的请求回包挤掉）。 */
+    public void sendStateless(String json) {
+        sendFireAndForget(json);
     }
 
     /** 如果消息体含 messageId，则回 ACK 到后台用于投递追踪 */
