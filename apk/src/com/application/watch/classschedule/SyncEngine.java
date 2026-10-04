@@ -37,6 +37,13 @@ public final class SyncEngine {
         void onReply(String json);
         void onTimeout(String hint);
         void onError(String msg);
+
+        /**
+         * 可选回调：手环端没响应，正在拉起手环 EV 并等待它冷启动。
+         * 冷启动可能要好几秒（最多重试 3 次），界面可借此给出「正在唤醒手环」提示，
+         * 避免用户以为点了没反应。默认空实现，旧调用方无需改动。
+         */
+        default void onWaking() { }
     }
 
     public interface Cb {
@@ -533,12 +540,14 @@ public final class SyncEngine {
                                 // 与 ping 分支同款自愈：EV 没回应多半是退了，拉起来，
                                 // 下一轮心跳自然能刷新成功
                                 android.util.Log.d("EVProbe", "keepalive: deviceId 无回应，拉起");
-                                try {
-                                    Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx));
-                                } catch (Throwable ignored) {
-                                }
+                                wakeUpPeer();
                             }
-                            @Override public void onError(String msg) { }
+                            @Override public void onError(String msg) {
+                                // 同上：EV 退出后 sendMessage 也可能【立即失败】而非超时，
+                                // 这条路径不补拉起的话，保活会在最需要时失灵
+                                android.util.Log.d("EVProbe", "keepalive: deviceId 失败，拉起");
+                                wakeUpPeer();
+                            }
                         });
                     } else {
                         android.util.Log.d("EVProbe", "keepalive: ping");
@@ -546,12 +555,14 @@ public final class SyncEngine {
                             @Override public void onReply(String json) { /* 通道活着，什么都不做 */ }
                             @Override public void onTimeout(String hint) {
                                 android.util.Log.d("EVProbe", "keepalive: EV 无回应，拉起");
-                                try {
-                                    Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx));
-                                } catch (Throwable ignored) {
-                                }
+                                wakeUpPeer();
                             }
-                            @Override public void onError(String msg) { /* 静默 */ }
+                            @Override public void onError(String msg) {
+                                // 早期这里静默放过 → EV 一退出、通道没建立时就再没人拉起它，
+                                // 保活形同虚设。现在超时/立即失败都走同一条自愈。
+                                android.util.Log.d("EVProbe", "keepalive: ping 失败，拉起");
+                                wakeUpPeer();
+                            }
                         });
                     }
                 } else {
@@ -1340,29 +1351,66 @@ public final class SyncEngine {
     }
 
     /**
-     * 通用「发消息 + 无回应自动唤醒」：呼叫手环 / 同步等动作都走这里。
-     * EV 快应用冷启动经常超过 6s 回包窗口，超时后自动 launchWearApp 再试（最多 3 次）。
+     * 通用「发消息 + 无回应/通道没建立自动唤醒」：呼叫手环 / 上课了 / 导出等即时指令都走这里。
+     *
+     * 两种情况都算「手环端没准备好」，都要拉起对端再补发（最多 3 次）：
+     *   ① {@code onTimeout}：报文被 SDK 受理但 6s 没回包 —— EV 冷启动慢；
+     *   ② {@code onError}：{@code sendMessage} 【立即失败】—— EV 压根没在运行，
+     *      interconnect 通道没建立，SDK 直接报 {@code sendMessage failed}。
+     *
+     * 早期实现只在 ① 里拉起，漏了 ② —— 于是「手环上没打开过 EV」时点按钮会立刻失败、
+     * 既不重试也唤不醒手环（用户反馈的「无法唤起手环」）。现两条路径统一收口到
+     * {@link #wakeRetry}。
      */
     public void sendWake(final String json, final Reply cb) { sendWakeN(json, cb, 3); }
 
     private void sendWakeN(final String json, final Reply cb, final int left) {
         send(json, new Reply() {
             @Override public void onReply(String r) { cb.onReply(r); }
-            @Override public void onTimeout(String hint) {
-                if (left <= 1) {
-                    cb.onTimeout(hint + "（已自动拉起 EV 重试过）");
-                    return;
-                }
-                try {
-                    Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx));
-                } catch (Throwable ignored) {
-                }
-                main.postDelayed(new Runnable() {
-                    @Override public void run() { sendWakeN(json, cb, left - 1); }
-                }, 3500);
-            }
-            @Override public void onError(String msg) { cb.onError(msg); }
+            @Override public void onTimeout(String hint) { wakeRetry(json, cb, left, hint, true); }
+            @Override public void onError(String msg) { wakeRetry(json, cb, left, msg, false); }
         });
+    }
+
+    /**
+     * 统一的「拉起手环 EV → 等它冷启动 → 重发」。
+     *
+     * @param timeout 原回调类型：true=超时、false=立即失败。保留是为了让调用方的
+     *                onTimeout/onError 文案分支不被混淆；但两者都会在这里尝试拉起。
+     */
+    private void wakeRetry(final String json, final Reply cb, final int left,
+                           final String why, final boolean timeout) {
+        // 重试耗尽，或本就没条件拉起（没选设备 / SDK 不可用）→ 按原类型如实上报
+        if (left <= 1 || nodeId == null || api == null) {
+            if (timeout) {
+                cb.onTimeout(left <= 1 ? why + "（已自动拉起 EV 重试过）" : why);
+            } else {
+                cb.onError(why);
+            }
+            return;
+        }
+        wakeUpPeer();
+        cb.onWaking();
+        main.postDelayed(new Runnable() {
+            @Override public void run() { sendWakeN(json, cb, left - 1); }
+        }, 3500);
+    }
+
+    /**
+     * 尽力拉起手环端快应用，失败静默。
+     *
+     * 手环上的 EV 快应用闲置一会儿就会被系统回收，此时 interconnect 通道没建立，
+     * 发消息会直接失败 —— 所以要靠 {@code launchWearApp} 把它叫醒。
+     * 「用户点击重试」({@link #wakeRetry}) 与「前台保活心跳」都走这里，避免两处各写一遍漂移。
+     */
+    private void wakeUpPeer() {
+        if (nodeId == null) {
+            return;
+        }
+        try {
+            Wearable.getNodeApi(ctx).launchWearApp(nodeId, Variant.peerPkg(ctx));
+        } catch (Throwable ignored) {
+        }
     }
 
     public void launchEv(final Cb cb) {

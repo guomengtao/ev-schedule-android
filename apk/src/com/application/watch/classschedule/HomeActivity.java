@@ -982,14 +982,12 @@ public class HomeActivity extends Activity {
     // ======================= 快捷操作 =======================
 
     /**
-     * 发一条 EV 指令（超时会自动拉起手环 EV 并重试 3 次）。
-     * 现仅由「上课了/下课了」在旧版手环不认 notify 时回落调用。
+     * 发一条 EV 指令给手环。无回应 / 通道没建立时会自动「拉起手环 EV → 补发」，
+     * 该逻辑已内建在 {@link SyncEngine#sendWake}（见其注释），此处不必重复。
      *
-     * @param allowWakeRetry SDK 直接报错时，是否补一次「先拉起手环 EV → 再发」。
-     *   对端快应用没起来时 sendMessage 会【立刻失败】（sendMessage failed），
-     *   而 sendWake 只在超时时才拉起对端，覆盖不到这种立即失败 → 这里补一步。
+     * 现由「上课了/下课了」在旧版手环不认 notify 时回落调用。
      */
-    private void quickSend(final String json, final String label, final boolean allowWakeRetry) {
+    private void quickSend(final String json, final String label) {
         final SyncEngine e = SyncEngine.get(this);
         if (!e.hasNode()) {
             miniStatus("手环未连接，无法" + label, Ui.WARN);
@@ -1018,21 +1016,10 @@ public class HomeActivity extends Activity {
                 miniStatus("手环无回应（" + label + "）", Ui.WARN);
             }
             @Override public void onError(String msg) {
-                if (!allowWakeRetry) {
-                    miniStatus(label + "发送失败：" + msg, Ui.ERR);
-                    return;
-                }
-                // 对端没起来 → 先拉起手环 EV，等它冷启动完再补发一次
-                miniStatus("正在唤醒手环 EV 并重发「" + label + "」…", Ui.ACCENT);
-                e.launchEv(new SyncEngine.Cb() {
-                    @Override public void on(boolean ok, String info) {
-                        ui.postDelayed(new Runnable() {
-                            @Override public void run() {
-                                quickSend(json, label, false);
-                            }
-                        }, 3500);
-                    }
-                });
+                miniStatus(label + "发送失败：" + msg, Ui.ERR);
+            }
+            @Override public void onWaking() {
+                miniStatus("手环未响应，正在唤醒手环并重发「" + label + "」…", Ui.ACCENT);
             }
         });
     }
@@ -1081,7 +1068,7 @@ public class HomeActivity extends Activity {
                 } else {
                     // 旧版手环不认 notify → 回落长震动，保证有反馈
                     miniStatus("手环版本较旧，改用震动提醒「" + label + "」…", Ui.MUTED);
-                    quickSend("{\"action\":\"call\",\"text\":\"" + label + "\"}", label, false);
+                    quickSend("{\"action\":\"call\",\"text\":\"" + label + "\"}", label);
                 }
             }
             @Override public void onTimeout(String hint) {
@@ -1089,6 +1076,9 @@ public class HomeActivity extends Activity {
             }
             @Override public void onError(String msg) {
                 miniStatus(label + "提醒失败：" + msg, Ui.ERR);
+            }
+            @Override public void onWaking() {
+                miniStatus("手环未响应，正在唤醒手环并重发「" + label + "」…", Ui.ACCENT);
             }
         });
     }
