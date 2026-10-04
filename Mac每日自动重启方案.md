@@ -291,3 +291,44 @@ sudo pmset repeat cancel && sudo launchctl bootout system /Library/LaunchDaemons
 sudo launchctl bootstrap system /Library/LaunchDaemons/com.user.dailyrestart.plist
 sudo pmset repeat wakeorpoweron MTWRFSU 04:25:00
 ```
+
+---
+
+## 八、按次自动登录：只有凌晨那次重启免密直进（2026-10-04 部署）
+
+### 需求与前提
+
+- 需求：**仅 04:30 计划重启**后自动登录进桌面；手动重启/意外断电等其他情况照常要密码。
+- 前提：**FileVault 必须关闭**（macOS 硬限制：FV 开启时重启场景下自动登录被整体禁用，会卡在解锁屏）。
+  实锤：2026-10-04 凌晨 04:30:02 计划重启成功，但开机脚本 08:26 才跑 —— 卡解锁屏 4 小时。
+  → 2026-10-04 已执行 `sudo fdesetup disable`（`FileVault is Off`）+ `sudo sysadminctl -autologin set Banner -password …`（登记自动登录凭据，密码只进系统安全域，不落任何脚本）。
+
+### 实现机制（开关在脚本里，密码不在）
+
+自动登录本身是全局开关，没有"按次"原生选项；利用"凌晨重启由我们自己的 daemon 触发"这一事实做**临时开关**：
+
+```
+04:30  daily_restart.sh：touch 标记文件 + 写 autoLoginUser=Banner → shutdown -r
+开机    loginwindow 因 autoLoginUser 存在 → 自动登录进桌面
++60s   log_boot.sh：检测到标记 → 消费标记 + 删除 autoLoginUser
+之后    手动重启/断电重启 → autoLoginUser 不存在 → 照常要密码 ✓
+```
+
+| 文件 | 本节改动 |
+|---|---|
+| `/usr/local/bin/daily_restart.sh` | shutdown 前加：`touch /var/log/.ev_autologin_pending` + `defaults write …/loginwindow autoLoginUser -string Banner` |
+| `/usr/local/bin/log_boot.sh` | 开机区分"计划重启（有标记）→ 消费标记；非计划 → 保持关闭"，并**延时 60 秒**后删除 autoLoginUser（不能太早，会跟 loginwindow 自动登录抢跑把人挡在登录窗） |
+
+### 验证与备忘
+
+```bash
+cat /var/log/daily_reboot.log      # 新增 [ALOGIN] 三种行：armed / consumed / stays off
+defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser   # 平时应报"找不到 key"= 关闭态
+```
+
+- **明天 04:30 后确认**：日志出现 `[ALOGIN] … auto-login consumed` 且人不卡登录窗 = 全链路通。
+- 若卡在登录窗 → 说明 `sysadminctl -autologin set` 那步没成功，重跑：
+  `sudo sysadminctl -autologin set Banner -password '开机密码'`
+- 立即实测一次（**会真的重启，先存工作**）：`sudo launchctl kickstart -k system/com.user.dailyrestart`
+- 恢复"每次重启都要密码"：把 daily_restart.sh 里 `touch 标记 + defaults write` 两行注释掉即可。
+- 彻底关闭自动登录能力：`sudo defaults delete /Library/Preferences/com.apple.loginwindow autoLoginUser`（键平时本就不存在）。
