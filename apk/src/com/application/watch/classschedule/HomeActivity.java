@@ -834,7 +834,7 @@ public class HomeActivity extends Activity {
             TextView tv = Ui.textLh(this, ts, Ui.SP_MICRO, Ui.MUTED, false, Ui.LH_MICRO);
             tv.setGravity(android.view.Gravity.CENTER);
             tv.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, TIME_COL_W),
-                    Ui.dp(this, 48)));
+                    Ui.dp(this, Ui.ROW_PITCH)));
             timeCol.addView(tv);
         }
         body.addView(timeCol);
@@ -855,7 +855,7 @@ public class HomeActivity extends Activity {
                 TextView hn = Ui.textMedium(this, Holiday.holidayName(this, day),
                         Ui.SP_CAPTION, Ui.OK);
                 hn.setGravity(android.view.Gravity.CENTER);
-                int colH = Ui.dp(this, 48) * Math.max(1, timeSlots.size());
+                int colH = Ui.dp(this, Ui.ROW_PITCH) * Math.max(1, timeSlots.size());
                 hn.setLayoutParams(new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, colH));
                 dayCol.addView(hn);
@@ -864,7 +864,8 @@ public class HomeActivity extends Activity {
                 continue;
             }
 
-            dayCol.setPadding(Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2), Ui.dp(this, 2));
+            dayCol.setPadding(Ui.dp(this, Ui.COL_PAD), Ui.dp(this, Ui.COL_PAD),
+                    Ui.dp(this, Ui.COL_PAD), Ui.dp(this, Ui.COL_PAD));
 
             // 调休列按目标星期几取课
             java.util.List<CourseCache.Course> dayList = CourseCache.coursesOfDay(all, override >= 0 ? override : d);
@@ -893,7 +894,7 @@ public class HomeActivity extends Activity {
                     View empty = new View(this);
                     empty.setBackground(Ui.round(0x00000000, Ui.R_BLOCK, 0, this));
                     empty.setLayoutParams(new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 48)));
+                            LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, Ui.ROW_PITCH)));
                     dayCol.addView(empty);
                 }
             }
@@ -906,7 +907,7 @@ public class HomeActivity extends Activity {
     }
 
     /**
-     * 课程小色块（周视图网格用，固定高度 44dp 双行：课名 + 教室）。
+     * 课程小色块（周视图网格用）：单字模式近正方 40dp、双行 44dp；上下均分补足 ROW_PITCH，行距恒对齐。
      * 字色按底色亮度自动选深/白（Ui.onCourseColor），单字模式放大课名。
      * current=true（今天列里正在上的课）加 2dp ACCENT 描边。
      */
@@ -918,12 +919,16 @@ public class HomeActivity extends Activity {
         b.setBackground(current
                 ? Ui.round(bg, Ui.R_BLOCK, Ui.ACCENT, 2, this)
                 : Ui.round(bg, Ui.R_BLOCK, 0, this));
-        // 左右 2→4 给文字留白；块高 44→48 容纳「课名 2 行 + 地点 1 行 + 行高」
+        // 2026-10-05 首页 UI 精细化：块高按模式收敛（单字近正方），上下均分补足 ROW_PITCH；
+        // 左右外边距由 3 收口到 BLOCK_MARGIN → 相邻块横向缝 10→4dp、可用文字宽 +25%
+        int blockH = shortModeHere() ? Ui.BLOCK_H_1CHAR : Ui.BLOCK_H_2LINE;
+        int vMargin = (Ui.ROW_PITCH - blockH) / 2;   // 每行总高恒 = ROW_PITCH，时间轴不再越滚越歪
         b.setPadding(Ui.dp(this, 2), Ui.dp(this, Ui.GAP_XS),
                 Ui.dp(this, 2), Ui.dp(this, Ui.GAP_XS));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 48));
-        lp.setMargins(Ui.dp(this, 3), Ui.dp(this, 3), Ui.dp(this, 3), Ui.dp(this, 3)); // 四向留缝
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, blockH));
+        lp.setMargins(Ui.dp(this, Ui.BLOCK_MARGIN), Ui.dp(this, vMargin),
+                Ui.dp(this, Ui.BLOCK_MARGIN), Ui.dp(this, vMargin));
         b.setLayoutParams(lp);
         int fg = Ui.onCourseColor(bg);
         String disp = CourseCache.displayName(c.name, CourseCache.shortNameMode(this));

@@ -126,8 +126,15 @@ public final class Ui {
     /** 间距栅格（4dp 基线）：首页所有间距都应落在这四档上 */
     public static final int GAP_XS = 4, GAP_SM = 8, GAP_MD = 12, GAP_LG = 16;
 
-    /** 圆角三档（原 20/16/15/14/12/8 六种 → 收敛） */
-    public static final int R_CARD = 16, R_CTRL = 12, R_BLOCK = 6;
+    /** 圆角三档（原 20/16/15/14/12/8 六种 → 收敛）。R_BLOCK 2026-10-05 6→4：块短边仅 ~34dp，圆角率 21%→14%，不再「按钮化」 */
+    public static final int R_CARD = 14, R_CTRL = 12, R_BLOCK = 4;
+
+    /** 周课表网格节奏（2026-10-05 首页 UI 精细化）：行距单一真源，时间标签/课程块/空行全部对齐它 */
+    public static final int ROW_PITCH = 48;      // 每行统一总高（时间列 / 课程块行 / 空格行）
+    public static final int BLOCK_MARGIN = 1;    // 课程块左右外边距（与 COL_PAD 收口：横向缝 10→4dp）
+    public static final int COL_PAD = 1;         // 天列内边距（与 BLOCK_MARGIN 共同收口）
+    public static final int BLOCK_H_2LINE = 44;  // 双行块（课名+地点）高度
+    public static final int BLOCK_H_1CHAR = 40;  // 单字块高度（近正方 1:1.18，从 28×48 竖长条改来）
 
     /** 最小触摸热区（Material 建议值） */
     public static final int TOUCH_MIN = 44;
@@ -332,7 +339,7 @@ public final class Ui {
         LinearLayout l = new LinearLayout(c);
         l.setOrientation(LinearLayout.VERTICAL);
         l.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12));
-        l.setBackground(round(CARD, 14, LINE, c));
+        l.setBackground(round(CARD, R_CARD, LINE, c));
         return l;
     }
 
@@ -340,7 +347,7 @@ public final class Ui {
         LinearLayout l = new LinearLayout(c);
         l.setOrientation(LinearLayout.VERTICAL);
         l.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12));
-        l.setBackground(round(CARD, 16, 0, c));
+        l.setBackground(round(CARD, R_CARD, 0, c));
         l.setElevation(dp(c, 6));
         return l;
     }
