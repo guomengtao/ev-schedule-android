@@ -15,6 +15,7 @@ import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -57,6 +58,7 @@ public class MessageActivity extends Activity {
     private static final int SEEN_MAX = 500;
 
     private LinearLayout listBox;
+    private ScrollView scrollBox;   // P0：气泡流需在发送/接收后自动滚到底
     private TextView stateView;
     private EditText inputView;
     private final SimpleDateFormat TS = new SimpleDateFormat("MM-dd HH:mm", Locale.US);
@@ -81,9 +83,9 @@ public class MessageActivity extends Activity {
 
         listBox = new LinearLayout(this);
         listBox.setOrientation(LinearLayout.VERTICAL);
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(listBox);
-        root.addView(scroll, new LinearLayout.LayoutParams(
+        scrollBox = new ScrollView(this);
+        scrollBox.addView(listBox);
+        root.addView(scrollBox, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
         LinearLayout sendRow = new LinearLayout(this);
@@ -170,7 +172,11 @@ public class MessageActivity extends Activity {
         return n;
     }
 
-    /** 极简卡片流：最新在上。每条 = 方向/状态标签 + 时间 + 内容，无气泡。 */
+    /**
+     * 微信式气泡流（P0）：最新在下；我方右对齐（主色气泡白字），对方左对齐（浅灰气泡深字）；
+     * 与上一条间隔 > 5 分钟才插一条居中时间分割；双方各有头像（手机 / 手表）。
+     * 消息量小（<100 条）→ 维持现有全量重建，暂不上 RecyclerView（方案 §3.1）。
+     */
     private void render() {
         listBox.removeAllViews();
         if (items.length() == 0) {
@@ -181,35 +187,100 @@ public class MessageActivity extends Activity {
             listBox.addView(empty);
             return;
         }
-        for (int i = items.length() - 1; i >= 0; i--) {
+        // 气泡最大宽度：约屏宽 2/3，避免长句铺满整行（微信同款观感）
+        int maxW = (int) (getResources().getDisplayMetrics().widthPixels * 0.66f);
+        long prevTs = 0;
+        for (int i = 0; i < items.length(); i++) {   // 正序：最新在下
             JSONObject o = items.optJSONObject(i);
             if (o == null) {
                 continue;
             }
+            long ts = o.optLong("ts");
+            if (prevTs == 0 || ts - prevTs > 5 * 60 * 1000L) {
+                listBox.addView(timeDivider(ts));
+            }
+            prevTs = ts;
+
             boolean out = "out".equals(o.optString("dir"));
             boolean sent = "sent".equals(o.optString("status"));
-
-            LinearLayout card = Ui.card(this);
-            // 头行：方向·状态（左） + 时间（右）
-            LinearLayout head = new LinearLayout(this);
-            head.setOrientation(LinearLayout.HORIZONTAL);
-            head.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            String tag = out ? (sent ? "我 · 已送达" : "我 · 待发送") : "手环";
-            TextView tagView = Ui.text(this, tag, 11f,
-                    out ? (sent ? Ui.OK : Ui.WARN) : Ui.ACCENT, true);
-            head.addView(tagView, new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-            TextView timeView = Ui.text(this, fmt(o.optLong("ts")), 10.5f, Ui.MUTED, false);
-            head.addView(timeView);
-            card.addView(head);
-
-            TextView body = Ui.text(this, o.optString("text"), 14f, Ui.TEXT, false);
-            body.setPadding(0, Ui.dp(this, 4), 0, 0);
-            card.addView(body);
-
-            listBox.addView(card);
-            listBox.addView(Ui.space(this, 8));
+            listBox.addView(bubbleRow(out, sent, o.optString("text"), maxW));
+            listBox.addView(Ui.space(this, 6));
         }
+        scrollToBottom();
+    }
+
+    /** 居中时间分割（10.5sp 灰字，上下留白） */
+    private View timeDivider(long ts) {
+        TextView t = Ui.text(this, fmt(ts), 10.5f, Ui.MUTED, false);
+        t.setGravity(android.view.Gravity.CENTER);
+        t.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 8));
+        t.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        return t;
+    }
+
+    /** 单条气泡行：头像 + 气泡（我方在右、对方在左），对方一侧用 spacer 把气泡推向另一侧 */
+    private View bubbleRow(boolean out, boolean sent, String text, int maxW) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.BOTTOM);
+
+        int av = Ui.dp(this, 34);
+        ImageView avatar = new ImageView(this);
+        avatar.setImageResource(out ? R.drawable.ic_smartphone : R.drawable.ic_tab_watch);
+        avatar.setColorFilter(out ? Ui.ACCENT : Ui.MUTED);
+        avatar.setPadding(Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7));
+        avatar.setBackground(Ui.round(out ? Ui.ACCENT_LIGHT : Ui.CARD2, 17, 0, this));
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(av, av);
+        alp.gravity = android.view.Gravity.BOTTOM;
+
+        LinearLayout bubble = new LinearLayout(this);
+        bubble.setOrientation(LinearLayout.VERTICAL);
+        bubble.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 8));
+        bubble.setBackground(Ui.round(out ? Ui.ACCENT : Ui.CARD, 14, out ? 0 : Ui.LINE, this));
+
+        TextView body = Ui.textLh(this, text, 14f, out ? Ui.ON_ACCENT : Ui.TEXT, false, Ui.LH_BODY);
+        body.setMaxWidth(maxW);
+        bubble.addView(body);
+
+        if (out) {
+            // 我方气泡内的送达状态（已送达 = 手环回了 chat_ack；待发送 = 尚未确认）
+            TextView st = Ui.text(this, sent ? "已送达" : "待发送", 10f,
+                    sent ? 0xB3FFFFFF : 0xFFFFE08A, false);
+            st.setPadding(0, Ui.dp(this, 3), 0, 0);
+            st.setGravity(android.view.Gravity.END);
+            bubble.addView(st);
+        }
+
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        blp.setMargins(Ui.dp(this, 6), 0, Ui.dp(this, 6), 0);
+
+        View spacer = new View(this);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(0, 1, 1f);
+
+        if (out) {                 // 我：spacer | 气泡 | 头像
+            row.addView(spacer, slp);
+            row.addView(bubble, blp);
+            row.addView(avatar, alp);
+        } else {                   // 对方：头像 | 气泡 | spacer
+            row.addView(avatar, alp);
+            row.addView(bubble, blp);
+            row.addView(spacer, slp);
+        }
+        return row;
+    }
+
+    /** 布局完成后滚到底部（最新消息） */
+    private void scrollToBottom() {
+        if (scrollBox == null) {
+            return;
+        }
+        scrollBox.post(new Runnable() {
+            @Override public void run() {
+                scrollBox.fullScroll(View.FOCUS_DOWN);
+            }
+        });
     }
 
     private String fmt(long ts) {
