@@ -81,7 +81,12 @@ public class MessageActivity extends Activity {
 
     private LinearLayout listBox;
     private ScrollView scrollBox;   // P0：气泡流需在发送/接收后自动滚到底
-    private LinearLayout phraseBox; // P1：快捷短语横滑条
+    private LinearLayout phraseBox; // P1：快捷短语横滑条（现收纳进「＋」面板）
+    private Button sendBtn;                                  // 微信式：有文字才显示的绿色发送键
+    private android.widget.ImageButton plusBtn;              // ＋键（有文字时被「发送」取代）
+    private LinearLayout phrasePanel;                        // 面板0：短语 + 设置小行
+    private android.widget.HorizontalScrollView emojiPanel;  // 面板1：表情
+    private LinearLayout emojiBox;                           // 表情容器
     private TextView typingHint;    // P3：对方输入态提示（「对方正在输入：草稿」）
     private TextView stateView;
     private EditText inputView;
@@ -140,58 +145,94 @@ public class MessageActivity extends Activity {
         root.addView(scrollBox, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        // P3：对方输入态提示（钉在短语条上方；有内容才显示）
+        // P3：对方输入态提示（钉在输入区上方；有内容才显示）
         typingHint = Ui.text(this, "", 11.5f, Ui.ACCENT, false);
-        typingHint.setPadding(0, Ui.dp(this, 2), 0, Ui.dp(this, 2));
+        typingHint.setPadding(Ui.dp(this, 6), Ui.dp(this, 2), 0, Ui.dp(this, 2));
         typingHint.setVisibility(View.GONE);
         root.addView(typingHint);
 
-        // P1：快捷短语横滑条（钉在输入栏上方，与手环端 phrase-swiper 交互一致）
-        HorizontalScrollView phraseScroll = new HorizontalScrollView(this);
-        phraseScroll.setHorizontalScrollBarEnabled(false);
-        phraseBox = new LinearLayout(this);
-        phraseBox.setOrientation(LinearLayout.HORIZONTAL);
-        phraseScroll.addView(phraseBox);
-        root.addView(phraseScroll, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        root.addView(Ui.space(this, 6));
-
+        // ===== 微信式输入栏：[输入框]　[表情]　[＋ / 发送] =====
+        // 依据真机微信截图(1080×1920@3x)：栏底 #F7F7F7、输入框纯白圆角、右侧描边圆图标、有字时出现绿色「发送」
         LinearLayout sendRow = new LinearLayout(this);
         sendRow.setOrientation(LinearLayout.HORIZONTAL);
         sendRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        sendRow.setBackgroundColor(wxBarBg());
+        sendRow.setPadding(Ui.dp(this, 6), Ui.dp(this, 7), Ui.dp(this, 6), Ui.dp(this, 7));
+
         inputView = new EditText(this);
         inputView.setHint("发消息…");
         inputView.setTextSize(15f);
         inputView.setTextColor(wxBodyText());
         inputView.setHintTextColor(wxTimeText());
-        inputView.setBackground(Ui.round(wxInputBg(), 6, 0, this));
-        inputView.setPadding(Ui.dp(this, 12), Ui.dp(this, 9), Ui.dp(this, 12), Ui.dp(this, 9));
+        inputView.setBackground(Ui.round(wxInputBg(), 5, 0, this));   // 微信输入框：纯白、圆角≈5dp、无描边
+        inputView.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 8));
         inputView.setMaxLines(4);
-        // P3：输入变化 → 节流上报输入态（草稿实时同步给手环）
+        inputView.setMinHeight(Ui.dp(this, 36));
+        // P3：输入变化 → 节流上报输入态（草稿实时同步）+ 微信式「发送」键显隐
         inputView.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
             @Override public void afterTextChanged(Editable s) {
-                onTypingChanged(s == null ? "" : s.toString());
+                String t = s == null ? "" : s.toString();
+                onTypingChanged(t);
+                updateSendButton(t);
             }
+        });
+        inputView.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { hidePanels(); }   // 点输入框＝收面板（微信行为）
         });
         sendRow.addView(inputView, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        Button send = Ui.button(this, "发送", true, new View.OnClickListener() {
+
+        // 表情键（微信输入栏右侧第一个）
+        android.widget.ImageButton emojiBtn = iconBtn(R.drawable.ic_smile, "表情");
+        emojiBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (emojiPanel.getVisibility() == View.VISIBLE) { hidePanels(); } else { togglePanel(1); }
+            }
+        });
+        sendRow.addView(emojiBtn);
+
+        // ＋键（微信输入栏最右；输入框有字时被绿色「发送」取代）
+        plusBtn = iconBtn(R.drawable.ic_plus, "更多");
+        plusBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (phrasePanel.getVisibility() == View.VISIBLE) { hidePanels(); } else { togglePanel(0); }
+            }
+        });
+        sendRow.addView(plusBtn);
+
+        // 发送键（微信绿 #07C160；仅输入框有文字时出现）
+        sendBtn = Ui.button(this, "发送", true, new View.OnClickListener() {
             @Override public void onClick(View v) { sendMessage(); }
         });
-        send.setTextColor(0xFFFFFFFF);
-        send.setBackground(Ui.round(wxSendGreen(), 6, 0, this));   // 微信发送键绿
-        send.setPadding(Ui.dp(this, 15), Ui.dp(this, 9), Ui.dp(this, 15), Ui.dp(this, 9));
-        sendRow.addView(send);
+        sendBtn.setTextColor(0xFFFFFFFF);
+        sendBtn.setBackground(Ui.round(wxSendGreen(), 5, 0, this));
+        sendBtn.setPadding(Ui.dp(this, 14), Ui.dp(this, 8), Ui.dp(this, 14), Ui.dp(this, 8));
+        sendBtn.setVisibility(View.GONE);
+        sendRow.addView(sendBtn);
         root.addView(sendRow);
-        root.addView(Ui.space(this, 6));
 
-        // 按钮精简：诊断类动作移除（补发自动进行）。
-        // P1.1：把「长按短语可编辑/删除」常驻写在这里 —— 短语的删除入口不能只靠用户猜长按。
+        // ===== 面板区（默认收起，点 ＋/表情 展开；对应微信盖住键盘位的面板） =====
+        // 面板0：快捷短语 + 设置小行
+        phrasePanel = new LinearLayout(this);
+        phrasePanel.setOrientation(LinearLayout.VERTICAL);
+        phrasePanel.setBackgroundColor(wxBarBg());
+        phrasePanel.setVisibility(View.GONE);
+        HorizontalScrollView phraseScroll = new HorizontalScrollView(this);
+        phraseScroll.setHorizontalScrollBarEnabled(false);
+        phraseBox = new LinearLayout(this);
+        phraseBox.setOrientation(LinearLayout.HORIZONTAL);
+        phraseBox.setPadding(Ui.dp(this, 6), Ui.dp(this, 6), Ui.dp(this, 6), Ui.dp(this, 2));
+        phraseScroll.addView(phraseBox);
+        phrasePanel.addView(phraseScroll, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // 设置小行（长按短语可编辑 / 输入态开关 / 清空记录）收纳进面板 —— 主界面保持微信式干净
         LinearLayout footRow = new LinearLayout(this);
         footRow.setOrientation(LinearLayout.HORIZONTAL);
         footRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        footRow.setPadding(Ui.dp(this, 10), 0, Ui.dp(this, 6), Ui.dp(this, 4));
         footRow.addView(Ui.text(this, "长按短语可编辑", 10.5f, Ui.MUTED, false),
                 new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         final TextView typingToggle = Ui.text(this, "", 11f, Ui.MUTED, false);
@@ -218,9 +259,23 @@ public class MessageActivity extends Activity {
             @Override public void onClick(View v) { clearAll(); }
         });
         footRow.addView(clearLink);
-        root.addView(footRow);
+        phrasePanel.addView(footRow);
+        root.addView(phrasePanel);
+
+        // 面板1：表情（BMP 符号，手机必显；手环是否渲染取决于其字体）
+        emojiPanel = new android.widget.HorizontalScrollView(this);
+        emojiPanel.setHorizontalScrollBarEnabled(false);
+        emojiPanel.setBackgroundColor(wxBarBg());
+        emojiBox = new LinearLayout(this);
+        emojiBox.setOrientation(LinearLayout.HORIZONTAL);
+        emojiBox.setPadding(Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8));
+        emojiPanel.addView(emojiBox);
+        emojiPanel.setVisibility(View.GONE);
+        root.addView(emojiPanel, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         renderPhrases();
+        renderEmoji();
         typingEnabled = loadTypingEnabled();
         setContentView(Ui.fixedWithBottomBar(this, root, -1));
         installObserver(this);
@@ -396,6 +451,83 @@ public class MessageActivity extends Activity {
             row.addView(spacer, slp);
         }
         return row;
+    }
+
+    // ======================= 微信式输入栏小组件（v3） =======================
+
+    /** 描边圆图标键（微信输入栏同款：细线图标 + 浅圆底） */
+    private android.widget.ImageButton iconBtn(int resId, String desc) {
+        android.widget.ImageButton b = new android.widget.ImageButton(this);
+        b.setImageResource(resId);
+        b.setColorFilter(Ui.isDark() ? 0xFFBFBFBF : 0xFF3A3A3A);
+        b.setBackground(Ui.round(Ui.isDark() ? 0xFF2A2A2A : 0xFFF2F2F2, 24, 0, this));
+        int sz = Ui.dp(this, 34);
+        b.setPadding(Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(sz, sz);
+        lp.setMargins(Ui.dp(this, 4), 0, 0, 0);
+        b.setLayoutParams(lp);
+        b.setContentDescription(desc);
+        return b;
+    }
+
+    /** 微信式：输入框有字 → 显绿色「发送」、隐「＋」；无字 → 反之 */
+    private void updateSendButton(String text) {
+        if (sendBtn == null || plusBtn == null) {
+            return;
+        }
+        boolean has = text != null && text.trim().length() > 0;
+        sendBtn.setVisibility(has ? View.VISIBLE : View.GONE);
+        plusBtn.setVisibility(has ? View.GONE : View.VISIBLE);
+    }
+
+    /** 展开面板（0=短语/设置，1=表情），同时收起另一个 */
+    private void togglePanel(int which) {
+        boolean phrase = (which == 0);
+        phrasePanel.setVisibility(phrase ? View.VISIBLE : View.GONE);
+        emojiPanel.setVisibility(phrase ? View.GONE : View.VISIBLE);
+    }
+
+    private void hidePanels() {
+        if (phrasePanel != null) {
+            phrasePanel.setVisibility(View.GONE);
+        }
+        if (emojiPanel != null) {
+            emojiPanel.setVisibility(View.GONE);
+        }
+    }
+
+    /** 表情面板：BMP 符号集（手机必显；手环是否渲染取决于其字体，后续可真机核） */
+    private static final String[] EMOJI = {
+            "\u263A", "\u2764", "\u2B50", "\u2728", "\u2600", "\u26A1",
+            "\u2615", "\u2708", "\u2757", "\u2714", "\u2665", "\u2709"
+    };
+
+    private void renderEmoji() {
+        if (emojiBox == null) {
+            return;
+        }
+        emojiBox.removeAllViews();
+        for (final String e : EMOJI) {
+            TextView t = Ui.text(this, e, 20f, wxBodyText(), false);
+            t.setGravity(android.view.Gravity.CENTER);
+            t.setPadding(Ui.dp(this, 10), Ui.dp(this, 6), Ui.dp(this, 10), Ui.dp(this, 6));
+            t.setClickable(true);
+            t.setBackground(Ui.round(Ui.isDark() ? 0xFF2A2A2A : 0xFFF2F2F2, 8, 0, this));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 0, Ui.dp(this, 6), 0);
+            t.setLayoutParams(lp);
+            t.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    int pos = inputView.getSelectionStart();
+                    if (pos < 0) {
+                        pos = inputView.getText().length();
+                    }
+                    inputView.getText().insert(pos, e);
+                }
+            });
+            emojiBox.addView(t);
+        }
     }
 
     /** 布局完成后滚到底部（最新消息） */
