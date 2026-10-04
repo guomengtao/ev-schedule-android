@@ -58,6 +58,11 @@ public class MessageActivity extends Activity {
     private int lastThemeVersion = 0;
 
     private static final String PREF = "ev_message_queue";
+    /** 栏目/入口短名（原「留言」）：体现「手环 ↔ 手机 实时聊天」 */
+    static final String CHAT_NAME = "腕聊";
+    /** 记住「最后一次对话所属设备」：断开后仍沿用同一作用域，否则对话会“消失” */
+    private static final String SCOPE_PREF = "ev_msg_scope";
+    private static final String LAST_SCOPE_KEY = "last_device";
     private static final String KEY = "items";
     /** P1：快捷短语（两端各自本地维护；跨端下发 phrases 留到 P3） */
     private static final String PHRASE_KEY = "phrases";
@@ -123,15 +128,12 @@ public class MessageActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 全屏微信式：留言页不挂任何底部栏（4 tab 属主框架），整页沉浸
-        goFullScreen();
-
+        // 留言页微信式：不挂底部 4 tab（属主框架）；系统状态栏/导航栏保持原样（不干预）
         LinearLayout root = Ui.screen(this);
         root.setBackgroundColor(wxChtBg());
         root.setPadding(0, 0, 0, 0);   // 去 Ui.screen 留白：输入栏通栏贴底（微信行为）
-        View nav = Ui.header(this, "留言");
+        View nav = Ui.header(this, chatTitle());   // 顶部显示当前手环名（可能连不同手环）
         nav.setBackgroundColor(wxNavBg());
-        nav.setPadding(0, Ui.dp(this, 6), 0, 0);   // 无状态栏后给标题一点呼吸
         root.addView(nav);
         root.addView(Ui.space(this, 2));
 
@@ -481,14 +483,82 @@ public class MessageActivity extends Activity {
         return row;
     }
 
-    /** 真·沉浸式全屏：隐藏系统状态栏 + 导航栏（留言页不挂底部 tab，整页沉浸） */
-    private void goFullScreen() {
+    /** 顶部标题：当前连接的手环名（可能连不同手环）；未连接/无名时退回栏目短名 */
+    private String chatTitle() {
         try {
-            getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+            String n = SyncEngine.get(this).currentDeviceName();
+            if (n != null && n.trim().length() > 0) {
+                return n.trim();
+            }
+        } catch (Throwable ignored) {
+        }
+        return CHAT_NAME;
+    }
+
+    // ======================= 多手环对话隔离（按 deviceId 分库） =======================
+
+    /** 只留字母数字，作为 prefs 文件名的安全后缀 */
+    private static String sani(String s) {
+        return s == null ? "" : s.replaceAll("[^A-Za-z0-9]", "");
+    }
+
+    /** 本设备对话作用域的文件名：按手环 deviceId 隔离（多手环各自独立对话）。
+     *  未连接时沿用「最后一次的设备」，避免断开后对话跳回空文件；从没连过才退回默认文件。 */
+    private static String prefName(Context ctx) {
+        String id = "";
+        try {
+            id = sani(SyncEngine.get(ctx).currentDeviceId());
+        } catch (Throwable ignored) {
+        }
+        try {
+            SharedPreferences sc = ctx.getSharedPreferences(SCOPE_PREF, Context.MODE_PRIVATE);
+            if (id.length() > 0) {
+                if (!id.equals(sc.getString(LAST_SCOPE_KEY, ""))) {
+                    sc.edit().putString(LAST_SCOPE_KEY, id).apply();   // 记住本设备
+                }
+            } else {
+                id = sani(sc.getString(LAST_SCOPE_KEY, ""));           // 断开：沿用最后设备
+            }
+        } catch (Throwable ignored) {
+        }
+        return id.length() > 0 ? PREF + "_" + (id.length() > 24 ? id.substring(0, 24) : id) : PREF;
+    }
+
+    private static SharedPreferences msgPrefs(Context ctx) {
+        return ctx.getSharedPreferences(prefName(ctx), Context.MODE_PRIVATE);
+    }
+
+    /** 首次按设备隔离时，把旧的全局队列/短语搬进本设备作用域（仅一次；随后清空旧文件，避免重复搬）。 */
+    private static void migrateLegacyScope(Context ctx, SharedPreferences target) {
+        try {
+            if (PREF.equals(prefName(ctx))) {
+                return;   // 仍落在默认文件（从没连过）：无需迁移
+            }
+            SharedPreferences legacy = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+            if (target == legacy) {
+                return;
+            }
+            SharedPreferences.Editor ed = null;
+            if (!target.contains(KEY)) {
+                String raw = legacy.getString(KEY, null);
+                if (raw != null && raw.length() > 2) {
+                    target.edit().putString(KEY, raw).apply();
+                    ed = legacy.edit().remove(KEY);
+                }
+            }
+            if (!target.contains(PHRASE_KEY)) {
+                String ph = legacy.getString(PHRASE_KEY, null);
+                if (ph != null && ph.length() > 2) {
+                    target.edit().putString(PHRASE_KEY, ph).apply();
+                    if (ed == null) {
+                        ed = legacy.edit();
+                    }
+                    ed.remove(PHRASE_KEY);
+                }
+            }
+            if (ed != null) {
+                ed.apply();
+            }
         } catch (Throwable ignored) {
         }
     }
@@ -646,11 +716,11 @@ public class MessageActivity extends Activity {
     // ======================= 输入态（P3：typing，双端可关） =======================
 
     private boolean loadTypingEnabled() {
-        return getSharedPreferences(PREF, MODE_PRIVATE).getBoolean(TYPING_ENABLED_KEY, true);
+        return getSharedPreferences(prefName(this), MODE_PRIVATE).getBoolean(TYPING_ENABLED_KEY, true);
     }
 
     private void saveTypingEnabled() {
-        getSharedPreferences(PREF, MODE_PRIVATE).edit()
+        getSharedPreferences(prefName(this), MODE_PRIVATE).edit()
                 .putBoolean(TYPING_ENABLED_KEY, typingEnabled).apply();
     }
 
@@ -776,7 +846,7 @@ public class MessageActivity extends Activity {
     private JSONArray loadPhrases() {
         try {
             JSONArray arr = new JSONArray(
-                    getSharedPreferences(PREF, MODE_PRIVATE).getString(PHRASE_KEY, ""));
+                    getSharedPreferences(prefName(this), MODE_PRIVATE).getString(PHRASE_KEY, ""));
             if (arr.length() > 0) {
                 return arr;
             }
@@ -790,7 +860,7 @@ public class MessageActivity extends Activity {
     }
 
     private void savePhrases(JSONArray arr) {
-        getSharedPreferences(PREF, MODE_PRIVATE).edit()
+        getSharedPreferences(prefName(this), MODE_PRIVATE).edit()
                 .putString(PHRASE_KEY, arr.toString()).apply();
     }
 
@@ -1103,7 +1173,7 @@ public class MessageActivity extends Activity {
             if (ids == null || ids.length() == 0) {
                 return true;    // 是已读回执但无 ids：消费掉，不进留言流、不提醒
             }
-            SharedPreferences sp = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+            SharedPreferences sp = msgPrefs(ctx);
             JSONArray arr;
             try {
                 arr = new JSONArray(sp.getString(KEY, "[]"));
@@ -1172,7 +1242,7 @@ public class MessageActivity extends Activity {
     /** 记录已提醒过的 id；返回 true = 首次见到（应提醒），false = 重复（应丢弃） */
     private static synchronized boolean markSeen(Context ctx, String id) {
         try {
-            SharedPreferences sp = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+            SharedPreferences sp = msgPrefs(ctx);
             String raw = sp.getString(SEEN_KEY, "");
             Set<String> seen = new LinkedHashSet<>();
             if (raw.length() > 0) {
@@ -1204,7 +1274,7 @@ public class MessageActivity extends Activity {
     /** 把收到的留言写入本地记录（与留言列表共用同一份存储） */
     private static synchronized void appendIncoming(Context ctx, String id, String text, long ts) {
         try {
-            SharedPreferences sp = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+            SharedPreferences sp = msgPrefs(ctx);
             JSONArray arr;
             try {
                 arr = new JSONArray(sp.getString(KEY, "[]"));
@@ -1294,7 +1364,7 @@ public class MessageActivity extends Activity {
         }
         final String id = UUID.randomUUID().toString().substring(0, 8);
         try {
-            SharedPreferences sp = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+            SharedPreferences sp = msgPrefs(ctx);
             JSONArray arr;
             try {
                 arr = new JSONArray(sp.getString(KEY, "[]"));
@@ -1339,7 +1409,7 @@ public class MessageActivity extends Activity {
                                 && !"no courses".equals(r.optString("reason")));
                     if (ack) {
                         SharedPreferences sp =
-                                appCtx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+                                msgPrefs(appCtx);
                         JSONArray arr = new JSONArray(sp.getString(KEY, "[]"));
                         for (int i = 0; i < arr.length(); i++) {
                             JSONObject it = arr.optJSONObject(i);
@@ -1359,7 +1429,8 @@ public class MessageActivity extends Activity {
     }
 
     private void load() {
-        SharedPreferences sp = getSharedPreferences(PREF, MODE_PRIVATE);
+        SharedPreferences sp = getSharedPreferences(prefName(this), MODE_PRIVATE);
+        migrateLegacyScope(this, sp);
         try {
             items = new JSONArray(sp.getString(KEY, "[]"));
         } catch (Throwable t) {
@@ -1368,7 +1439,7 @@ public class MessageActivity extends Activity {
     }
 
     private void save() {
-        getSharedPreferences(PREF, MODE_PRIVATE).edit()
+        getSharedPreferences(prefName(this), MODE_PRIVATE).edit()
                 .putString(KEY, items.toString()).apply();
     }
 }

@@ -14,7 +14,7 @@ import android.widget.TextView;
 import org.json.JSONObject;
 
 /**
- * 手环页（底栏第 3 tab，设备作用域）：连接管理 + 昵称 + 首页设置 + 留言入口。
+ * 手环页（底栏第 3 tab，设备作用域）：连接管理 + 昵称 + 首页设置 + 腕聊入口。
  *
  * 与「设置」页的分工：凡是「写回手环才生效 / 设备仅有的」配置都在这里；
  * App 自身行为（后台常驻、上课提醒、主题、高级版、打赏、更新）在「设置」页。
@@ -173,8 +173,8 @@ public class BandActivity extends Activity {
                 }));
         cfgBox.addView(Ui.space(this, 6));
 
-        // ----- 留言（原底栏入口取消后的固定去处）-----
-        cfgBox.addView(Ui.row(this, "留言", "给手环发消息 / 查看手环发来的留言", Ui.TEXT,
+        // ----- 腕聊（原「留言」入口；突出「手环 ↔ 手机 实时聊天」）-----
+        cfgBox.addView(Ui.row(this, MessageActivity.CHAT_NAME, "手环 ↔ 手机 实时聊天", Ui.TEXT,
                 new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         startActivity(new Intent(BandActivity.this, MessageActivity.class));
