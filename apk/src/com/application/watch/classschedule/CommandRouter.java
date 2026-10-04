@@ -481,12 +481,12 @@ public final class CommandRouter {
 
         Notification n = new Notification.Builder(app, Notifications.CH_REMIND)
                 .setSmallIcon(R.drawable.ic_timer)
-                .setContentTitle("Countdown Finished")
-                .setContentText("Time's up — tap to open toolbox")
+                .setContentTitle("倒计时结束")
+                .setContentText("时间到，点按打开工具箱")
                 .setPriority(Notification.PRIORITY_HIGH)
                 .setAutoCancel(true)
                 .setContentIntent(contentPi)
-                .addAction(0, "Dismiss", dismissPi)
+                .addAction(0, "知道了", dismissPi)
                 .build();
         nm(app).notify(CD_NOTIFY_ID, n);
 

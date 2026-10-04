@@ -35,27 +35,27 @@ public class ToolboxActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.header(this, "Toolbox"));
+        root.addView(Ui.header(this, "工具箱"));
         root.addView(Ui.space(this, 12));
 
         // ===== Find Phone =====
         LinearLayout findCard = Ui.card(this);
-        findCard.addView(Ui.text(this, "Find Phone", 13.5f, Ui.TEXT, true));
-        findStatusView = Ui.text(this, "Phone rings for 30s (even in silent mode)", 11.5f, Ui.MUTED, false);
+        findCard.addView(Ui.text(this, "找手机", 13.5f, Ui.TEXT, true));
+        findStatusView = Ui.text(this, "手机响铃 30 秒（静音/勿扰也能响）", 11.5f, Ui.MUTED, false);
         findStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
         findCard.addView(findStatusView);
         findCard.addView(Ui.grid(this,
-                Ui.button(this, "Start Ringing", true, new View.OnClickListener() {
+                Ui.button(this, "开始响铃", true, new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         CommandRouter.findPhone(ToolboxActivity.this);
-                        findStatusView.setText("Ringing... a full-screen popup lets you stop instantly");
+                        findStatusView.setText("响铃中… 全屏弹窗可一键停止");
                         findStatusView.setTextColor(Ui.OK);
                     }
                 }),
-                Ui.button(this, "Stop", false, new View.OnClickListener() {
+                Ui.button(this, "停止", false, new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         CommandRouter.stopFindPhone(ToolboxActivity.this);
-                        findStatusView.setText("Stopped");
+                        findStatusView.setText("已停止");
                         findStatusView.setTextColor(Ui.MUTED);
                     }
                 })));
@@ -64,11 +64,11 @@ public class ToolboxActivity extends Activity {
 
         // ===== Mute Toggle =====
         LinearLayout muteCard = Ui.card(this);
-        muteCard.addView(Ui.text(this, "Mute Toggle", 13.5f, Ui.TEXT, true));
+        muteCard.addView(Ui.text(this, "静音切换", 13.5f, Ui.TEXT, true));
         muteStatusView = Ui.text(this, currentRinger(), 11.5f, Ui.MUTED, false);
         muteStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
         muteCard.addView(muteStatusView);
-        muteCard.addView(Ui.button(this, "Toggle Ring / Vibrate", false, new View.OnClickListener() {
+        muteCard.addView(Ui.button(this, "切换响铃 / 振动", false, new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String r = CommandRouter.toggleMute(ToolboxActivity.this);
                 muteStatusView.setText(r);
@@ -80,7 +80,7 @@ public class ToolboxActivity extends Activity {
 
         // ===== Countdown =====
         cdCard = Ui.card(this);
-        cdCard.addView(Ui.text(this, "Countdown", 13.5f, Ui.TEXT, true));
+        cdCard.addView(Ui.text(this, "倒计时", 13.5f, Ui.TEXT, true));
 
         cdTimerView = Ui.text(this, "", 24f, Ui.ACCENT, true);
         cdTimerView.setGravity(Gravity.CENTER);
@@ -92,19 +92,19 @@ public class ToolboxActivity extends Activity {
         cdCard.addView(cdStatusView);
 
         cdCard.addView(Ui.grid(this,
-                Ui.button(this, "1 min", false, clickCd(1)),
-                Ui.button(this, "5 min", false, clickCd(5))));
+                Ui.button(this, "1 分钟", false, clickCd(1)),
+                Ui.button(this, "5 分钟", false, clickCd(5))));
         cdCard.addView(Ui.space(this, 2));
         cdCard.addView(Ui.grid(this,
-                Ui.button(this, "10 min", false, clickCd(10)),
-                Ui.button(this, "30 min", false, clickCd(30))));
+                Ui.button(this, "10 分钟", false, clickCd(10)),
+                Ui.button(this, "30 分钟", false, clickCd(30))));
 
-        cdCancelBtn = Ui.button(this, "Cancel", false, new View.OnClickListener() {
+        cdCancelBtn = Ui.button(this, "取消", false, new View.OnClickListener() {
             @Override public void onClick(View v) {
                 CommandRouter.cancelCountdown(ToolboxActivity.this);
                 stopTick();
                 cdTimerView.setText("");
-                cdStatusView.setText("Select a duration to start countdown");
+                cdStatusView.setText("选择时长开始倒计时");
                 cdStatusView.setTextColor(Ui.MUTED);
                 cdCancelBtn.setVisibility(View.GONE);
                 dismissFiredCard();
@@ -120,11 +120,11 @@ public class ToolboxActivity extends Activity {
         // ===== Countdown completion card (shown when fired while app foreground) =====
         cdFiredCard = Ui.card(this);
         cdFiredCard.setVisibility(View.GONE);
-        cdFiredCard.addView(Ui.text(this, "Countdown Finished!", 15f, Ui.OK, true));
-        TextView firedHint = Ui.text(this, "Your countdown has ended.", 12f, Ui.TEXT, false);
+        cdFiredCard.addView(Ui.text(this, "倒计时结束！", 15f, Ui.OK, true));
+        TextView firedHint = Ui.text(this, "你设置的倒计时已到点。", 12f, Ui.TEXT, false);
         firedHint.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
         cdFiredCard.addView(firedHint);
-        cdFiredCard.addView(Ui.button(this, "Dismiss", false, new View.OnClickListener() {
+        cdFiredCard.addView(Ui.button(this, "知道了", false, new View.OnClickListener() {
             @Override public void onClick(View v) {
                 dismissFiredCard();
             }
@@ -135,11 +135,11 @@ public class ToolboxActivity extends Activity {
 
         // ===== Phone Status =====
         LinearLayout stCard = Ui.card(this);
-        stCard.addView(Ui.text(this, "Phone Status", 13.5f, Ui.TEXT, true));
+        stCard.addView(Ui.text(this, "手机状态", 13.5f, Ui.TEXT, true));
         statusView = Ui.text(this, CommandRouter.statusText(this), 11.5f, Ui.MUTED, false);
         statusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
         stCard.addView(statusView);
-        stCard.addView(Ui.button(this, "Refresh", false, new View.OnClickListener() {
+        stCard.addView(Ui.button(this, "刷新", false, new View.OnClickListener() {
             @Override public void onClick(View v) {
                 statusView.setText(CommandRouter.statusText(ToolboxActivity.this));
             }
@@ -147,8 +147,8 @@ public class ToolboxActivity extends Activity {
         root.addView(stCard);
 
         root.addView(Ui.space(this, 10));
-        root.addView(Ui.mono(this, "Watch-side EV toolbox menu can trigger the same commands"
-                + " ({\"action\":\"cmd\",...}, pending watch release)"));
+        root.addView(Ui.mono(this, "手环端 EV 工具箱的同名菜单会触发同样的指令"
+                + "（{\"action\":\"cmd\",...}）"));
 
         setContentView(Ui.wrapWithBottomBar(this, root, -1));
         Analytics.pageView(this, "/apk/toolbox");
@@ -160,7 +160,7 @@ public class ToolboxActivity extends Activity {
         return new View.OnClickListener() {
             @Override public void onClick(View v) {
                 CommandRouter.countdown(ToolboxActivity.this, minutes);
-                cdStatusView.setText("Countdown set: " + minutes + " min — will ring when done");
+                cdStatusView.setText("已设置 " + minutes + " 分钟倒计时，到点响铃");
                 cdStatusView.setTextColor(Ui.OK);
                 cdCancelBtn.setVisibility(View.VISIBLE);
                 dismissFiredCard();
@@ -172,10 +172,10 @@ public class ToolboxActivity extends Activity {
     private String cdStatusText() {
         long left = CommandRouter.countdownRemaining(this);
         if (CommandRouter.countdownFired(this)) {
-            return "Countdown finished!";
+            return "倒计时结束！";
         }
-        return left > 0 ? "Remaining: " + (left / 60) + " min " + (left % 60) + " sec"
-                : "Select a duration to start countdown";
+        return left > 0 ? "剩余 " + (left / 60) + " 分 " + (left % 60) + " 秒"
+                : "选择时长开始倒计时";
     }
 
     private void startTick() {
@@ -185,7 +185,7 @@ public class ToolboxActivity extends Activity {
                 long left = CommandRouter.countdownRemaining(ToolboxActivity.this);
                 if (CommandRouter.countdownFired(ToolboxActivity.this)) {
                     cdTimerView.setText("00:00");
-                    cdStatusView.setText("Countdown finished!");
+                    cdStatusView.setText("倒计时结束！");
                     cdStatusView.setTextColor(Ui.OK);
                     cdCancelBtn.setVisibility(View.GONE);
                     showFiredCard();
@@ -193,7 +193,7 @@ public class ToolboxActivity extends Activity {
                 }
                 if (left <= 0) {
                     cdTimerView.setText("");
-                    cdStatusView.setText("Select a duration to start countdown");
+                    cdStatusView.setText("选择时长开始倒计时");
                     cdStatusView.setTextColor(Ui.MUTED);
                     cdCancelBtn.setVisibility(View.GONE);
                     return;
@@ -201,7 +201,7 @@ public class ToolboxActivity extends Activity {
                 long min = left / 60;
                 long sec = left % 60;
                 cdTimerView.setText(String.format("%02d:%02d", min, sec));
-                cdStatusView.setText("Remaining: " + min + " min " + sec + " sec");
+                cdStatusView.setText("剩余 " + min + " 分 " + sec + " 秒");
                 cdStatusView.setTextColor(Ui.ACCENT);
                 cdCancelBtn.setVisibility(View.VISIBLE);
                 mainHandler.postDelayed(this, 1000);
@@ -229,7 +229,7 @@ public class ToolboxActivity extends Activity {
     // ======================= Lifecycle =======================
 
     private String currentRinger() {
-        return "Current: " + CommandRouter.statusText(this);
+        return "当前：" + CommandRouter.statusText(this);
     }
 
     @Override
@@ -246,7 +246,7 @@ public class ToolboxActivity extends Activity {
 
         if (fired) {
             cdTimerView.setText("00:00");
-            cdStatusView.setText("Countdown finished!");
+            cdStatusView.setText("倒计时结束！");
             cdStatusView.setTextColor(Ui.OK);
             cdCancelBtn.setVisibility(View.GONE);
             showFiredCard();

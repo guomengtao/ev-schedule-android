@@ -216,27 +216,49 @@ public final class SyncEngine {
             final String text = (message == null) ? "" : new String(message, Charset.forName("UTF-8"));
             main.post(new Runnable() {
                 @Override public void run() {
-                    if (timeoutTask != null) {
-                        main.removeCallbacks(timeoutTask);
-                        timeoutTask = null;
+                    // ⚠️ 手环主动 push（cmd / chat）即使在途请求（pending != null）也绝不能当回包吞掉：
+                    //    手机侧恰有请求在飞（课表同步 / 留言发送等，各占 6 秒窗口）时，
+                    //    手环点「找手机」会石沉大海 —— 2026-10-04 真机实测：消息到达 8 次、cmd 执行 0 次。
+                    boolean unsolicited = false;
+                    try {
+                        org.json.JSONObject o = new org.json.JSONObject(text);
+                        String a = o.optString("action", "");
+                        unsolicited = "cmd".equals(a) || "chat".equals(a);
+                    } catch (Throwable ignored) {
                     }
-                    Reply r = pending;
-                    pending = null;
-                    if (r != null) {
-                        r.onReply(text);
-                        pumpNext(); // 回包已消费，放行队列里的下一个请求
+                    android.util.Log.i("EVSync", "rx: " + text);
+                    if (!unsolicited) {
+                        if (timeoutTask != null) {
+                            main.removeCallbacks(timeoutTask);
+                            timeoutTask = null;
+                        }
+                        Reply r = pending;
+                        pending = null;
+                        if (r != null) {
+                            r.onReply(text);
+                            pumpNext(); // 回包已消费，放行队列里的下一个请求
+                            return;
+                        }
+                        // 没有待回包的请求 → 这是手环主动 push，交观察者处理（不再静默丢弃）
+                        if (observer != null) {
+                            try {
+                                observer.onMessage(text);
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                        // 消息投递追踪：收到来自后台的推送时，自动回 ACK
+                        ackIfNeeded(text);
+                        pumpNext();
                         return;
                     }
-                    // 没有待回包的请求 → 这是手环主动 push，交观察者处理（不再静默丢弃）
+                    // 主动 push：pending 与超时保持原状（真正的回包仍会按期到来），只投观察者
                     if (observer != null) {
                         try {
                             observer.onMessage(text);
                         } catch (Throwable ignored) {
                         }
                     }
-                    // 消息投递追踪：收到来自后台的推送时，自动回 ACK
                     ackIfNeeded(text);
-                    pumpNext();
                 }
             });
         }
