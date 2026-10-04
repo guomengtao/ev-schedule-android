@@ -332,3 +332,64 @@ defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser   # 平�
 - 立即实测一次（**会真的重启，先存工作**）：`sudo launchctl kickstart -k system/com.user.dailyrestart`
 - 恢复"每次重启都要密码"：把 daily_restart.sh 里 `touch 标记 + defaults write` 两行注释掉即可。
 - 彻底关闭自动登录能力：`sudo defaults delete /Library/Preferences/com.apple.loginwindow autoLoginUser`（键平时本就不存在）。
+
+---
+
+## 九、重启前先弹窗、可取消（60 秒无人处理才重启，2026-10-05 部署）
+
+### 需求
+
+半夜 04:30 自动重启会打断正在用机器的人（2026-10-05 凌晨就是差点被重启，靠手动取消才拦下）。改为：**到点先弹提示窗，1 分钟内无人处理才重启；点「取消本次重启」则当晚不重启。**
+
+### 结构
+
+```
+04:30  launchd(root, com.user.dailyrestart)
+        └─ /usr/local/bin/daily_restart.sh
+             ├─ 写 [PLAN] 日志
+             ├─ 调 /usr/local/bin/ev_restart_prompt.sh   ← 弹窗，最多等 60 秒
+             │    ├─ 点「取消本次重启」→ 返回 0 → daily_restart 直接 exit（不重启、不开自动登录）
+             │    └─ 超时/点「立即重启」/弹窗显示不出来 → 返回 1 → 继续
+             ├─ touch /var/log/.ev_autologin_pending + 打开 autoLoginUser（§八 按次自动登录）
+             └─ /sbin/shutdown -r now
+```
+
+| 文件 | 作用 |
+|---|---|
+| `/usr/local/bin/ev_restart_prompt.sh` | 弹窗逻辑。退出码 **0 = 取消**、**1 = 继续重启**。默认 60 秒、**默认按钮＝「取消本次重启」**（半夜误按回车不会重启） |
+| `/usr/local/bin/daily_restart.sh` | 先调提示脚本，按退出码决定是否重启（取消时**不写**自动登录标记，保证不误免密） |
+
+### 三个关键实现点（踩坑记录）
+
+1. **LaunchDaemon 在系统域、看不到 GUI** → 必须 `launchctl asuser <uid> osascript …` 切到已登录用户会话才能弹窗；uid 取 `stat -f%u /dev/console`。已实测：以 root 经 asuser 弹窗返回 `gave up:true`（弹窗正常显示并超时）。
+2. **睡屏状态下弹窗看不见** → 弹窗前 `caffeinate -u -t 2` 先唤醒屏幕。
+3. **不要用同步阻塞写法**：`display dialog` 是模态的，靠 `giving up after 60` 自带超时返回，**不能**自己写 loop 等（会卡住 launchd 任务）。
+
+### 验证（已跑过的安全测试）
+
+```bash
+bash -n /usr/local/bin/daily_restart.sh /usr/local/bin/ev_restart_prompt.sh     # 语法
+# 提示脚本四条分支（用假 osascript，不弹窗不重启）：cancel→0 / timeout→1 / now→1 / no-gui→1
+# 重启脚本两条路径（用桩 shutdown + 桩 defaults + 临时 marker/log，绝不真重启）：
+#   取消分支 → 不调 shutdown、不建自动登录标记 ✅
+#   继续分支 → 建标记 + 写 autoLoginUser + 调 shutdown ✅
+```
+
+### 备忘与回滚
+
+- 日志新增两种行：`[PROMPT] … continue -> restart (<reason>)` 与 `[CANCEL] … user cancelled this scheduled restart`。
+- 改等待秒数：编辑 `ev_restart_prompt.sh` 里 `SECS=${EV_PROMPT_SECS:-60}`。
+- **回滚成「到点直接重启」**：`sudo rm /usr/local/bin/ev_restart_prompt.sh`（daily_restart.sh 检测到提示脚本缺失会自动跳过提示、直接重启）。
+- 临时停用整套计划重启：`sudo launchctl bootout system/com.user.dailyrestart`（要恢复：`sudo launchctl enable … && sudo launchctl bootstrap system /Library/LaunchDaemons/com.user.dailyrestart.plist`）。
+- ⚠️ **唯一不确定项**：若此刻机器停在**登录窗**（睡眠中唤醒、屏幕锁定），弹窗可能显示不出来 → 会走「60 秒超时 → 照常重启」。这与「无人处理就重启」的约定一致，但如果你希望**锁屏时也别重启**，需要改成「锁屏就跳过今晚」（可在提示脚本里先判断 `python3 -c 'import Quartz'`/`ioreg` 锁屏状态，待定）。
+
+### 源码归档（/usr/local/bin 里的真身同步存档）
+
+两份系统脚本在仓库里有可追溯副本，改完记得同步：
+
+```bash
+ls tools/mac-restart/          # daily_restart.sh / ev_restart_prompt.sh
+# 部署（与安装脚本一致）：
+sudo install -m 755 tools/mac-restart/daily_restart.sh      /usr/local/bin/daily_restart.sh
+sudo install -m 755 tools/mac-restart/ev_restart_prompt.sh  /usr/local/bin/ev_restart_prompt.sh
+```
