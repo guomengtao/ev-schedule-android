@@ -123,10 +123,15 @@ public class MessageActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // 全屏微信式：留言页不挂任何底部栏（4 tab 属主框架），整页沉浸
+        goFullScreen();
+
         LinearLayout root = Ui.screen(this);
         root.setBackgroundColor(wxChtBg());
+        root.setPadding(0, 0, 0, 0);   // 去 Ui.screen 留白：输入栏通栏贴底（微信行为）
         View nav = Ui.header(this, "留言");
         nav.setBackgroundColor(wxNavBg());
+        nav.setPadding(0, Ui.dp(this, 6), 0, 0);   // 无状态栏后给标题一点呼吸
         root.addView(nav);
         root.addView(Ui.space(this, 2));
 
@@ -134,11 +139,14 @@ public class MessageActivity extends Activity {
         stateView = Ui.text(this, "", 11f, wxTimeText(), false);
         stateView.setGravity(android.view.Gravity.CENTER);
         stateView.setVisibility(View.GONE);
+        stateView.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), 0);
         root.addView(stateView);
         root.addView(Ui.space(this, 4));
 
         listBox = new LinearLayout(this);
         listBox.setOrientation(LinearLayout.VERTICAL);
+        // 微信消息区左右 16dp（原挂在 root 的 20dp，改全屏后由列表自己带）
+        listBox.setPadding(Ui.dp(this, 16), Ui.dp(this, 6), Ui.dp(this, 16), Ui.dp(this, 6));
         scrollBox = new ScrollView(this);
         scrollBox.setBackgroundColor(wxChtBg());
         scrollBox.addView(listBox);
@@ -277,7 +285,13 @@ public class MessageActivity extends Activity {
         renderPhrases();
         renderEmoji();
         typingEnabled = loadTypingEnabled();
-        setContentView(Ui.fixedWithBottomBar(this, root, -1));
+        // 留言页全屏：不挂 Ui.fixedWithBottomBar（那会带 4 tab + 底部留白）
+        android.widget.FrameLayout screen = new android.widget.FrameLayout(this);
+        screen.setBackgroundColor(wxChtBg());
+        screen.addView(root, new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(screen);
         installObserver(this);
         load();
         render();
@@ -413,25 +427,39 @@ public class MessageActivity extends Activity {
         bubble.addView(body);
 
         if (out) {
-            // 我方气泡内的送达状态（P2 三态）：
-            //   待发送 = 尚未确认；已送达 = 手环回了 chat_ack；已读 = 手环回了 chat_read（真·看见）
+            // 微信式状态（收进气泡、极淡）：
+            //   待发送 = 尚未确认（保留醒目，须提醒）；已送达 = 手环回 chat_ack（展示片刻后果断淡出收起）；
+            //   已读   = 手环回 chat_read（真·看见，淡绿常显 —— 这是本项目的已读功能）。
             //   ⚠️「已读」只可能来自手环上报，手机端绝不推断（手环没进页面就永远停在「已送达」）。
             String stLabel;
             int stColor;
+            final boolean fadeOut;
             if ("read".equals(status)) {
                 stLabel = "已读";
-                stColor = 0xAA0B6B33;      // 深绿：已读（绿底上可读）
+                stColor = 0x8C0B6B33;      // 淡绿（约 55% 透明）：收进气泡、不抢眼
+                fadeOut = false;
             } else if ("sent".equals(status)) {
                 stLabel = "已送达";
-                stColor = 0x99000000;      // 半透明黑：已送达
+                stColor = 0x3D000000;      // 极淡灰：微信不强调送达
+                fadeOut = true;            // 片刻后淡出并收起，让气泡回到纯微信态
             } else {
                 stLabel = "待发送";
-                stColor = 0xAAA03000;      // 暗棕红：待发送
+                stColor = 0xAAA03000;      // 暗棕红：未发出，保留提醒
+                fadeOut = false;
             }
-            TextView st = Ui.text(this, stLabel, 10f, stColor, false);
-            st.setPadding(0, Ui.dp(this, 3), 0, 0);
+            final TextView st = Ui.text(this, stLabel, 9f, stColor, false);
+            st.setPadding(0, Ui.dp(this, 2), 0, 0);
             st.setGravity(android.view.Gravity.END);
             bubble.addView(st);
+            if (fadeOut) {
+                st.postDelayed(new Runnable() {
+                    @Override public void run() {
+                        st.animate().alpha(0f).setDuration(450).withEndAction(new Runnable() {
+                            @Override public void run() { st.setVisibility(View.GONE); }
+                        }).start();
+                    }
+                }, 2600);
+            }
         }
 
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
@@ -451,6 +479,18 @@ public class MessageActivity extends Activity {
             row.addView(spacer, slp);
         }
         return row;
+    }
+
+    /** 真·沉浸式全屏：隐藏系统状态栏 + 导航栏（留言页不挂底部 tab，整页沉浸） */
+    private void goFullScreen() {
+        try {
+            getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        } catch (Throwable ignored) {
+        }
     }
 
     // ======================= 微信式输入栏小组件（v3） =======================
