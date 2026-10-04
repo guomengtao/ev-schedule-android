@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Ev 课程表 · 设置页 全新设计原型 v1</title>
+<style>
+  :root{
+    /* ===== 浅色「晴空蓝」—— 取自 Ui.java 权威 token ===== */
+    --l-bg:#F4F7FB; --l-canvas:#E9EAEF; --l-card:#FFFFFF; --l-card2:#EAF0F8;
+    --l-line:#E3EAF3; --l-text:#0F172A; --l-muted:#64748B;
+    --l-accent:#2F6BFF; --l-accentLight:#EBF0FF;
+    --l-ok:#16A34A; --l-warn:#F59E0B; --l-err:#DC2626; --l-onAccent:#FFFFFF;
+    /* ===== 深色「夜幕蓝」 ===== */
+    --d-bg:#0B1020; --d-canvas:#0B1020; --d-card:#151C30; --d-card2:#1C2542; --d-line:#27314C;
+    --d-text:#E9EEF9; --d-muted:#8695B4; --d-accent:#5B9BFF; --d-accentLight:#1A2544;
+    --d-ok:#34C759; --d-warn:#FFB020; --d-err:#FF6B6B;
+    /* 文档底板 */
+    --doc-bg:#eef1f6; --doc-fg:#1a2233; --doc-muted:#5c6779; --doc-line:#d5dbe6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--doc-bg); color:var(--doc-fg);
+    padding:40px 24px 80px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;letter-spacing:.2px}
+  h2{font-size:19px;font-weight:600;margin:52px 0 6px;padding-top:18px;border-top:2px solid var(--doc-line)}
+  h2 .num{color:var(--l-accent);font-weight:600;margin-right:8px}
+  h3{font-size:15px;font-weight:600;margin:26px 0 10px}
+  .sub{color:var(--doc-muted);font-size:13.5px;margin-top:8px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12px;padding:4px 10px;border-radius:999px;background:#fff;border:1px solid var(--doc-line);color:var(--doc-muted)}
+  .chip b{color:var(--l-accent);font-weight:600}
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--doc-line);vertical-align:top}
+  th{background:#f3f6fb;font-weight:600;color:var(--doc-muted);font-size:12px}
+  td code,.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    background:#eef2f8;padding:1px 5px;border-radius:4px;color:#33415c}
+  .note{margin:16px 0;padding:13px 16px;border-radius:10px;font-size:13px;border:1px solid var(--doc-line);background:#fff}
+  .note.warn{background:#fff8ec;border-color:#f2d9ad}
+  .note.ok{background:#eefaf1;border-color:#bfe6c9}
+  .note b{font-weight:600}
+  ul{margin:10px 0 0 20px} li{margin:5px 0;font-size:13.5px}
+
+  /* ===== 手机框 ===== */
+  .frames{display:flex;flex-wrap:wrap;gap:34px;margin-top:26px;align-items:flex-start}
+  .frame{width:360px}
+  .frame .cap{font-size:12.5px;color:var(--doc-muted);margin-bottom:9px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .frame .cap b{color:var(--doc-fg);font-weight:600}
+  .tag{font-size:10.5px;padding:2px 7px;border-radius:5px;background:var(--l-accentLight);color:var(--l-accent);font-weight:600}
+  .tag.dark{background:#20293f;color:#8fb4ff}
+  .tag.new{background:rgba(22,163,74,.14);color:var(--l-ok)}
+  .screen{
+    width:360px;height:640px;border-radius:22px;overflow:hidden;position:relative;
+    box-shadow:0 18px 40px -12px rgba(20,32,60,.32),0 0 0 1px rgba(20,32,60,.06);
+    display:flex;flex-direction:column;
+  }
+  .anno{font-size:12px;color:var(--doc-muted);margin-top:10px;line-height:1.55}
+  .anno b{color:var(--doc-fg);font-weight:600}
+
+  /* ---- 通用原子 ---- */
+  .L{background:var(--l-canvas);color:var(--l-text)} .D{background:var(--d-canvas);color:var(--d-text)}
+  .body{flex:1;overflow:hidden;display:flex;flex-direction:column;padding:12px 16px 0}
+
+  /* ---- 顶栏 32dp ---- */
+  .topbar{height:32px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .tbtitle{font-size:17px;font-weight:600;color:var(--l-text)}
+  .D .tbtitle{color:var(--d-text)}
+
+  /* ---- 分组标题 ---- */
+  .grp{font-size:11.5px;font-weight:600;color:var(--l-muted);letter-spacing:.3px;margin:16px 0 7px}
+  .grp:first-of-type{margin-top:12px}
+  .D .grp{color:var(--d-muted)}
+
+  /* ---- 设置卡 ---- */
+  .scard{background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;overflow:hidden}
+  .D .scard{background:var(--d-card);border-color:var(--d-line)}
+
+  /* ---- 设置行 52dp ---- */
+  .srow{display:flex;align-items:center;gap:10px;padding:0 14px;height:52px;border-top:1px solid var(--l-line)}
+  .srow:first-child{border-top:0}
+  .D .srow{border-color:var(--d-line)}
+  .sl{flex:1;min-width:0}
+  .slk{font-size:13px;color:var(--l-text)}
+  .D .slk{color:var(--d-text)}
+  .sls{font-size:11.5px;color:var(--l-muted);margin-top:1px;line-height:1.35}
+  .D .sls{color:var(--d-muted)}
+  .sls.warn{color:var(--l-warn)}
+  .D .sls.warn{color:var(--d-warn)}
+  .sr{flex:0 0 auto;display:flex;align-items:center;gap:5px}
+  .srv{font-size:12.5px;color:var(--l-muted)}
+  .D .srv{color:var(--d-muted)}
+  .chev{width:14px;height:14px;flex:0 0 auto}
+  .chev svg{width:14px;height:14px;stroke:var(--l-muted);fill:none;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+  .D .chev svg{stroke:var(--d-muted)}
+
+  /* ---- Switch ---- */
+  .sw{width:40px;height:23px;border-radius:12px;background:var(--l-accent);position:relative;flex:0 0 auto}
+  .sw i{position:absolute;top:2.5px;right:2.5px;width:18px;height:18px;border-radius:50%;background:#fff;
+    box-shadow:0 1px 2px rgba(15,23,42,.28)}
+  .sw.off{background:#CBD5E1}
+  .sw.off i{left:2.5px;right:auto}
+  .D .sw{background:var(--d-accent)} .D .sw i{background:#0B1020}
+  .D .sw.off{background:#3A465F}
+
+  /* ---- 展开子区 ---- */
+  .ssub{background:var(--l-card2)}
+  .D .ssub{background:var(--d-card2)}
+  .ssrow{display:flex;align-items:center;gap:10px;height:46px;padding:0 14px 0 26px;border-top:1px solid var(--l-line)}
+  .D .ssrow{border-color:var(--d-line)}
+  .ssk{font-size:12.5px;color:var(--l-text);flex:1}
+  .D .ssk{color:var(--d-text)}
+  .ssv{font-size:12.5px;color:var(--l-muted)}
+  .D .ssv{color:var(--d-muted)}
+  .slinks{display:flex;align-items:center;gap:20px;height:44px;padding:0 14px 0 26px;border-top:1px solid var(--l-line)}
+  .D .slinks{border-top-color:var(--d-line)}
+  .link{font-size:12.5px;font-weight:600;color:var(--l-accent)}
+  .D .link{color:var(--d-accent)}
+  .link.ok{color:var(--l-ok)} .D .link.ok{color:var(--d-ok)}
+
+  /* ---- 单选弹层 ---- */
+  .mask{position:absolute;inset:0;background:rgba(15,23,42,.32)}
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--l-card);border-radius:18px 18px 0 0;
+    padding:16px 0 10px;box-shadow:0 -12px 32px -12px rgba(20,32,60,.35)}
+  .D .sheet{background:var(--d-card)}
+  .sheet .sh{font-size:15px;font-weight:600;color:var(--l-text);padding:0 20px}
+  .D .sheet .sh{color:var(--d-text)}
+  .sheet .sd{font-size:11.5px;color:var(--l-muted);padding:3px 20px 12px}
+  .D .sheet .sd{color:var(--d-muted)}
+  .opt{display:flex;align-items:center;gap:10px;height:48px;padding:0 20px;border-top:1px solid var(--l-line)}
+  .D .opt{border-color:var(--d-line)}
+  .opt .ot{font-size:15px;color:var(--l-text);flex:1}
+  .D .opt .ot{color:var(--d-text)}
+  .opt.on .ot{color:var(--l-accent);font-weight:600}
+  .D .opt.on .ot{color:var(--d-accent)}
+  .opt .ck{width:16px;height:16px}
+  .opt .ck svg{width:16px;height:16px;stroke:var(--l-accent);fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+  .D .opt .ck svg{stroke:var(--d-accent)}
+  .cancel{margin:10px 20px 0;height:44px;border-radius:12px;background:var(--l-card2);color:var(--l-text);
+    font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;border:1px solid var(--l-line)}
+  .D .cancel{background:var(--d-card2);color:var(--d-text);border-color:var(--d-line)}
+
+  /* ---- 底栏 ---- */
+  .tabbar{height:56px;flex:0 0 auto;display:flex;align-items:center;background:var(--l-card);
+    border-top:1px solid var(--l-line)}
+  .D .tabbar{background:var(--d-card);border-color:var(--d-line)}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .tab svg{width:19px;height:19px;stroke:var(--l-muted);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .tab.on svg{stroke:var(--l-accent)}
+  .D .tab svg{stroke:var(--d-muted)} .D .tab.on svg{stroke:var(--d-accent)}
+  .tab span{font-size:9.5px;color:var(--l-muted)}
+  .tab.on span{color:var(--l-accent);font-weight:600}
+  .D .tab span{color:var(--d-muted)} .D .tab.on span{color:var(--d-accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>设置页 · 全新设计原型 v1</h1>
+  <div class="sub">目标页 <code>SettingsActivity</code>（底部 tab「设置」）· 1 dp = 1 px · 360 × 640 dp 真机等比 · 配色与字号全部取自 <code>Ui.java</code> 权威 token</div>
+  <div class="meta">
+    <span class="chip">浅色 <b>晴空蓝</b></span>
+    <span class="chip">深色 <b>夜幕蓝</b></span>
+    <span class="chip">零新增 token</span>
+    <span class="chip">顺便删掉第 8 档字号 <b>13.5sp</b></span>
+    <span class="chip">5 态：主态 / 收起+警告 / 单选弹层 / 支持与关于 / 深色</span>
+  </div>
+
+  <h2><span class="num">1</span>五态原型</h2>
+
+  <div class="frames">
+
+    <!-- ============ 态 1：主态（上课提醒展开） ============ -->
+    <div class="frame">
+      <div class="cap"><b>态 1 · 首屏主态（提醒组展开）</b><span class="tag">浅色</span></div>
+      <div class="screen L">
+        <div class="tabbar" style="position:absolute;bottom:0;left:0;right:0;z-index:5">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg><span>课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3"/></svg><span>手环</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>设置</span></div>
+        </div>
+
+        <div class="body">
+          <div class="topbar"><div class="tbtitle">设置</div></div>
+
+          <div class="grp">提醒</div>
+          <div class="scard">
+            <!-- 上课提醒（展开） -->
+            <div class="srow">
+              <div class="sl"><div class="slk">上课提醒</div><div class="sls">提前 15 分钟 · 手机通知 + 手环</div></div>
+              <div class="sr"><div class="sw"><i></i></div></div>
+            </div>
+            <div class="ssub">
+              <div class="ssrow"><div class="ssk">提前时间</div><div class="ssv">15 分钟</div><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div>
+              <div class="ssrow"><div class="ssk">推送到手环</div><div class="sw"><i></i></div></div>
+              <div class="slinks"><span class="link">测试提醒</span><span class="link">重排提醒</span></div>
+            </div>
+            <!-- 后台常驻 -->
+            <div class="srow">
+              <div class="sl"><div class="slk">后台常驻提醒</div><div class="sls">退到后台也能收新留言</div></div>
+              <div class="sr"><div class="sw"><i></i></div></div>
+            </div>
+            <!-- 假期调休 -->
+            <div class="srow">
+              <div class="sl"><div class="slk">假期 / 调休</div><div class="sls">今天放假，不排课</div></div>
+              <div class="sr"><div class="sw"><i></i></div></div>
+            </div>
+          </div>
+
+          <div class="grp">外观</div>
+          <div class="scard">
+            <div class="srow">
+              <div class="sl"><div class="slk">主题外观</div></div>
+              <div class="sr"><div class="srv">晴空蓝</div><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div>
+            </div>
+          </div>
+
+          <div class="grp">支持与关于</div>
+          <div class="scard">
+            <div class="srow"><div class="sl"><div class="slk">帮助与反馈</div></div><div class="sr"><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="anno"><b>看什么</b>：全页收成 <b>3 个分组</b>（提醒 / 外观 / 支持与关于）。三个「标题+开关+状态+按钮」的重卡，压成 <b>三行开关行</b>（左标题 + 副文案、右 Switch）。「上课提醒」是唯一有子项的，打开时在卡内展开一条 <code>CARD2</code> 次级区（提前时间 / 推送到手环 / 测试·重排）。<b>顶栏下那行「操作反馈」已经删掉</b>——它原来钉在屏幕外。</div>
+    </div>
+
+    <!-- ============ 态 2：收起 + 白名单警告 ============ -->
+    <div class="frame">
+      <div class="cap"><b>态 2 · 收起态 + 白名单警告</b><span class="tag new">反馈就地化</span></div>
+      <div class="screen L">
+        <div class="tabbar" style="position:absolute;bottom:0;left:0;right:0;z-index:5">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg><span>课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3"/></svg><span>手环</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>设置</span></div>
+        </div>
+
+        <div class="body">
+          <div class="topbar"><div class="tbtitle">设置</div></div>
+
+          <div class="grp">提醒</div>
+          <div class="scard">
+            <div class="srow">
+              <div class="sl"><div class="slk">上课提醒</div><div class="sls warn">未授予「闹钟和提醒」权限，可能有 ±1 分钟误差</div></div>
+              <div class="sr"><div class="sw off"><i></i></div></div>
+            </div>
+            <div class="srow">
+              <div class="sl"><div class="slk">后台常驻提醒</div><div class="sls warn">未加省电白名单，后台可能被清理 ›</div></div>
+              <div class="sr"><div class="sw off"><i></i></div></div>
+            </div>
+            <div class="srow">
+              <div class="sl"><div class="slk">假期 / 调休</div><div class="sls">按系统日期上课</div></div>
+              <div class="sr"><div class="sw"><i></i></div></div>
+            </div>
+          </div>
+
+          <div class="grp">外观</div>
+          <div class="scard">
+            <div class="srow">
+              <div class="sl"><div class="slk">主题外观</div></div>
+              <div class="sr"><div class="srv">晴空蓝</div><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div>
+            </div>
+          </div>
+
+          <div class="grp">支持与关于</div>
+          <div class="scard">
+            <div class="srow"><div class="sl"><div class="slk">帮助与反馈</div></div><div class="sr"><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div></div>
+            <div class="srow"><div class="sl"><div class="slk">检查更新</div></div><div class="sr"><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="anno"><b>看什么</b>：开关行副文案<b>不再复述「已开启 / 已关闭」</b>——Switch 的位置已经说明状态，副文案只写<b>有信息量的补充</b>。真正要用户处理的问题（缺权限、缺省电白名单）用 <b>琥珀色常驻副文案</b>，就地贴在那一行，不再跑到页面顶端。<b>状态说一遍，问题说在出事的地方。</b></div>
+    </div>
+
+    <!-- ============ 态 3：提前时间单选弹层 ============ -->
+    <div class="frame">
+      <div class="cap"><b>态 3 · 提前时间（单选弹层）</b><span class="tag new">替换循环按钮</span></div>
+      <div class="screen L">
+        <div class="body">
+          <div class="topbar"><div class="tbtitle">设置</div></div>
+          <div class="grp">提醒</div>
+          <div class="scard">
+            <div class="srow">
+              <div class="sl"><div class="slk">上课提醒</div><div class="sls">提前 15 分钟 · 手机通知 + 手环</div></div>
+              <div class="sr"><div class="sw"><i></i></div></div>
+            </div>
+            <div class="ssub">
+              <div class="ssrow"><div class="ssk">提前时间</div><div class="ssv">15 分钟</div><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div>
+              <div class="ssrow"><div class="ssk">推送到手环</div><div class="sw"><i></i></div></div>
+              <div class="slinks"><span class="link">测试提醒</span><span class="link">重排提醒</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mask"></div>
+        <div class="sheet">
+          <div class="sh">提前时间</div>
+          <div class="sd">上课前多久提醒你</div>
+          <div class="opt"><div class="ot">5 分钟</div></div>
+          <div class="opt"><div class="ot">10 分钟</div></div>
+          <div class="opt on"><div class="ot">15 分钟</div><div class="ck"><svg viewBox="0 0 24 24"><path d="M4 12l6 6L20 6"/></svg></div></div>
+          <div class="opt"><div class="ot">20 分钟</div></div>
+          <div class="opt"><div class="ot">30 分钟</div></div>
+          <div class="cancel">取消</div>
+        </div>
+      </div>
+      <div class="anno"><b>看什么</b>：原来的「提前 15 分钟」是个<b>循环按钮</b>——点一下 +1 档、到顶回绕，用户既不知道有哪些可选值，也无法直接选到想要的。改成<b>设置行（右侧显示当前值）+ 单选弹层</b>：一眼看到全部选项、当前值带主色勾选。选项直接复用 <code>Reminders.LEAD_STEPS</code>，<b>逻辑零改动</b>。</div>
+    </div>
+
+    <!-- ============ 态 4：支持与关于 ============ -->
+    <div class="frame">
+      <div class="cap"><b>态 4 · 支持与关于（页面下半）</b><span class="tag">滚动到底</span></div>
+      <div class="screen L">
+        <div class="tabbar" style="position:absolute;bottom:0;left:0;right:0;z-index:5">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg><span>课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3"/></svg><span>手环</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>设置</span></div>
+        </div>
+
+        <div class="body">
+          <div class="grp" style="margin-top:2px">支持与关于</div>
+          <div class="scard">
+            <div class="srow"><div class="sl"><div class="slk">帮助与反馈</div><div class="sls">常见问题 · QQ 群 · 提交截图反馈</div></div><div class="sr"><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div></div>
+            <div class="srow"><div class="sl"><div class="slk">检查更新</div></div><div class="sr"><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div></div>
+            <div class="srow"><div class="sl"><div class="slk">打赏支持</div><div class="sls">爱发电 / 微信 / 支付宝</div></div><div class="sr"><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div></div>
+            <div class="srow"><div class="sl"><div class="slk">高级版</div><div class="sls">4 位兑换码一键激活</div></div><div class="sr"><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div></div>
+            <div class="srow"><div class="sl"><div class="slk">调试</div><div class="sls">连不上手环时分步排查</div></div><div class="sr"><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div></div>
+            <div class="srow"><div class="sl"><div class="slk">Ev 课程表</div></div><div class="sr"><div class="srv">v0.5.151</div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="anno"><b>看什么</b>：原来「检查更新」在第 4 块灰砖、版本号是页面最底一行裸 <code>mono</code>——<b>同一件事的两半隔着整个屏幕</b>。现在它们同组同卡，版本号成为「关于」行的<b>右侧值</b>。「调试」从与用户功能平级，降为支持组内一行（副文案直接标明用途），与手环页 ⋯ 菜单里的同一入口保持一致的定位。<b>唯一入口。</b></div>
+    </div>
+
+    <!-- ============ 态 5：深色 ============ -->
+    <div class="frame">
+      <div class="cap"><b>态 5 · 深色主态</b><span class="tag dark">夜幕蓝</span></div>
+      <div class="screen D">
+        <div class="tabbar" style="position:absolute;bottom:0;left:0;right:0;z-index:5">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg><span>课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3"/></svg><span>手环</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>设置</span></div>
+        </div>
+
+        <div class="body">
+          <div class="topbar"><div class="tbtitle">设置</div></div>
+
+          <div class="grp">提醒</div>
+          <div class="scard">
+            <div class="srow">
+              <div class="sl"><div class="slk">上课提醒</div><div class="sls">提前 15 分钟 · 手机通知 + 手环</div></div>
+              <div class="sr"><div class="sw"><i></i></div></div>
+            </div>
+            <div class="ssub">
+              <div class="ssrow"><div class="ssk">提前时间</div><div class="ssv">15 分钟</div><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div>
+              <div class="ssrow"><div class="ssk">推送到手环</div><div class="sw"><i></i></div></div>
+              <div class="slinks"><span class="link">测试提醒</span><span class="link">重排提醒</span></div>
+            </div>
+            <div class="srow">
+              <div class="sl"><div class="slk">后台常驻提醒</div><div class="sls warn">未加省电白名单，后台可能被清理 ›</div></div>
+              <div class="sr"><div class="sw off"><i></i></div></div>
+            </div>
+            <div class="srow">
+              <div class="sl"><div class="slk">假期 / 调休</div><div class="sls">今天放假，不排课</div></div>
+              <div class="sr"><div class="sw"><i></i></div></div>
+            </div>
+          </div>
+
+          <div class="grp">外观</div>
+          <div class="scard">
+            <div class="srow">
+              <div class="sl"><div class="slk">主题外观</div></div>
+              <div class="sr"><div class="srv">夜幕蓝</div><div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="anno"><b>看什么</b>：深色由 <code>Ui.applyTheme</code> 全局接管，原型仅验证<b>语义色仍然成立</b>——主色亮蓝 <code>#5B9BFF</code>、展开子区深底 <code>#1C2542</code>、警告琥珀 <code>#FFB020</code> 都清晰不刺眼。无任何为深色单独新造的颜色；<b>「展开子区」不靠阴影、靠底色差</b>，深色下依然成立。</div>
+    </div>
+
+  </div>
+
+  <h2><span class="num">2</span>关键尺寸（落地可直接换算）</h2>
+  <table>
+    <tr><th>部件</th><th>规格</th><th>token</th></tr>
+    <tr><td>顶栏</td><td>高 32dp，居中标题 17sp/600</td><td><code>SP_TITLE</code></td></tr>
+    <tr><td>分组标题</td><td>11.5sp/600 <code>MUTED</code>，字距 .3；上 16dp 下 7dp</td><td><code>SP_CAPTION</code></td></tr>
+    <tr><td>设置卡</td><td>圆角 14dp · 描边 1dp <code>LINE</code> · 行间分隔线左缩进 14dp</td><td><code>R_CARD</code></td></tr>
+    <tr><td>设置行</td><td>固定高 52dp · 左右内边距 14dp；标题 13sp、副文案 11.5sp、右值 12.5sp</td><td><code>SP_BODY</code>/<code>SP_CAPTION</code></td></tr>
+    <tr><td>Switch</td><td>40 × 23dp，圆点 18dp；关态用中性灰</td><td>系统控件</td></tr>
+    <tr><td>chevron</td><td>14 × 14dp 描边 2.1dp <code>MUTED</code></td><td>—</td></tr>
+    <tr><td>展开子区</td><td>底 <code>CARD2</code>，子行高 46dp、左缩进 26dp</td><td><code>CARD2</code></td></tr>
+    <tr><td>文字链</td><td>12.5sp/600 <code>ACCENT</code>，行高 44dp，两枚间距 20dp</td><td><code>TOUCH_MIN</code></td></tr>
+    <tr><td>单选弹层</td><td>圆角 18/18/0/0；项高 48dp；取消按钮高 44dp 圆角 12</td><td><code>R_CTRL</code></td></tr>
+    <tr><td>底栏</td><td>固定 4 tab：首页 / 课表库 / 手环 / 设置，图标 19dp</td><td>—</td></tr>
+  </table>
+
+  <div class="note ok">
+    <b>零新增 token</b>：本页只用到既有色值（<code>CARD / CARD2 / ACCENT / OK / WARN / MUTED / LINE / TEXT</code>）、既有字号档（17 / 15 / 13 / 12.5 / 11.5 / 10.5）、既有圆角（14 / 12）与既有间距（8 / 12 / 16）。<b>并且删掉了一档字号</b>——<code>13.5sp</code>（<code>Ui.row</code> 的唯一使用者），落地后全项目回到 7 档。
+  </div>
+
+  <div class="note warn">
+    <b>一处需要全局判断的取舍</b>：本页原来那 6 块「灰砖」用的是 <code>CARD2 #EAF0F8</code>，而页面画布是 <code>CANVAS #E9EAEF</code>——逐通道只差 <code>(1,6,9)</code>，卡片边界事实上<b>消失</b>，只剩 1dp 描边撑着。本方案让设置页<b>不再使用</b>灰砖、统一走白卡，问题在本页消失；但 <code>Ui.row()</code> 若被其它页面继续使用，同样的「灰砖糊进背景」还会复现。<b>建议单独立项评估这两个 token 的差值。</b>
+  </div>
+
+  <h2><span class="num">3</span>设计意图速览</h2>
+  <ul>
+    <li><b>有分组</b>：9 个平铺入口 → 3 组（提醒 / 外观 / 支持与关于），每组一条 11.5sp 小标题。</li>
+    <li><b>一种容器</b>：6 块灰砖 + 3 张白卡 → 全部白卡；行标题统一 13sp，消除「入口比功能还大」的层级倒挂。</li>
+    <li><b>重卡变行</b>：三个「标题+开关+状态+按钮」的开关卡 → 三行开关行，副文案只说补充信息，不重复「已开启」。</li>
+    <li><b>反馈就地</b>：页面顶端的 <code>resultView</code> 删除；瞬时动作按钮自身变「已发送 ✓」，持续问题用琥珀副文案贴在该行。</li>
+    <li><b>循环变选择</b>：不可发现的「提前 15 分钟」循环按钮 → 设置行 + 单选弹层，一眼看全、直接选。</li>
+    <li><b>关于归位</b>：检查更新与版本号从屏幕两端 → 同组同卡；调试从平级 → 支持组末行。</li>
+    <li><b>顺手收口</b>：删掉第 8 档字号 <code>13.5sp</code> 与两段工程师味的 <code>mono</code> 实现说明。</li>
+  </ul>
+
+</div>
+</body>
+</html>
