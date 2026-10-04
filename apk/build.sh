@@ -82,10 +82,22 @@ export JAVA_HOME="$JRE_HOME"
 export PATH="$JRE_HOME/bin:$PATH"
 
 # --- 找 EV 快应用的签名密钥 ---
+# 2026-10-04 修：2026-10-02 目录重组（快应用移入 ev/）后，旧候选路径全部失效 →
+#   查找静默落空 → 退回自签 keystore.jks → interconnect 第③步 requestPermission
+#   抛 SignatureVerifyFailedException，界面显示「签名校验未通过」，连手环必失败。
+# 现按「两层候选」找：仓库既可能挂 `guomengtao/ev/ev-schedule-android`（则
+#   apk/../.. = ev/），也可能挂 `guomengtao/ev-schedule-android`（则 apk/../.. = 项目根），
+#   两种层级都列出来，命中即用；旧路径（tom/…、EvBox/…）保留兜底。
 RPK_SIGN_DIR="${RPK_SIGN_DIR:-}"
 if [ -z "$RPK_SIGN_DIR" ]; then
-  for d in "$GUOMENGTAO/tom/class/class/sign" \
-           "$GUOMENGTAO/EvBox/evbox/sign"; do
+  UP2="$(cd "$HERE/../.." && pwd)"
+  UP3="$(cd "$HERE/../../.." && pwd)"
+  for d in "$UP2/class-schedule/sign" \
+           "$UP2/evbox/sign" \
+           "$UP3/ev/class-schedule/sign" \
+           "$UP3/ev/evbox/sign" \
+           "$UP3/tom/class/class/sign" \
+           "$UP3/EvBox/evbox/sign"; do
     if [ -f "$d/private.pem" ] && [ -f "$d/certificate.pem" ]; then RPK_SIGN_DIR="$d"; break; fi
   done
 fi
