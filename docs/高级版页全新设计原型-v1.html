@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Ev 课程表 · 高级版页 全新设计原型 v1</title>
+<style>
+  :root{
+    /* ===== 浅色「晴空蓝」—— 取自 Ui.java 权威 token ===== */
+    --l-bg:#F4F7FB; --l-canvas:#E9EAEF; --l-card:#FFFFFF; --l-card2:#EAF0F8;
+    --l-line:#E3EAF3; --l-text:#0F172A; --l-muted:#64748B;
+    --l-accent:#2F6BFF; --l-accentLight:#EBF0FF;
+    --l-ok:#16A34A; --l-warn:#F59E0B; --l-err:#DC2626; --l-onAccent:#FFFFFF;
+    --l-okLight:rgba(34,197,94,.18); --l-warnLight:rgba(253,230,138,.25);
+    /* ===== 深色「夜幕蓝」 ===== */
+    --d-bg:#0B1020; --d-canvas:#060912; --d-card:#151C30; --d-card2:#1C2542; --d-line:#27314C;
+    --d-text:#E9EEF9; --d-muted:#8695B4; --d-accent:#5B9BFF; --d-accentLight:#1A2544;
+    --d-ok:#34C759; --d-warn:#FFB020; --d-err:#FF6B6B;
+    --d-okLight:rgba(52,199,89,.18); --d-warnLight:rgba(255,176,32,.18);
+    /* 文档底板 */
+    --doc-bg:#eef1f6; --doc-fg:#1a2233; --doc-muted:#5c6779; --doc-line:#d5dbe6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--doc-bg); color:var(--doc-fg);
+    padding:40px 24px 80px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;letter-spacing:.2px}
+  h2{font-size:19px;font-weight:600;margin:52px 0 6px;padding-top:18px;border-top:2px solid var(--doc-line)}
+  h2 .num{color:var(--l-accent);font-weight:600;margin-right:8px}
+  h3{font-size:15px;font-weight:600;margin:26px 0 10px}
+  .sub{color:var(--doc-muted);font-size:13.5px;margin-top:8px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12px;padding:4px 10px;border-radius:999px;background:#fff;border:1px solid var(--doc-line);color:var(--doc-muted)}
+  .chip b{color:var(--l-accent);font-weight:600}
+  .note{margin:16px 0;padding:13px 16px;border-radius:10px;font-size:13px;border:1px solid var(--doc-line);background:#fff}
+  .note.warn{background:#fff8ec;border-color:#f2d9ad}
+  .note.ok{background:#eefaf1;border-color:#bfe6c9}
+  .note b{font-weight:600}
+  ul{margin:10px 0 0 20px} li{margin:5px 0;font-size:13.5px}
+
+  /* ===== 手机框 ===== */
+  .frames{display:flex;flex-wrap:wrap;gap:34px;margin-top:26px;align-items:flex-start}
+  .frame{width:360px}
+  .frame .cap{font-size:12.5px;color:var(--doc-muted);margin-bottom:9px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .frame .cap b{color:var(--doc-fg);font-weight:600}
+  .tag{font-size:10.5px;padding:2px 7px;border-radius:5px;background:var(--l-accentLight);color:var(--l-accent);font-weight:600}
+  .tag.dark{background:#20293f;color:#8fb4ff}
+  .tag.new{background:rgba(22,163,74,.14);color:var(--l-ok)}
+  .tag.del{background:rgba(220,38,38,.12);color:var(--l-err)}
+  .screen{
+    width:360px;height:640px;border-radius:22px;overflow:hidden;position:relative;
+    box-shadow:0 18px 40px -12px rgba(20,32,60,.32),0 0 0 1px rgba(20,32,60,.06);
+    display:flex;flex-direction:column;
+  }
+  .anno{font-size:12px;color:var(--doc-muted);margin-top:10px;line-height:1.55}
+  .anno b{color:var(--doc-fg);font-weight:600}
+
+  /* ---- 通用原子 ---- */
+  .L{background:var(--l-canvas);color:var(--l-text)} .D{background:var(--d-canvas);color:var(--d-text)}
+  .body{flex:1;overflow:hidden;display:flex;flex-direction:column}
+
+  /* ---- 顶栏 44dp ---- */
+  .topbar{height:44px;display:flex;align-items:center;padding:0 16px;flex:0 0 auto;position:relative}
+  .tbtitle{font-size:17px;font-weight:600;color:var(--l-text);flex:1;text-align:center}
+  .D .tbtitle{color:var(--d-text)}
+  .tbic{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .tbic svg{width:18px;height:18px;stroke:var(--l-text);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .D .tbic svg{stroke:var(--d-text)}
+  .tbic.dim svg{stroke:var(--l-muted)}
+  .D .tbic.dim svg{stroke:var(--d-muted)}
+
+  /* ---- 卡 ---- */
+  .card{margin:8px 16px 0;background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;padding:14px}
+  .D .card{background:var(--d-card);border-color:var(--d-line)}
+  .card.plain{background:var(--l-card2);border-color:var(--l-line)}
+  .D .card.plain{background:var(--d-card2)}
+  .ctitle{font-size:17px;font-weight:600;color:var(--l-text);letter-spacing:.1px}
+  .D .ctitle{color:var(--d-text)}
+  .csub{font-size:11.5px;color:var(--l-muted);margin-top:3px}
+  .D .csub{color:var(--d-muted)}
+
+  /* ---- 设备行 ---- */
+  .devrow{display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--l-ok);flex:0 0 auto}
+  .dot.warn{background:var(--l-warn)} .dot.mut{background:var(--l-muted)} .dot.acc{background:var(--l-accent)}
+  .D .dot{background:var(--d-ok)} .D .dot.warn{background:var(--d-warn)}
+  .D .dot.mut{background:var(--d-muted)} .D .dot.acc{background:var(--d-accent)}
+  .devtxt{flex:1;min-width:0;font-size:13px;font-weight:500;color:var(--l-text);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .D .devtxt{color:var(--d-text)}
+  .devtxt.ok{color:var(--l-ok)} .devtxt.warn{color:var(--l-warn)} .devtxt.acc{color:var(--l-accent)}
+  .D .devtxt.ok{color:var(--d-ok)} .D .devtxt.warn{color:var(--d-warn)} .D .devtxt.acc{color:var(--d-accent)}
+  .devsub{font-size:11.5px;color:var(--l-muted);margin-top:4px}
+  .D .devsub{color:var(--d-muted)}
+  .devmore{width:44px;height:44px;margin:-8px -8px -8px 0;border-radius:11px;
+    display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .devmore svg{width:17px;height:17px;stroke:var(--l-muted);fill:none;stroke-width:2;stroke-linecap:round}
+  .D .devmore svg{stroke:var(--d-muted)}
+  .hr{height:1px;background:var(--l-line);margin:12px -14px}
+  .D .hr{background:var(--d-line)}
+
+  /* ---- 四格 ---- */
+  .boxes{display:flex;gap:8px}
+  .box{flex:1;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    font-size:22px;font-weight:600;letter-spacing:.5px;
+    background:var(--l-card);border:2px solid var(--l-line);color:var(--l-text)}
+  .D .box{background:var(--d-card);border-color:var(--d-line);color:var(--d-text)}
+  .box.on{border-color:var(--l-accent);box-shadow:0 0 0 3px var(--l-accentLight)}
+  .D .box.on{border-color:var(--d-accent);box-shadow:0 0 0 3px rgba(91,155,255,.16)}
+  .box.ph{border-style:dashed;color:var(--l-muted);font-weight:400}
+  .D .box.ph{color:var(--d-muted)}
+  .boxes.off .box{border-color:var(--l-line);background:var(--l-card2);color:var(--l-muted)}
+  .D .boxes.off .box{border-color:var(--d-line);background:var(--d-card2);color:var(--d-muted)}
+
+  /* ---- 按钮 ---- */
+  .btn{height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:600;border:1px solid transparent}
+  .btn.pri{background:var(--l-accent);color:var(--l-onAccent)}
+  .D .btn.pri{background:var(--d-accent);color:#08122a}
+  .btn.sec{background:var(--l-card2);border-color:var(--l-line);color:var(--l-accent)}
+  .D .btn.sec{background:var(--d-card2);border-color:var(--d-line);color:var(--d-accent)}
+  .btn.busy{background:var(--l-card2);color:var(--l-muted)}
+  .D .btn.busy{background:var(--d-card2);color:var(--d-muted)}
+  .btn.dis{background:var(--l-card2);color:var(--l-muted);opacity:.72}
+  .D .btn.dis{background:var(--d-card2);color:var(--d-muted)}
+  .mt8{margin-top:8px}.mt12{margin-top:12px}
+
+  /* ---- 结果条 / 提示条 ---- */
+  .inline{display:flex;gap:8px;align-items:flex-start;border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.45}
+  .inline.acc{background:var(--l-accentLight);color:var(--l-accent)}
+  .D .inline.acc{background:var(--d-accentLight);color:var(--d-accent)}
+  .inline.ok{background:var(--l-okLight);color:var(--l-ok)}
+  .D .inline.ok{background:var(--d-okLight);color:var(--d-ok)}
+  .inline.wn{background:var(--l-warnLight);color:#8a5b00}
+  .D .inline.wn{color:var(--d-warn);background:var(--d-warnLight)}
+  .inline svg{width:15px;height:15px;flex:0 0 auto;margin-top:1px;stroke:currentColor;fill:none;
+    stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+  .hint{font-size:11.5px;color:var(--l-muted)}
+  .D .hint{color:var(--d-muted)}
+  .hint.mini{font-size:10.5px}
+
+  /* ---- 购买入口行 ---- */
+  .buyrow{margin:12px 16px 0;height:52px;border-radius:14px;background:var(--l-card);
+    border:1px solid var(--l-line);display:flex;align-items:center;gap:10px;padding:0 14px}
+  .D .buyrow{background:var(--d-card);border-color:var(--d-line)}
+  .buyrow .t{flex:1;min-width:0}
+  .buyrow .t1{font-size:13px;color:var(--l-text)}
+  .D .buyrow .t1{color:var(--d-text)}
+  .buyrow .t1 b{color:var(--l-accent);font-weight:600}
+  .D .buyrow .t1 b{color:var(--d-accent)}
+  .buyrow .t2{font-size:11.5px;color:var(--l-muted);margin-top:1px}
+  .D .buyrow .t2{color:var(--d-muted)}
+  .buyrow svg{width:16px;height:16px;stroke:var(--l-muted);fill:none;stroke-width:2.2;
+    stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+  .D .buyrow svg{stroke:var(--d-muted)}
+
+  /* ---- 成功卡 ---- */
+  .okcard{margin:8px 16px 0;background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;
+    padding:26px 14px 16px;display:flex;flex-direction:column;align-items:center}
+  .D .okcard{background:var(--d-card);border-color:var(--d-line)}
+  .okbadge{width:48px;height:48px;border-radius:50%;background:var(--l-okLight);
+    display:flex;align-items:center;justify-content:center}
+  .D .okbadge{background:var(--d-okLight)}
+  .okbadge svg{width:24px;height:24px;stroke:var(--l-ok);fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+  .D .okbadge svg{stroke:var(--d-ok)}
+  .oktitle{font-size:17px;font-weight:600;color:var(--l-text);margin-top:12px}
+  .D .oktitle{color:var(--d-text)}
+  .oksub{font-size:11.5px;color:var(--l-muted);margin-top:4px;text-align:center}
+  .D .oksub{color:var(--d-muted)}
+  .okcard .btn{width:100%}
+
+  /* ---- 引导卡 ---- */
+  .guide{margin:12px 0 0;border-radius:12px;background:var(--l-warnLight);
+    border:1px solid rgba(245,158,11,.34);padding:12px}
+  .D .guide{background:var(--d-warnLight);border-color:rgba(255,176,32,.28)}
+  .gt{font-size:13px;font-weight:600;color:#8a5b00}
+  .D .gt{color:var(--d-warn)}
+  .guide ul{margin:7px 0 0 16px}
+  .guide li{font-size:11.5px;color:var(--l-muted);margin:3px 0}
+  .D .guide li{color:var(--d-muted)}
+
+  /* ---- 底栏 ---- */
+  .bbar{height:62px;background:var(--l-card);border-top:1px solid var(--l-line);
+    display:flex;flex:0 0 auto}
+  .D .bbar{background:var(--d-card);border-color:var(--d-line)}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+  .tab svg{width:22px;height:22px;stroke:var(--l-muted);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .tab span{font-size:10.5px;color:var(--l-muted)}
+  .tab.on svg{stroke:var(--l-accent)} .tab.on span{color:var(--l-accent);font-weight:600}
+  .D .tab svg{stroke:var(--d-muted)} .D .tab span{color:var(--d-muted)}
+  .D .tab.on svg{stroke:var(--d-accent)} .D .tab.on span{color:var(--d-accent)}
+  .spacer{flex:1}
+
+  /* ---- 弹层（示意） ---- */
+  .sheet{margin:0 16px;background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;
+    overflow:hidden;box-shadow:0 -8px 26px -14px rgba(20,32,60,.4)}
+  .D .sheet{background:var(--d-card);border-color:var(--d-line)}
+  .sheet .it{height:48px;display:flex;align-items:center;gap:10px;padding:0 14px;
+    border-bottom:1px solid var(--l-line);font-size:13px;color:var(--l-text)}
+  .D .sheet .it{color:var(--d-text);border-color:var(--d-line)}
+  .sheet .it:last-child{border-bottom:0}
+  .sheet .it svg{width:16px;height:16px;stroke:var(--l-muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .D .sheet .it svg{stroke:var(--d-muted)}
+  .sheet .it.danger{color:var(--l-err)}
+  .dim{position:absolute;inset:0;background:rgba(15,23,42,.42)}
+  .sheetwrap{position:absolute;left:0;right:0;bottom:0;padding-bottom:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Ev 课程表 · 「高级版」页 全新设计原型 v1</h1>
+<p class="sub">对象 <code>FastActivateActivity</code> · 1dp = 1px · 全量复用 <code>Ui.java</code> 既有 token（零新增）</p>
+<div class="meta">
+  <span class="chip">字号 <b>17 / 13 / 11.5 / 10.5 / 22</b></span>
+  <span class="chip">圆角 <b>14 / 12</b></span>
+  <span class="chip">间距 <b>4 / 8 / 12 / 16</b></span>
+  <span class="chip">热区 <b>44dp</b></span>
+  <span class="chip">消除越界字号 <b>24f → 22f</b></span>
+</div>
+
+<div class="note">
+  <b>一句话结论：</b>本页真实用户只有两种 —— <b>A 已付款拿码来激活</b>（多数，且可能由深链直达）、<b>B 还没付款来看怎么买</b>（少数）。
+  现状把 <b>B 的需求（买码卡）放在 A 的需求（输入卡）前面</b>，且同一件事（连没连上手环）被三个地方各说了一遍。
+</div>
+
+<h2><span class="num">01</span>被删掉的东西（对照现状）</h2>
+<ul>
+  <li><b>顶栏副标题</b>「一键激活：只需填 4 位兑换码」—— 与卡内标题重复说「4 位」。</li>
+  <li><b><code>ConnectionBar</code> 整条</b> —— 与设备卡状态、设备 ID 三处同时说「没连上手环」。</li>
+  <li><b><code>resultView</code> 裸文本</b> —— 深链提示 / 呼叫反馈 / 激活全过程三合一，且与 <code>statusView</code> 构成两套反馈通道。</li>
+  <li><b><code>Ui.mono</code> 两段等宽说明</b> —— 硬前提「需装小米运动健康」被埋在最底部。</li>
+  <li><b>「① ②」编号</b> —— 4 步流程只编两个号，中间夹一张无编号的设备卡。</li>
+</ul>
+
+<h2><span class="num">02</span>五态 + 深色主态</h2>
+
+<div class="frames">
+
+  <!-- ============ 态 A：已连接 · 待输入 ============ -->
+  <div class="frame">
+    <div class="cap"><b>态 A</b> 已连接 · 待输入 <span class="tag new">主态</span></div>
+    <div class="screen L">
+      <div class="topbar">
+        <div class="tbic"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="tbtitle">高级版</div>
+        <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+      </div>
+      <div class="body">
+        <!-- 主卡 -->
+        <div class="card">
+          <div class="devrow">
+            <span class="dot"></span>
+            <div class="devtxt ok">已连接 · Mi Band 9</div>
+            <div class="devmore"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+          <div class="devsub">设备ID ····A1B2C3</div>
+          <div class="hr"></div>
+          <div class="ctitle">输入 4 位兑换码</div>
+          <div class="csub">在爱发电订单里查看</div>
+          <div class="mt12"></div>
+          <div class="boxes">
+            <div class="box ph">·</div><div class="box ph">·</div>
+            <div class="box ph">·</div><div class="box ph">·</div>
+          </div>
+          <div class="mt8 hint mini">支持长按粘贴，自动分格、自动大写</div>
+          <div class="mt12"></div>
+          <div class="btn pri">一键激活</div>
+        </div>
+        <!-- 购买入口行 -->
+        <div class="buyrow">
+          <div class="t">
+            <div class="t1">还没有兑换码？<b>前往爱发电购买</b></div>
+            <div class="t2">4 位大写字母或数字</div>
+          </div>
+          <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>
+      <div class="bbar">
+        <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V21H3z"/></svg><span>首页</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/></svg><span>课表库</span></div>
+        <div class="tab on"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M9 3h6M9 21h6"/></svg><span>手环</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>设置</span></div>
+      </div>
+    </div>
+    <div class="anno">
+      <b>输入卡是首屏第一张卡</b>（现状是第三张）。设备状态收敛为卡内<b>唯一一行</b>：<b>8dp 状态点 + 「已连接 · 型号」</b>，下一行才是设备 ID 掩码。
+      右侧 <b>⋯</b> 收纳两个低频动作（重新读取设备 ID / 呼叫手环）。
+    </div>
+  </div>
+
+  <!-- ============ 态 B：输入中 ============ -->
+  <div class="frame">
+    <div class="cap"><b>态 B</b> 输入中（3/4，焦点在第 4 格）</div>
+    <div class="screen L">
+      <div class="topbar">
+        <div class="tbic"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="tbtitle">高级版</div>
+        <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="devrow">
+            <span class="dot"></span>
+            <div class="devtxt ok">已连接 · Mi Band 9</div>
+            <div class="devmore"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+          <div class="devsub">设备ID ····A1B2C3</div>
+          <div class="hr"></div>
+          <div class="ctitle">输入 4 位兑换码</div>
+          <div class="csub">在爱发电订单里查看</div>
+          <div class="mt12"></div>
+          <div class="boxes">
+            <div class="box">7</div><div class="box">K</div>
+            <div class="box">9</div><div class="box on">·</div>
+          </div>
+          <div class="mt8 hint mini">支持长按粘贴，自动分格、自动大写</div>
+          <div class="mt12"></div>
+          <div class="btn pri">一键激活</div>
+        </div>
+        <div class="buyrow">
+          <div class="t">
+            <div class="t1">还没有兑换码？<b>前往爱发电购买</b></div>
+            <div class="t2">4 位大写字母或数字</div>
+          </div>
+          <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>
+      <div class="bbar">
+        <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V21H3z"/></svg><span>首页</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/></svg><span>课表库</span></div>
+        <div class="tab on"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M9 3h6M9 21h6"/></svg><span>手环</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>设置</span></div>
+      </div>
+    </div>
+    <div class="anno">
+      <b>聚焦格有明确指示</b>：2dp 主色描边 + 3px 主色淡光晕（<code>0 0 0 3px ACCENT_LIGHT</code>）。
+      现状四格外观完全一致、看不出焦点在哪 —— 自动跳格后尤其明显。
+      数字 <b>22sp</b>（现状 24sp，超出 7 档字号）。
+    </div>
+  </div>
+
+  <!-- ============ 态 C：激活中 ============ -->
+  <div class="frame">
+    <div class="cap"><b>态 C</b> 激活中（按钮自反馈 + 卡内结果条） <span class="tag">反馈就地化</span></div>
+    <div class="screen L">
+      <div class="topbar">
+        <div class="tbic"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="tbtitle">高级版</div>
+        <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="devrow">
+            <span class="dot"></span>
+            <div class="devtxt ok">已连接 · Mi Band 9</div>
+            <div class="devmore"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+          <div class="devsub">设备ID ····A1B2C3</div>
+          <div class="hr"></div>
+          <div class="ctitle">输入 4 位兑换码</div>
+          <div class="mt12"></div>
+          <div class="boxes">
+            <div class="box">7</div><div class="box">K</div>
+            <div class="box">9</div><div class="box">Q</div>
+          </div>
+          <div class="mt12"></div>
+          <div class="inline acc">
+            <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M21 3v6h-6"/></svg>
+            <div>正在向服务器换取激活码…</div>
+          </div>
+          <div class="mt8"></div>
+          <div class="btn busy">激活中…</div>
+        </div>
+        <div class="buyrow">
+          <div class="t">
+            <div class="t1">还没有兑换码？<b>前往爱发电购买</b></div>
+            <div class="t2">4 位大写字母或数字</div>
+          </div>
+          <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>
+      <div class="bbar">
+        <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V21H3z"/></svg><span>首页</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/></svg><span>课表库</span></div>
+        <div class="tab on"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M9 3h6M9 21h6"/></svg><span>手环</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>设置</span></div>
+      </div>
+    </div>
+    <div class="anno">
+      <b>两处同说一件事、且都在卡内</b>：结果条（<code>ACCENT</code> 淡底 + 转圈图标）说明"正在做什么"，按钮自己变成「激活中…」。
+      <b>不再有页面级反馈通道</b> —— 用户的视线永远在按钮附近，不需要上下找。
+    </div>
+  </div>
+
+  <!-- ============ 态 D：激活成功 ============ -->
+  <div class="frame">
+    <div class="cap"><b>态 D</b> 激活成功（独立成功卡） <span class="tag new">新增</span></div>
+    <div class="screen L">
+      <div class="topbar">
+        <div class="tbic"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="tbtitle">高级版</div>
+        <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="okcard">
+          <div class="okbadge"><svg viewBox="0 0 24 24"><path d="M4 12.5l5.2 5.2L20 7"/></svg></div>
+          <div class="oktitle">激活成功</div>
+          <div class="oksub">有效期至 2027-10-05 · 共 365 天</div>
+          <div class="mt12" style="width:100%"></div>
+          <div class="btn pri">回首页</div>
+        </div>
+        <div class="card">
+          <div class="devrow">
+            <span class="dot"></span>
+            <div class="devtxt ok">已激活 · Mi Band 9</div>
+            <div class="devmore"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+          <div class="devsub">设备ID ····A1B2C3　·　可在手环「EV 课程表 → 高级版」查看</div>
+        </div>
+      </div>
+      <div class="bbar">
+        <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V21H3z"/></svg><span>首页</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/></svg><span>课表库</span></div>
+        <div class="tab on"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M9 3h6M9 21h6"/></svg><span>手环</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>设置</span></div>
+      </div>
+    </div>
+    <div class="anno">
+      现状成功态只是往 <code>resultView</code> 写一行 12.5sp 绿字。这是<b>付费转化页的终点</b>，必须有「成功的样子」+ 明确出口：
+      <b>48dp 圆底 ✓ + 「激活成功」+ 有效期 + 主按钮「回首页」</b>。输入卡整块被替换，不给用户"我是不是漏了一步"的错觉。
+    </div>
+  </div>
+
+  <!-- ============ 态 E：未连接 ============ -->
+  <div class="frame">
+    <div class="cap"><b>态 E</b> 未连接手环（硬前提前置）</div>
+    <div class="screen L">
+      <div class="topbar">
+        <div class="tbic"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="tbtitle">高级版</div>
+        <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="devrow">
+            <span class="dot warn"></span>
+            <div class="devtxt warn">未连接手环</div>
+            <div class="devmore"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+          <div class="devsub">先填码也行 —— 连上手环回到本页会自动继续激活</div>
+
+          <div class="guide">
+            <div class="gt">激活前需要先连上手环</div>
+            <ul>
+              <li>手机已安装「小米运动健康」并连接手环</li>
+              <li>手环已安装 EV 课程表</li>
+            </ul>
+            <div class="mt8"></div>
+            <div class="btn sec">去首页连接</div>
+          </div>
+
+          <div class="hr"></div>
+          <div class="ctitle">输入 4 位兑换码</div>
+          <div class="mt12"></div>
+          <div class="boxes">
+            <div class="box ph">·</div><div class="box ph">·</div>
+            <div class="box ph">·</div><div class="box ph">·</div>
+          </div>
+          <div class="mt8 hint mini">支持长按粘贴，自动分格、自动大写</div>
+          <div class="mt12"></div>
+          <div class="btn pri">暂存兑换码</div>
+        </div>
+      </div>
+      <div class="bbar">
+        <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V21H3z"/></svg><span>首页</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/></svg><span>课表库</span></div>
+        <div class="tab on"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M9 3h6M9 21h6"/></svg><span>手环</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>设置</span></div>
+      </div>
+    </div>
+    <div class="anno">
+      现状把<b>硬前提</b>「手机已安装小米运动健康」写在页面最底部的 <code>mono</code> 等宽说明里 —— 用户失败时才知道。
+      现在<b>就地出现在需要它的地方</b>（未连接态的引导卡）。
+      同时把「未连接也能先填码、连上自动继续」这个**真实存在但被隐藏的能力**显式说出来 → 按钮文案变成「暂存兑换码」。
+    </div>
+  </div>
+
+  <!-- ============ 深色主态 ============ -->
+  <div class="frame">
+    <div class="cap"><b>深色「夜幕蓝」</b> 主态 <span class="tag dark">验收 8</span></div>
+    <div class="screen D">
+      <div class="topbar">
+        <div class="tbic"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="tbtitle">高级版</div>
+        <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="devrow">
+            <span class="dot"></span>
+            <div class="devtxt ok">已连接 · Mi Band 9</div>
+            <div class="devmore"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+          <div class="devsub">设备ID ····A1B2C3</div>
+          <div class="hr"></div>
+          <div class="ctitle">输入 4 位兑换码</div>
+          <div class="csub">在爱发电订单里查看</div>
+          <div class="mt12"></div>
+          <div class="boxes">
+            <div class="box">7</div><div class="box">K</div>
+            <div class="box">9</div><div class="box on">·</div>
+          </div>
+          <div class="mt8 hint mini">支持长按粘贴，自动分格、自动大写</div>
+          <div class="mt12"></div>
+          <div class="btn pri">一键激活</div>
+        </div>
+        <div class="buyrow">
+          <div class="t">
+            <div class="t1">还没有兑换码？<b>前往爱发电购买</b></div>
+            <div class="t2">4 位大写字母或数字</div>
+          </div>
+          <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>
+      <div class="bbar">
+        <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V21H3z"/></svg><span>首页</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/></svg><span>课表库</span></div>
+        <div class="tab on"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M9 3h6M9 21h6"/></svg><span>手环</span></div>
+        <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>设置</span></div>
+      </div>
+    </div>
+    <div class="anno">
+      深色下四格用 <code>CARD</code> #151C30 作底、<code>CARD2</code> 只在"未连接置灰"时使用；聚焦描边 <code>ACCENT</code> #5B9BFF + 16% 光晕。
+      <b>两套主题都用 token，无写死颜色。</b>
+    </div>
+  </div>
+
+</div>
+
+<h2><span class="num">03</span>次级界面：设备行 ⋯ 与常见问题</h2>
+<div class="frames">
+  <div class="frame">
+    <div class="cap"><b>设备行 ⋯</b> 收纳两个低频动作</div>
+    <div class="screen L">
+      <div class="topbar">
+        <div class="tbic"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="tbtitle">高级版</div>
+        <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="devrow">
+            <span class="dot"></span>
+            <div class="devtxt ok">已连接 · Mi Band 9</div>
+            <div class="devmore"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+          <div class="devsub">设备ID ····A1B2C3</div>
+          <div class="hr"></div>
+          <div class="ctitle">输入 4 位兑换码</div>
+          <div class="mt12"></div>
+          <div class="boxes">
+            <div class="box ph">·</div><div class="box ph">·</div>
+            <div class="box ph">·</div><div class="box ph">·</div>
+          </div>
+          <div class="mt12"></div>
+          <div class="btn pri">一键激活</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="sheet">
+          <div class="it">
+            <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M21 3v6h-6"/></svg>
+            重新读取设备ID
+          </div>
+          <div class="it">
+            <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 7 3 7H3s3 0 3-7"/><path d="M10.5 20a2 2 0 0 0 3 0"/></svg>
+            呼叫手环（响铃找表）
+          </div>
+          <div class="it">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.4-2.5 2.4"/><path d="M12 17.2v.01"/></svg>
+            常见问题
+          </div>
+        </div>
+      </div>
+      <div class="dim"></div>
+    </div>
+    <div class="anno">
+      复用课表库 / 手环页的 ⋯ + 底部弹层模式（<code>AlertDialog</code>，零新增组件）。
+      <b>注：未连接态时「呼叫手环」不进弹层，而是直接提为设备行内主按钮</b> —— 那一刻它正是最需要的动作。
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="cap"><b>常见问题弹层</b> 取代 <code>Ui.mono</code> 两段</div>
+    <div class="screen L">
+      <div class="topbar">
+        <div class="tbic"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="tbtitle">高级版</div>
+        <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+      </div>
+      <div class="body" style="background:var(--l-canvas)">
+        <div class="spacer"></div>
+        <div class="sheet">
+          <div class="it" style="height:auto;padding:14px;display:block">
+            <div style="font-size:15px;font-weight:600;margin-bottom:8px">常见问题</div>
+            <div style="font-size:12.5px;color:var(--l-muted);line-height:1.6">
+              <b style="color:var(--l-text)">兑换码怎么来？</b><br>在爱发电下单后自动发放，4 位大写字母或数字。<br><br>
+              <b style="color:var(--l-text)">一个兑换码能激活几台手环？</b><br>一台。激活码跟随手环，换手机不用重新激活。<br><br>
+              <b style="color:var(--l-text)">激活码多长？需要我手输吗？</b><br>18 位数字，由服务端按你的设备 ID 生成，本页自动写入。<br><br>
+              <b style="color:var(--l-text)">iOS 能用吗？</b><br>暂不支持，需要安卓手机。
+            </div>
+          </div>
+          <div class="it" style="justify-content:center;color:var(--l-accent);font-weight:600">知道了</div>
+        </div>
+      </div>
+      <div class="dim"></div>
+    </div>
+    <div class="anno">
+      原 <code>Ui.mono</code> 两段（前置条件 3 条 + 说明 3 条）压成 4 问 4 答的弹层。
+      <b>硬前提「需装小米运动健康」已被提到未连接态的引导卡里</b>（态 E），不再需要用户滚到最底部。
+    </div>
+  </div>
+</div>
+
+<h2><span class="num">04</span>规格速查</h2>
+<div class="note">
+  <b>四格尺寸校验：</b>屏宽 360dp − 页面边距 40（20×2） − 卡内边距 28（14×2） = <b>292dp</b> 可用；
+  四格 <b>4×56 + 3×8 = 248dp</b>，余量 44dp ✓（现状 54×4 + 10×3 = 246dp，其中 10 不在 4dp 栅格上）。
+</div>
+<div class="note ok">
+  <b>零新增 token：</b>字号只用到 <code>SP_TITLE 17</code> / <code>SP_BODY 13</code> / <code>SP_CAPTION 11.5</code> / <code>SP_MICRO 10.5</code> / <code>SP_DISPLAY 22</code>；
+  圆角只用到 <code>R_CARD 14</code> / <code>R_CTRL 12</code>；间距只用到 <code>GAP_SM 8</code> / <code>GAP_MD 12</code>。
+  <b>顺带消除越界字号 24f（第 9 档）。</b>
+</div>
+<div class="note warn">
+  <b>唯一一处新增行为：</b>成功卡的「回首页」按钮（<code>startActivity(HomeActivity)</code>）。其余全部为视图层改动 ——
+  激活 / 暂存 / 续传 / 深链 / 埋点逻辑零改动。
+</div>
+
+</div>
+</body>
+</html>
