@@ -176,6 +176,34 @@ public final class Holiday {
         return (e != null && e.holiday) ? e.name : "";
     }
 
+    /**
+     * 内置假期祝福语 —— 与手环端 EV 同源（class-schedule/src/data/holiday-preset.js
+     * 的 defaultGreetings），两端文案保持一致；用户日后改文案应两侧同步改。
+     * key 用 SEED 里的假期名（「国庆」不带「假期」后缀），查不到则用通用兜底。
+     */
+    private static final java.util.Map<String, String> GREETINGS = new java.util.HashMap<>();
+
+    static {
+        GREETINGS.put("元旦", "元旦快乐，新的一年顺顺利利！");
+        GREETINGS.put("春节", "新春快乐，阖家幸福！");
+        GREETINGS.put("清明", "清明安康，注意出行安全");
+        GREETINGS.put("劳动节", "劳动节快乐，好好休息");
+        GREETINGS.put("端午", "端午安康，记得吃粽子");
+        GREETINGS.put("中秋", "中秋快乐，月圆人团圆");
+        GREETINGS.put("国庆", "国庆快乐，祝祖国繁荣昌盛");
+    }
+
+    /** 假期祝福语（仅当天是假期才有值；未收录的假期用「节日快乐！」兜底） */
+    public static String greeting(Context c, Calendar cal) {
+        String name = holidayName(c, cal);
+        if (name.length() == 0) {
+            return "";
+        }
+        // key 兼容：手环端存的是「国庆假期」这类带后缀的名字，统一去掉后缀再查
+        String g = GREETINGS.get(name.replace("假期", ""));
+        return (g != null && g.length() > 0) ? g : "节日快乐！";
+    }
+
     /** 日期条上的角标：放假 = 「休」，调休 = 「班」，普通日 = 空串 */
     public static String badge(Context c, Calendar cal) {
         if (!enabled(c) || cal == null) {

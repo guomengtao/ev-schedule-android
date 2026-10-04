@@ -662,13 +662,26 @@ public class HomeActivity extends Activity {
         // ── 假期 / 调休提示（移植自 EV 首页的祝福卡 + 调休提示条）──
         int overrideToday = Holiday.resolveToday(this);
         if (overrideToday == Holiday.HOLIDAY) {
-            String name = Holiday.holidayName(this, java.util.Calendar.getInstance());
-            TextView b = Ui.textLh(this, (name.length() > 0 ? name : "假期") + " · 今天休息，没有课",
-                    Ui.SP_CAPTION, Ui.OK, false, Ui.LH_CAPTION);
-            b.setPadding(Ui.dp(this, Ui.GAP_MD), Ui.dp(this, Ui.GAP_SM),
+            java.util.Calendar todayCal = java.util.Calendar.getInstance();
+            String name = Holiday.holidayName(this, todayCal);
+            String greet = Holiday.greeting(this, todayCal);
+            // 祝福卡（对齐手环端 EV 的「祝福卡」）：主行=祝福语，次行=假期名 + 无课说明
+            LinearLayout hc = new LinearLayout(this);
+            hc.setOrientation(LinearLayout.VERTICAL);
+            hc.setPadding(Ui.dp(this, Ui.GAP_MD), Ui.dp(this, Ui.GAP_SM),
                     Ui.dp(this, Ui.GAP_MD), Ui.dp(this, Ui.GAP_SM));
-            b.setBackground(Ui.round(Ui.OK_LIGHT, Ui.GAP_SM, 0, this));
-            weekBox.addView(b);
+            hc.setBackground(Ui.round(Ui.OK_LIGHT, Ui.GAP_SM, 0, this));
+            if (greet.length() > 0) {
+                TextView gt = Ui.textMediumLh(this, greet, Ui.SP_BODY, Ui.OK, Ui.LH_BODY);
+                hc.addView(gt);
+            }
+            TextView sub = Ui.textLh(this, (name.length() > 0 ? name : "假期") + " · 今天休息，没有课",
+                    Ui.SP_MICRO, Ui.MUTED, false, Ui.LH_CAPTION);
+            if (greet.length() > 0) {
+                sub.setPadding(0, Ui.dp(this, 2), 0, 0);
+            }
+            hc.addView(sub);
+            weekBox.addView(hc);
             weekBox.addView(Ui.space(this, Ui.GAP_SM));
         } else if (overrideToday >= 0) {
             TextView b = Ui.textLh(this, "今天调休，按" + CourseCache.WEEK[overrideToday] + "课表",
