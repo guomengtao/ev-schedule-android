@@ -181,8 +181,13 @@ public class HomeActivity extends Activity {
 
         // ---- 周日期条 ----
         // 格子用 weight 均分宽度（原 43dp 固定宽 × 7 + 间隔会超出 360dp 屏宽，最后一格被裁掉）
+        // §3.2 列对齐：左让出「课表卡内边距 GAP_MD(12) + 时间列 TIME_COL_W(36) = 48dp」、
+        // 右让出卡内边距 12dp，使 7 个日期格与下方课表卡的 7 个天列严格同列
+        //（改前日期条满宽、网格被时间列推右 48dp，两排星期横坐标对不上）。
         dateStripView = new LinearLayout(this);
         dateStripView.setOrientation(LinearLayout.HORIZONTAL);
+        dateStripView.setPadding(Ui.dp(this, Ui.GAP_MD + TIME_COL_W), 0,
+                Ui.dp(this, Ui.GAP_MD), 0);
         root.addView(dateStripView);
         root.addView(Ui.space(this, Ui.GAP_LG));
 
@@ -522,43 +527,66 @@ public class HomeActivity extends Activity {
         String[] weekLabels = {"一", "二", "三", "四", "五", "六", "日"};
 
         for (int d = 0; d < 7; d++) {
-            LinearLayout cell = new LinearLayout(this);
-            cell.setOrientation(LinearLayout.VERTICAL);
-            cell.setGravity(android.view.Gravity.CENTER);
-            int cellH = Ui.dp(this, 64);
             boolean sel = (d == selectedDay);
+            int cellH = Ui.dp(this, 64);
 
             // 假期 / 调休角标：「休」= 放假，「班」= 调休补课
             java.util.Calendar dayCal = (java.util.Calendar) cal.clone();
             String badge = Holiday.badge(this, dayCal);
-            String dayLabel = weekLabels[d] + (badge.length() > 0 ? " " + badge : "");
 
-            // 文字水平居中（之前 Ui.text 默认靠左，视觉上歪）
-            // badge（休/班）单独上主题色变体（暗底亮色/浅底深色），选中格保持纯白
-            TextView wv = Ui.textMediumLh(this, dayLabel, Ui.SP_CAPTION, sel ? Ui.ON_ACCENT : Ui.MUTED, Ui.LH_MICRO);
-            if (!sel && badge.length() > 0) {
-                int badgeColor = "休".equals(badge) ? Ui.OK : Ui.WARN;
-                android.text.SpannableString sp = new android.text.SpannableString(dayLabel);
-                sp.setSpan(new android.text.style.ForegroundColorSpan(badgeColor),
-                        dayLabel.length() - badge.length(), dayLabel.length(),
-                        android.text.SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
-                wv.setText(sp);
+            // 外格占满 1/7 列宽（pitch 与网格天列一致 → 两排星期严格同列）；
+            // 内卡留左右各 2dp 缝 → 视觉 4dp 间距，既有分隔感又不错位。
+            android.widget.FrameLayout cell = new android.widget.FrameLayout(this);
+            cell.setClipChildren(false);   // 内卡阴影不被外格裁掉
+
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setGravity(android.view.Gravity.CENTER);
+            if (sel) {
+                card.setBackground(Ui.round(Ui.ACCENT, Ui.R_CTRL, 0, this));
+            } else {
+                card.setBackground(Ui.round(Ui.CARD, Ui.R_CTRL, 0, this));
+                // 阴影 4 → 2：选中态已有 ACCENT 实心区分，非选中不必再靠重阴影
+                card.setElevation(Ui.dp(this, 2));
             }
+            android.widget.FrameLayout.LayoutParams clp = new android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
+            clp.leftMargin = Ui.dp(this, 2);
+            clp.rightMargin = Ui.dp(this, 2);
+            card.setLayoutParams(clp);
+
+            // 星期字只留「一」…「日」：不再与休/班拼排，消除「一休 / 六班」误读（§3.3）。
+            // 文字水平居中（之前 Ui.text 默认靠左，视觉上歪）
+            TextView wv = Ui.textMediumLh(this, weekLabels[d], Ui.SP_CAPTION,
+                    sel ? Ui.ON_ACCENT : Ui.MUTED, Ui.LH_MICRO);
             wv.setGravity(android.view.Gravity.CENTER);
             TextView dd = Ui.textMediumLh(this, String.valueOf(cal.get(java.util.Calendar.DAY_OF_MONTH)),
                     Ui.SP_NUM, sel ? Ui.ON_ACCENT : Ui.TEXT, Ui.LH_SUBTITLE);
             dd.setGravity(android.view.Gravity.CENTER);
             dd.setPadding(0, Ui.dp(this, 2), 0, 0);
+            card.addView(wv);
+            card.addView(dd);
+            cell.addView(card);
 
-            if (sel) {
-                cell.setBackground(Ui.round(Ui.ACCENT, Ui.R_CTRL, 0, this));
-            } else {
-                cell.setBackground(Ui.round(Ui.CARD, Ui.R_CTRL, 0, this));
-                // 阴影 4 → 2：选中态已有 ACCENT 实心区分，非选中不必再靠重阴影
-                cell.setElevation(Ui.dp(this, 2));
+            // 角标：右上角小方块（休=绿 / 班=琥珀），靠「位置」与星期字分离，避免拼读成一个词
+            if (badge.length() > 0) {
+                boolean rest = "休".equals(badge);
+                TextView bd = Ui.textMedium(this, badge, Ui.SP_MICRO, rest ? Ui.OK : Ui.WARN);
+                bd.setGravity(android.view.Gravity.CENTER);
+                bd.setIncludeFontPadding(false);
+                bd.setBackground(Ui.round(rest ? Ui.OK_LIGHT : Ui.WARN_LIGHT, Ui.R_BLOCK, 0, this));
+                android.widget.FrameLayout.LayoutParams blp = new android.widget.FrameLayout.LayoutParams(
+                        Ui.dp(this, 14), Ui.dp(this, 14));
+                blp.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
+                blp.topMargin = Ui.dp(this, 3);
+                blp.rightMargin = Ui.dp(this, 3);
+                bd.setLayoutParams(blp);
+                // ⚠️ 必须比内卡（elevation 2）更高：同一 FrameLayout 里带 elevation 的子 View
+                // 会盖在没有 elevation 的兄弟之上（Z 序优先于添加顺序），否则角标被卡片压住看不见。
+                bd.setElevation(Ui.dp(this, 3));
+                cell.addView(bd);
             }
-            cell.addView(wv);
-            cell.addView(dd);
 
             final int dayIndex = d;
             cell.setOnClickListener(new View.OnClickListener() {
@@ -568,13 +596,8 @@ public class HomeActivity extends Activity {
                 }
             });
 
+            // 无 gap：每格按 1/7 均分，pitch 与网格天列严格一致（gap 会造成逐列累积漂移）
             dateStripView.addView(cell, new LinearLayout.LayoutParams(0, cellH, 1f));
-            if (d < 6) {
-                View gap = new View(this);
-                gap.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, 6),
-                        LinearLayout.LayoutParams.MATCH_PARENT));
-                dateStripView.addView(gap);
-            }
             cal.add(java.util.Calendar.DAY_OF_MONTH, 1);
         }
     }
@@ -804,14 +827,10 @@ public class HomeActivity extends Activity {
         boolean thisWeek = (weekOffset == 0);
         for (int d = 0; d < 7; d++) {
             boolean isToday = thisWeek && d == today;
-            java.util.Calendar day = (java.util.Calendar) gridMon.clone();
-            day.add(java.util.Calendar.DAY_OF_MONTH, d);
-            String badge = Holiday.badge(this, day);
-            String head = heads[d] + badge;
-            int headColor = isToday ? Ui.ON_ACCENT
-                    : ("休".equals(badge) ? Ui.OK
-                        : ("班".equals(badge) ? Ui.WARN : Ui.MUTED));
-            TextView hl = Ui.textMediumLh(this, head, Ui.SP_CAPTION, headColor, Ui.LH_MICRO);
+            // 表头只留星期字「一」…「日」：休/班角标已由上方日期条右上角小点承担，
+            // 不再拼进表头文本，避免「一休 / 六班」被读成一个词（§3.3）。
+            int headColor = isToday ? Ui.ON_ACCENT : Ui.MUTED;
+            TextView hl = Ui.textMediumLh(this, heads[d], Ui.SP_CAPTION, headColor, Ui.LH_MICRO);
             hl.setGravity(android.view.Gravity.CENTER);
             hl.setPadding(0, Ui.dp(this, Ui.GAP_XS), 0, Ui.dp(this, Ui.GAP_XS));
             if (isToday) {
