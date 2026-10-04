@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Ev 课程表 · 手环页 全新设计原型 v1</title>
+<style>
+  :root{
+    /* ===== 浅色「晴空蓝」—— 取自 Ui.java 权威 token ===== */
+    --l-bg:#F4F7FB; --l-canvas:#E9EAEF; --l-card:#FFFFFF; --l-card2:#EAF0F8;
+    --l-line:#E3EAF3; --l-text:#0F172A; --l-muted:#64748B;
+    --l-accent:#2F6BFF; --l-accentLight:#EBF0FF;
+    --l-ok:#16A34A; --l-warn:#F59E0B; --l-err:#DC2626; --l-onAccent:#FFFFFF;
+    --l-okLight:rgba(34,197,94,.18); --l-warnLight:rgba(253,230,138,.25);
+    /* ===== 深色「夜幕蓝」 ===== */
+    --d-bg:#0B1020; --d-canvas:#0B1020; --d-card:#151C30; --d-card2:#1C2542; --d-line:#27314C;
+    --d-text:#E9EEF9; --d-muted:#8695B4; --d-accent:#5B9BFF; --d-accentLight:#1A2544;
+    --d-ok:#34C759; --d-warn:#FFB020; --d-err:#FF6B6B;
+    --d-okLight:rgba(52,199,89,.18); --d-warnLight:rgba(255,176,32,.18);
+    /* 文档底板 */
+    --doc-bg:#eef1f6; --doc-fg:#1a2233; --doc-muted:#5c6779; --doc-line:#d5dbe6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--doc-bg); color:var(--doc-fg);
+    padding:40px 24px 80px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;letter-spacing:.2px}
+  h2{font-size:19px;font-weight:600;margin:52px 0 6px;padding-top:18px;border-top:2px solid var(--doc-line)}
+  h2 .num{color:var(--l-accent);font-weight:600;margin-right:8px}
+  h3{font-size:15px;font-weight:600;margin:26px 0 10px}
+  .sub{color:var(--doc-muted);font-size:13.5px;margin-top:8px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12px;padding:4px 10px;border-radius:999px;background:#fff;border:1px solid var(--doc-line);color:var(--doc-muted)}
+  .chip b{color:var(--l-accent);font-weight:600}
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--doc-line);vertical-align:top}
+  th{background:#f3f6fb;font-weight:600;color:var(--doc-muted);font-size:12px}
+  td code,.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    background:#eef2f8;padding:1px 5px;border-radius:4px;color:#33415c}
+  .note{margin:16px 0;padding:13px 16px;border-radius:10px;font-size:13px;border:1px solid var(--doc-line);background:#fff}
+  .note.warn{background:#fff8ec;border-color:#f2d9ad}
+  .note.ok{background:#eefaf1;border-color:#bfe6c9}
+  .note b{font-weight:600}
+  ul{margin:10px 0 0 20px} li{margin:5px 0;font-size:13.5px}
+
+  /* ===== 手机框 ===== */
+  .frames{display:flex;flex-wrap:wrap;gap:34px;margin-top:26px;align-items:flex-start}
+  .frame{width:360px}
+  .frame .cap{font-size:12.5px;color:var(--doc-muted);margin-bottom:9px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .frame .cap b{color:var(--doc-fg);font-weight:600}
+  .tag{font-size:10.5px;padding:2px 7px;border-radius:5px;background:var(--l-accentLight);color:var(--l-accent);font-weight:600}
+  .tag.dark{background:#20293f;color:#8fb4ff}
+  .tag.new{background:rgba(22,163,74,.14);color:var(--l-ok)}
+  .screen{
+    width:360px;height:640px;border-radius:22px;overflow:hidden;position:relative;
+    box-shadow:0 18px 40px -12px rgba(20,32,60,.32),0 0 0 1px rgba(20,32,60,.06);
+    display:flex;flex-direction:column;
+  }
+  .anno{font-size:12px;color:var(--doc-muted);margin-top:10px;line-height:1.55}
+  .anno b{color:var(--doc-fg);font-weight:600}
+
+  /* ---- 通用原子 ---- */
+  .L{background:var(--l-bg);color:var(--l-text)} .D{background:var(--d-bg);color:var(--d-text)}
+  .body{flex:1;overflow:hidden;display:flex;flex-direction:column}
+
+  /* ---- 顶栏 44dp ---- */
+  .topbar{height:44px;display:flex;align-items:center;gap:8px;padding:0 16px;flex:0 0 auto}
+  .tbtitle{font-size:17px;font-weight:600;color:var(--l-text);flex:1}
+  .D .tbtitle{color:var(--d-text)}
+  .icbtn{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+    background:var(--l-card2);flex:0 0 auto}
+  .D .icbtn{background:var(--d-card2)}
+  .icbtn svg{width:17px;height:17px;stroke:var(--l-accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .D .icbtn svg{stroke:var(--d-accent)}
+
+  /* ---- 设备主卡 hero ---- */
+  .hero{margin:4px 16px 0;background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;
+    padding:14px;box-shadow:0 3px 10px -8px rgba(20,32,60,.2)}
+  .D .hero{background:var(--d-card);border-color:var(--d-line)}
+  .heroTop{display:flex;align-items:center;gap:14px}
+  .watchart{width:60px;height:60px;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+  .watchart svg{width:44px;height:58px;stroke:var(--l-accent);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+  .D .watchart svg{stroke:var(--d-accent)}
+  .heroInfo{flex:1;min-width:0}
+  .hnameRow{display:flex;align-items:center;gap:6px}
+  .hname{font-size:17px;font-weight:600;color:var(--l-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .D .hname{color:var(--d-text)}
+  .hnameRow svg{width:14px;height:14px;stroke:var(--l-muted);fill:none;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+  .hsub{display:flex;align-items:center;gap:6px;margin-top:3px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--l-ok);flex:0 0 auto}
+  .dot.off{background:var(--l-muted)} .dot.err{background:var(--l-err)} .dot.warn{background:var(--l-warn)}
+  .D .dot{background:var(--d-ok)} .D .dot.off{background:var(--d-muted)} .D .dot.err{background:var(--d-err)}
+  .hstatus{font-size:12.5px;font-weight:500;color:var(--l-ok)}
+  .hstatus.off{color:var(--l-muted)}
+  .D .hstatus{color:var(--d-ok)} .D .hstatus.off{color:var(--d-muted)}
+  .hmeta{font-size:11.5px;color:var(--l-muted);margin-top:2px}
+  .D .hmeta{color:var(--d-muted)}
+  .heroOps{display:flex;gap:8px;margin-top:13px}
+  .op{flex:1;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:600;border:1px solid var(--l-line);background:var(--l-card2);color:var(--l-accent)}
+  .op.primary{background:var(--l-accent);border-color:var(--l-accent);color:var(--l-onAccent)}
+  .D .op{background:var(--d-card2);border-color:var(--d-line);color:var(--d-accent)}
+  .D .op.primary{background:var(--d-accent);border-color:var(--d-accent);color:#08122a}
+
+  /* ---- 指标网格 ---- */
+  .sec{margin:12px 16px 0}
+  .sech{font-size:11.5px;font-weight:600;color:var(--l-muted);letter-spacing:.3px;margin-bottom:7px}
+  .D .sech{color:var(--d-muted)}
+  .metrics{background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;overflow:hidden}
+  .D .metrics{background:var(--d-card);border-color:var(--d-line)}
+  .mrow{display:flex}
+  .mcell{flex:1;padding:11px 14px;border-bottom:1px solid var(--l-line)}
+  .D .mcell{border-color:var(--d-line)}
+  .mrow:last-child .mcell{border-bottom:0}
+  .mcell + .mcell{border-left:1px solid var(--l-line)}
+  .D .mcell + .mcell{border-left-color:var(--d-line)}
+  .mv{font-size:17px;font-weight:600;color:var(--l-text);white-space:nowrap}
+  .D .mv{color:var(--d-text)}
+  .mv.accent{color:var(--l-accent)} .D .mv.accent{color:var(--d-accent)}
+  .mv.sm{font-size:13px}
+  .mv.dash{color:var(--l-muted)} .D .mv.dash{color:var(--d-muted)}
+  .ml{font-size:11.5px;color:var(--l-muted);margin-top:2px}
+  .D .ml{color:var(--d-muted)}
+
+  /* ---- 腕聊 主操作卡 ---- */
+  .mainop{margin:12px 16px 0;display:flex;align-items:center;gap:12px;padding:13px 14px;
+    border-radius:14px;background:var(--l-accentLight);border:1px solid rgba(47,107,255,.22)}
+  .D .mainop{background:var(--d-accentLight);border-color:#26365c}
+  .moic{width:38px;height:38px;border-radius:12px;background:var(--l-accent);flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center}
+  .D .moic{background:var(--d-accent)}
+  .moic svg{width:19px;height:19px;stroke:var(--l-onAccent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .D .moic svg{stroke:#08122a}
+  .moinfo{flex:1;min-width:0}
+  .mot{font-size:15px;font-weight:600;color:var(--l-accent)}
+  .D .mot{color:var(--d-accent)}
+  .mos{font-size:11.5px;color:var(--l-muted);margin-top:1px}
+  .D .mos{color:var(--d-muted)}
+  .chev{width:18px;height:18px;flex:0 0 auto}
+  .chev svg{width:18px;height:18px;stroke:var(--l-muted);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+  .D .chev svg{stroke:var(--d-muted)}
+
+  /* ---- 2 列工具 ---- */
+  .grid2{display:flex;gap:10px;margin-top:10px}
+  .tool{flex:1;background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;
+    padding:13px 12px;display:flex;align-items:center;gap:10px}
+  .D .tool{background:var(--d-card);border-color:var(--d-line)}
+  .tic{width:32px;height:32px;border-radius:10px;background:var(--l-accentLight);flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center}
+  .D .tic{background:var(--d-accentLight)}
+  .tic svg{width:17px;height:17px;stroke:var(--l-accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .D .tic svg{stroke:var(--d-accent)}
+  .tt{font-size:12.5px;font-weight:600;color:var(--l-text);line-height:1.3}
+  .D .tt{color:var(--d-text)}
+  .tsub2{font-size:10.5px;color:var(--l-muted);margin-top:1px}
+  .D .tsub2{color:var(--d-muted)}
+
+  /* ---- 设置行 ---- */
+  .lrows{background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;
+    margin:10px 16px 0;overflow:hidden}
+  .D .lrows{background:var(--d-card);border-color:var(--d-line)}
+  .lrow{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--l-line);height:48px}
+  .lrow:last-child{border-bottom:0}
+  .D .lrow{border-color:var(--d-line)}
+  .lk{font-size:13px;color:var(--l-text);flex:1}
+  .D .lk{color:var(--d-text)}
+  .lv{font-size:12.5px;color:var(--l-muted);display:flex;align-items:center;gap:5px}
+  .D .lv{color:var(--d-muted)}
+  .lv svg{width:14px;height:14px;stroke:var(--l-muted);fill:none;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+  .D .lv svg{stroke:var(--d-muted)}
+
+  /* ---- 提示条 ---- */
+  .flash{margin:10px 16px 0;display:flex;align-items:center;gap:7px;
+    padding:9px 12px;border-radius:12px;background:var(--l-okLight)}
+  .flash svg{width:14px;height:14px;stroke:var(--l-ok);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+  .flash span{font-size:12.5px;font-weight:500;color:var(--l-ok)}
+  .D .flash{background:var(--d-okLight)} .D .flash svg{stroke:var(--d-ok)} .D .flash span{color:var(--d-ok)}
+
+  /* ---- 引导卡（未连接） ---- */
+  .guide{margin:8px 16px 0;background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;
+    padding:24px 18px 20px;display:flex;flex-direction:column;align-items:center;text-align:center}
+  .D .guide{background:var(--d-card);border-color:var(--d-line)}
+  .guide .gart{width:76px;height:76px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+  .guide .gart svg{width:52px;height:68px;stroke:var(--l-muted);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:.7}
+  .D .guide .gart svg{stroke:var(--d-muted)}
+  .guide .gt{font-size:15px;font-weight:600;color:var(--l-text)}
+  .D .guide .gt{color:var(--d-text)}
+  .guide .gs{font-size:12.5px;color:var(--l-muted);margin-top:6px;line-height:1.6;max-width:250px}
+  .D .guide .gs{color:var(--d-muted)}
+  .guide .gbtn{margin-top:16px;width:100%;height:44px;border-radius:12px;background:var(--l-accent);
+    color:var(--l-onAccent);font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .D .guide .gbtn{background:var(--d-accent);color:#08122a}
+  .guide .glink{margin-top:11px;font-size:12.5px;font-weight:500;color:var(--l-accent)}
+  .D .guide .glink{color:var(--d-accent)}
+
+  /* ---- 弹出菜单 ---- */
+  .mask{position:absolute;inset:0;background:rgba(15,23,42,.28)}
+  .menu{position:absolute;top:44px;right:14px;width:190px;background:var(--l-card);border-radius:14px;
+    box-shadow:0 16px 36px -10px rgba(20,32,60,.4),0 0 0 1px rgba(20,32,60,.06);overflow:hidden;padding:5px 0}
+  .D .menu{background:var(--d-card)}
+  .mi{display:flex;align-items:center;gap:10px;padding:11px 14px;height:46px}
+  .mi svg{width:16px;height:16px;stroke:var(--l-accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+  .mi.warn svg{stroke:var(--l-warn)}
+  .mi .mit{font-size:13.5px;color:var(--l-text)}
+  .D .mi .mit{color:var(--d-text)}
+  .mi.warn .mit{color:var(--l-warn)}
+  .D .mi.warn .mit{color:var(--d-warn)}
+  .mi .mid{font-size:10.5px;color:var(--l-muted);margin-top:1px}
+  .msep{height:1px;background:var(--l-line);margin:4px 10px}
+  .D .msep{background:var(--d-line)}
+
+  /* ---- 弹层（昵称编辑） ---- */
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--l-card);border-radius:18px 18px 0 0;
+    padding:18px 16px 20px;box-shadow:0 -12px 32px -12px rgba(20,32,60,.35)}
+  .D .sheet{background:var(--d-card)}
+  .sheet .sh{font-size:15px;font-weight:600;color:var(--l-text);margin-bottom:4px}
+  .D .sheet .sh{color:var(--d-text)}
+  .sheet .sd{font-size:11.5px;color:var(--l-muted);margin-bottom:14px}
+  .D .sheet .sd{color:var(--d-muted)}
+  .field{height:44px;border-radius:12px;border:1px solid var(--l-line);background:var(--l-bg);
+    display:flex;align-items:center;padding:0 13px;font-size:14px;color:var(--l-text)}
+  .D .field{background:var(--d-bg);border-color:var(--d-line);color:var(--d-text)}
+  .field .caret2{width:1.5px;height:18px;background:var(--l-accent);margin-left:1px;animation:none}
+  .sheetOps{display:flex;gap:10px;margin-top:14px}
+  .sop{flex:1;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    font-size:14px;font-weight:600;border:1px solid var(--l-line);background:var(--l-card2);color:var(--l-text)}
+  .D .sop{background:var(--d-card2);border-color:var(--d-line);color:var(--d-text)}
+  .sop.primary{background:var(--l-accent);border-color:var(--l-accent);color:var(--l-onAccent)}
+  .D .sop.primary{background:var(--d-accent);border-color:var(--d-accent);color:#08122a}
+
+  /* ---- 底栏 ---- */
+  .tabbar{height:56px;flex:0 0 auto;display:flex;align-items:center;background:var(--l-card);
+    border-top:1px solid var(--l-line)}
+  .D .tabbar{background:var(--d-card);border-color:var(--d-line)}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .tab svg{width:19px;height:19px;stroke:var(--l-muted);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .tab.on svg{stroke:var(--l-accent)}
+  .D .tab svg{stroke:var(--d-muted)} .D .tab.on svg{stroke:var(--d-accent)}
+  .tab span{font-size:9.5px;color:var(--l-muted)}
+  .tab.on span{color:var(--l-accent);font-weight:600}
+  .D .tab span{color:var(--d-muted)} .D .tab.on span{color:var(--d-accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>手环页 · 全新设计原型 v1</h1>
+  <div class="sub">目标页 <code>BandActivity</code>（底部 tab「手环」）· 1 dp = 1 px · 360 × 640 dp 真机等比 · 配色与字号全部取自 <code>Ui.java</code> 权威 token</div>
+  <div class="meta">
+    <span class="chip">浅色 <b>晴空蓝</b></span>
+    <span class="chip">深色 <b>夜幕蓝</b></span>
+    <span class="chip">零新增 token</span>
+    <span class="chip">5 态：主态 / 设备菜单 / 未连接 / 昵称编辑 / 深色</span>
+  </div>
+
+  <h2><span class="num">1</span>五态原型</h2>
+
+  <div class="frames">
+
+    <!-- ============ 态 1：已连接 · 主态 ============ -->
+    <div class="frame">
+      <div class="cap"><b>态 1 · 已连接（主态）</b><span class="tag">浅色</span></div>
+      <div class="screen L">
+        <div class="tabbar" style="position:absolute;bottom:0;left:0;right:0;z-index:5">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg><span>课表库</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3"/></svg><span>手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>设置</span></div>
+        </div>
+
+        <div class="body">
+          <div class="topbar">
+            <div class="tbtitle">我的手环</div>
+            <div class="icbtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="2" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+
+          <!-- 设备主卡 -->
+          <div class="hero">
+            <div class="heroTop">
+              <div class="watchart"><svg viewBox="0 0 44 58"><rect x="15" y="1" width="14" height="10" rx="4"/><rect x="15" y="47" width="14" height="10" rx="4"/><rect x="7" y="9" width="30" height="40" rx="10"/><circle cx="22" cy="29" r="7"/></svg></div>
+              <div class="heroInfo">
+                <div class="hnameRow">
+                  <div class="hname">小米手环 9</div>
+                </div>
+                <div class="hsub"><span class="dot"></span><span class="hstatus">已连接 · 电量 85%</span></div>
+                <div class="hmeta">EV 1.7.83 · 课表 3 套</div>
+              </div>
+            </div>
+            <div class="heroOps">
+              <div class="op primary">呼叫手环</div>
+              <div class="op">同步课表</div>
+            </div>
+          </div>
+
+          <!-- 设备状态 指标网格 -->
+          <div class="sec">
+            <div class="sech">设备状态</div>
+            <div class="metrics">
+              <div class="mrow">
+                <div class="mcell"><div class="mv accent">85%</div><div class="ml">电量</div></div>
+                <div class="mcell"><div class="mv sm">未充电</div><div class="ml">充电</div></div>
+              </div>
+              <div class="mrow">
+                <div class="mcell"><div class="mv sm">佩戴中</div><div class="ml">佩戴</div></div>
+                <div class="mcell"><div class="mv sm">清醒</div><div class="ml">睡眠</div></div>
+              </div>
+              <div class="mrow">
+                <div class="mcell"><div class="mv sm">1.24 GB 可用 / 4.00 GB</div><div class="ml">存储空间</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 腕聊 主操作 -->
+          <div class="mainop">
+            <div class="moic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-8 8H7l-4 3v-5.5A8 8 0 1121 12z"/></svg></div>
+            <div class="moinfo"><div class="mot">腕聊</div><div class="mos">手环 ↔ 手机 实时聊天</div></div>
+            <div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+          </div>
+
+          <!-- 2 列工具 -->
+          <div class="grid2" style="margin-left:16px;margin-right:16px">
+            <div class="tool">
+              <div class="tic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg></div>
+              <div><div class="tt">首页设置</div><div class="tsub2">模板 / 字号</div></div>
+            </div>
+            <div class="tool">
+              <div class="tic"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 01-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 015.4-5.4z"/></svg></div>
+              <div><div class="tt">工具箱</div><div class="tsub2">找手机 / 静音</div></div>
+            </div>
+          </div>
+
+          <!-- 昵称行 -->
+          <div class="lrows">
+            <div class="lrow">
+              <div class="lk">手环昵称</div>
+              <div class="lv">小明 <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <div class="anno"><b>看什么</b>：全页只剩<b>一个状态源</b>（设备卡里的绿点 + 「已连接」）；<code>ConnectionBar</code> 与状态卡里那行「连接」都已删除。散落的六行 label-value 收成 <b>2 列指标网格</b>（电量用主色大数字做锚点）。「腕聊」从第四条设置项<b>提到独立主操作卡</b>——它是本页最高频动作。破坏性操作不再露脸。</div>
+    </div>
+
+    <!-- ============ 态 2：设备菜单展开 ============ -->
+    <div class="frame">
+      <div class="cap"><b>态 2 · ⋯ 设备菜单展开</b><span class="tag new">新增</span></div>
+      <div class="screen L">
+        <div class="tabbar" style="position:absolute;bottom:0;left:0;right:0;z-index:5">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg><span>课表库</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3"/></svg><span>手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>设置</span></div>
+        </div>
+
+        <div class="body">
+          <div class="topbar">
+            <div class="tbtitle">我的手环</div>
+            <div class="icbtn" style="background:var(--l-accentLight)"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="2" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+
+          <div class="hero">
+            <div class="heroTop">
+              <div class="watchart"><svg viewBox="0 0 44 58"><rect x="15" y="1" width="14" height="10" rx="4"/><rect x="15" y="47" width="14" height="10" rx="4"/><rect x="7" y="9" width="30" height="40" rx="10"/><circle cx="22" cy="29" r="7"/></svg></div>
+              <div class="heroInfo">
+                <div class="hnameRow">
+                  <div class="hname">小米手环 9</div>
+                </div>
+                <div class="hsub"><span class="dot"></span><span class="hstatus">已连接 · 电量 85%</span></div>
+                <div class="hmeta">EV 1.7.83 · 课表 3 套</div>
+              </div>
+            </div>
+            <div class="heroOps">
+              <div class="op primary">呼叫手环</div>
+              <div class="op">同步课表</div>
+            </div>
+          </div>
+
+          <div class="sec">
+            <div class="sech">设备状态</div>
+            <div class="metrics">
+              <div class="mrow">
+                <div class="mcell"><div class="mv accent">85%</div><div class="ml">电量</div></div>
+                <div class="mcell"><div class="mv sm">未充电</div><div class="ml">充电</div></div>
+              </div>
+              <div class="mrow">
+                <div class="mcell"><div class="mv sm">佩戴中</div><div class="ml">佩戴</div></div>
+                <div class="mcell"><div class="mv sm">清醒</div><div class="ml">睡眠</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mask"></div>
+        <div class="menu">
+          <div class="mi"><svg viewBox="0 0 24 24"><path d="M7 7h10M7 7l3-3M7 7l3 3"/><path d="M17 17H7M17 17l-3-3M17 17l-3 3"/></svg><div><div class="mit">切换手环</div></div></div>
+          <div class="mi warn"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><div><div class="mit">清除记忆并重连</div><div class="mid">会忘记当前设备，重新选择</div></div></div>
+          <div class="msep"></div>
+          <div class="mi"><svg viewBox="0 0 24 24"><rect x="8" y="7" width="8" height="12" rx="4"/><path d="M12 3v2M4 9h3M17 9h3M4 15h3M17 15h3"/></svg><div><div class="mit">连接调试</div><div class="mid">连不上时分步排查</div></div></div>
+        </div>
+      </div>
+      <div class="anno"><b>看什么</b>：原来那个 <b>11sp 的裸「▼」</b>（点击 = 清除设备记忆并重连，无人能识别）被换成一个语义明确的 <b>⋯ 菜单</b>。三项按「日常 / 有副作用 / 排障」分组，中间加分隔线；「清除记忆并重连」用琥珀色 + 一句副文案说明后果。<b>「连接调试」从常驻页底收进这里</b>，普通用户不再被噪音干扰。</div>
+    </div>
+
+    <!-- ============ 态 3：未连接 ============ -->
+    <div class="frame">
+      <div class="cap"><b>态 3 · 未连接（引导态）</b><span class="tag">边界</span></div>
+      <div class="screen L">
+        <div class="tabbar" style="position:absolute;bottom:0;left:0;right:0;z-index:5">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg><span>课表库</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3"/></svg><span>手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>设置</span></div>
+        </div>
+
+        <div class="body">
+          <div class="topbar">
+            <div class="tbtitle">我的手环</div>
+            <div class="icbtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="2" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+
+          <div class="hero">
+            <div class="heroTop">
+              <div class="watchart"><svg viewBox="0 0 44 58"><rect x="15" y="1" width="14" height="10" rx="4"/><rect x="15" y="47" width="14" height="10" rx="4"/><rect x="7" y="9" width="30" height="40" rx="10"/><circle cx="22" cy="29" r="7"/></svg></div>
+              <div class="heroInfo">
+                <div class="hnameRow"><div class="hname" style="color:var(--l-muted)">未连接手环</div></div>
+                <div class="hsub"><span class="dot off"></span><span class="hstatus off">未连接</span></div>
+                <div class="hmeta">打开小米运动健康连接手环</div>
+              </div>
+            </div>
+            <div class="heroOps">
+              <div class="op primary">同步手环课表</div>
+            </div>
+          </div>
+
+          <div class="guide">
+            <div class="gart"><svg viewBox="0 0 44 58"><rect x="15" y="1" width="14" height="10" rx="4"/><rect x="15" y="47" width="14" height="10" rx="4"/><rect x="7" y="9" width="30" height="40" rx="10"/><path d="M15 29h14"/></svg></div>
+            <div class="gt">还没有连接手环</div>
+            <div class="gs">先在「小米运动健康」里配对手环，回到这里点「同步手环课表」即可把课表读进手机。</div>
+            <div class="gbtn">去同步手环课表</div>
+            <div class="glink">连不上？打开连接调试</div>
+          </div>
+
+        </div>
+      </div>
+      <div class="anno"><b>看什么</b>：未连接时<b>不再摊一张六行全是「—」的空表</b>——设备状态区整块收起，页面收敛成一张<b>引导卡</b>（线稿手环 + 一句"怎么做" + 主按钮 + 排障文字链）。原来满屏的「离线 · 自动重连未成功…」「打开小米运动健康…，再点同步」「—／—／—」被压成<b>两处</b>：设备卡一行说明 + 引导卡。</div>
+    </div>
+
+    <!-- ============ 态 4：昵称编辑弹层 ============ -->
+    <div class="frame">
+      <div class="cap"><b>态 4 · 昵称编辑（底部弹层）</b><span class="tag new">替换表单卡</span></div>
+      <div class="screen L">
+        <div class="body">
+          <div class="topbar">
+            <div class="tbtitle">我的手环</div>
+            <div class="icbtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="2" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+
+          <div class="hero">
+            <div class="heroTop">
+              <div class="watchart"><svg viewBox="0 0 44 58"><rect x="15" y="1" width="14" height="10" rx="4"/><rect x="15" y="47" width="14" height="10" rx="4"/><rect x="7" y="9" width="30" height="40" rx="10"/><circle cx="22" cy="29" r="7"/></svg></div>
+              <div class="heroInfo">
+                <div class="hnameRow"><div class="hname">小米手环 9</div></div>
+                <div class="hsub"><span class="dot"></span><span class="hstatus">已连接 · 电量 85%</span></div>
+                <div class="hmeta">EV 1.7.83 · 课表 3 套</div>
+              </div>
+            </div>
+            <div class="heroOps">
+              <div class="op primary">呼叫手环</div>
+              <div class="op">同步课表</div>
+            </div>
+          </div>
+
+          <div class="sec">
+            <div class="sech">设备状态</div>
+            <div class="metrics">
+              <div class="mrow">
+                <div class="mcell"><div class="mv accent">85%</div><div class="ml">电量</div></div>
+                <div class="mcell"><div class="mv sm">未充电</div><div class="ml">充电</div></div>
+              </div>
+              <div class="mrow">
+                <div class="mcell"><div class="mv sm">佩戴中</div><div class="ml">佩戴</div></div>
+                <div class="mcell"><div class="mv sm">清醒</div><div class="ml">睡眠</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mask"></div>
+        <div class="sheet">
+          <div class="sh">手环昵称</div>
+          <div class="sd">显示在手环首页的名字</div>
+          <div class="field">小明<span class="caret2"></span></div>
+          <div class="sheetOps">
+            <div class="sop">取消</div>
+            <div class="sop primary">保存</div>
+          </div>
+        </div>
+      </div>
+      <div class="anno"><b>看什么</b>：原「昵称」卡是<b>三段式裸表单</b>（标签 + 输入框 + 蓝色「修改」按钮），是全 App 唯一的表单长相、破坏卡片语言。改为：设置区一条<b>细行</b>（左「手环昵称」右「小明 ›」），点开才是这个底部弹层。<b>展示归展示、编辑归编辑。</b></div>
+    </div>
+
+    <!-- ============ 态 5：深色 ============ -->
+    <div class="frame">
+      <div class="cap"><b>态 5 · 深色主态</b><span class="tag dark">夜幕蓝</span></div>
+      <div class="screen D">
+        <div class="tabbar" style="position:absolute;bottom:0;left:0;right:0;z-index:5">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>首页</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg><span>课表库</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="12" rx="3"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3"/></svg><span>手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>设置</span></div>
+        </div>
+
+        <div class="body">
+          <div class="topbar">
+            <div class="tbtitle">我的手环</div>
+            <div class="icbtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="2" fill="currentColor" stroke="none"/></svg></div>
+          </div>
+
+          <div class="hero">
+            <div class="heroTop">
+              <div class="watchart"><svg viewBox="0 0 44 58"><rect x="15" y="1" width="14" height="10" rx="4"/><rect x="15" y="47" width="14" height="10" rx="4"/><rect x="7" y="9" width="30" height="40" rx="10"/><circle cx="22" cy="29" r="7"/></svg></div>
+              <div class="heroInfo">
+                <div class="hnameRow"><div class="hname">小米手环 9</div></div>
+                <div class="hsub"><span class="dot"></span><span class="hstatus">已连接 · 电量 85%</span></div>
+                <div class="hmeta">EV 1.7.83 · 课表 3 套</div>
+              </div>
+            </div>
+            <div class="heroOps">
+              <div class="op primary">呼叫手环</div>
+              <div class="op">同步课表</div>
+            </div>
+          </div>
+
+          <div class="sec">
+            <div class="sech">设备状态</div>
+            <div class="metrics">
+              <div class="mrow">
+                <div class="mcell"><div class="mv accent">85%</div><div class="ml">电量</div></div>
+                <div class="mcell"><div class="mv sm">未充电</div><div class="ml">充电</div></div>
+              </div>
+              <div class="mrow">
+                <div class="mcell"><div class="mv sm">佩戴中</div><div class="ml">佩戴</div></div>
+                <div class="mcell"><div class="mv sm">清醒</div><div class="ml">睡眠</div></div>
+              </div>
+              <div class="mrow">
+                <div class="mcell"><div class="mv sm">1.24 GB 可用 / 4.00 GB</div><div class="ml">存储空间</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mainop">
+            <div class="moic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-8 8H7l-4 3v-5.5A8 8 0 1121 12z"/></svg></div>
+            <div class="moinfo"><div class="mot">腕聊</div><div class="mos">手环 ↔ 手机 实时聊天</div></div>
+            <div class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+          </div>
+        </div>
+      </div>
+      <div class="anno"><b>看什么</b>：深色由 <code>Ui.applyTheme</code> 全局接管，原型仅验证<b>语义色仍然成立</b>——主色亮蓝 <code>#5B9BFF</code>、绿点 <code>#34C759</code>、腕聊卡的深色淡底 <code>#1A2544</code> 与描边都不刺眼。无任何为深色单独新造的颜色。</div>
+    </div>
+
+  </div>
+
+  <h2><span class="num">2</span>关键尺寸（落地可直接换算）</h2>
+  <table>
+    <tr><th>部件</th><th>规格</th><th>token</th></tr>
+    <tr><td>顶栏</td><td>高 44dp，左右内边距 16dp；标题 17sp/600</td><td><code>SP_TITLE</code></td></tr>
+    <tr><td>设备卡</td><td>圆角 14dp · 内边距 14dp · 描边 1dp <code>LINE</code></td><td><code>R_CARD</code></td></tr>
+    <tr><td>设备名</td><td>17sp/600，右手区宽 ≥ 60%</td><td><code>SP_TITLE</code></td></tr>
+    <tr><td>状态副行</td><td>8dp 圆点 + 12.5sp/500（绿=已连接 / 灰=未连接）</td><td>—</td></tr>
+    <tr><td>主/次按钮</td><td>高 38dp · 圆角 12dp · 13sp/600，两枚等宽 <code>gap 8dp</code></td><td><code>R_CTRL</code></td></tr>
+    <tr><td>指标网格</td><td>2 列，单元格内边距 11/14；数值 17sp/600（电量主色）、标签 11.5sp <code>MUTED</code></td><td><code>SP_TITLE</code>/<code>SP_CAPTION</code></td></tr>
+    <tr><td>腕聊主卡</td><td>高 64dp · 圆角 14dp · 底 <code>ACCENT_LIGHT</code> + 主色描边；左 38dp 主色图标块</td><td><code>R_CARD</code>/<code>R_CTRL</code></td></tr>
+    <tr><td>工具 2 列</td><td>每列宽 <code>(320-10)/2</code>，高 58dp；左 32dp 圆角图标块</td><td><code>GAP_SM</code></td></tr>
+    <tr><td>设置行</td><td>固定高 48dp · 内边距 12/14 · 左 13sp 右 12.5sp <code>MUTED</code> + 14dp chevron</td><td><code>TOUCH_MIN</code> 满足</td></tr>
+    <tr><td>弹出菜单</td><td>宽 190dp · 圆角 14dp · 项高 46dp；副文案 10.5sp</td><td><code>R_CARD</code>/<code>SP_MICRO</code></td></tr>
+    <tr><td>底栏</td><td>固定 4 tab：首页 / 课表库 / 手环 / 设置，图标 19dp</td><td>—</td></tr>
+  </table>
+
+  <div class="note ok">
+    <b>零新增 token</b>：本页只用到既有色值（<code>CARD / CARD2 / ACCENT / ACCENT_LIGHT / OK / WARN / MUTED / LINE / TEXT</code>）、既有字号档（17 / 15 / 13 / 12.5 / 11.5 / 10.5）、既有圆角（14 / 12 / 4）与既有间距（4 / 8 / 12 / 16）。<b>落地不牵动全局样式。</b>
+  </div>
+
+  <div class="note warn">
+    <b>一处刻意的取舍</b>：设备状态由「六行 label-value」改成「2 列指标网格」后，「连接」这一行被<b>删掉</b>（它和设备卡里的状态点重复）。连接状态从此**只有一个真相源**——设备卡。若团队认为指标区必须自带状态，建议改回一行、且与设备卡共用同一个文案常量，不要各写一份。
+  </div>
+
+  <h2><span class="num">3</span>设计意图速览</h2>
+  <ul>
+    <li><b>一个状态源</b>：删 <code>ConnectionBar</code>、删状态卡「连接」行 → 连接状态只在设备卡出现一次。</li>
+    <li><b>展示归展示</b>：设备状态从六行清单 → 2 列指标网格，电量做视觉锚点，一眼扫完。</li>
+    <li><b>主操作上桌</b>：「腕聊」从第四条设置项 → 独立主操作卡（本页真正的高频动作）。</li>
+    <li><b>危险动作不露脸</b>：11sp 裸「▼」（清除记忆重连）→ ⋯ 菜单，带副文案说明后果。</li>
+    <li><b>排障不占位</b>：「连接调试」常驻页底 → ⋯ 菜单 + 未连接引导卡里的文字链。</li>
+    <li><b>空态会说话</b>：未连接不再满屏「—」，收敛成一张引导卡（线稿 + 怎么做 + 主按钮）。</li>
+    <li><b>表单消失</b>：昵称卡三段式表单 → 设置行 + 底部弹层。</li>
+  </ul>
+
+</div>
+</body>
+</html>
