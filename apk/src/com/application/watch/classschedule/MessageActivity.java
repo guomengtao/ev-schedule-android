@@ -120,14 +120,21 @@ public class MessageActivity extends Activity {
         root.addView(sendRow);
         root.addView(Ui.space(this, 6));
 
-        // 按钮精简：诊断类动作移除（补发自动进行），只留一个低调的「清空记录」
+        // 按钮精简：诊断类动作移除（补发自动进行）。
+        // P1.1：把「长按短语可编辑/删除」常驻写在这里 —— 短语的删除入口不能只靠用户猜长按。
+        LinearLayout footRow = new LinearLayout(this);
+        footRow.setOrientation(LinearLayout.HORIZONTAL);
+        footRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        footRow.addView(Ui.text(this, "长按短语可编辑或删除", 11f, Ui.MUTED, false),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         TextView clearLink = Ui.text(this, "清空记录", 11.5f, Ui.MUTED, false);
         clearLink.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8));
         clearLink.setClickable(true);
         clearLink.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { clearAll(); }
         });
-        root.addView(clearLink);
+        footRow.addView(clearLink);
+        root.addView(footRow);
 
         renderPhrases();
         setContentView(Ui.fixedWithBottomBar(this, root, -1));
@@ -422,7 +429,7 @@ public class MessageActivity extends Activity {
                 .show();
     }
 
-    /** 新增（oldText=null）或编辑短语；保存时按文本定位替换，找不到则追加 */
+    /** 新增（oldText=null）或编辑短语；编辑时对话框内直接给「删除」入口（不必去猜长按） */
     private void editPhrase(final String oldText) {
         final EditText et = new EditText(this);
         et.setText(oldText == null ? "" : oldText);
@@ -433,39 +440,52 @@ public class MessageActivity extends Activity {
         if (oldText != null && oldText.length() > 0) {
             et.setSelection(oldText.length());
         }
-        new AlertDialog.Builder(this)
+        AlertDialog.Builder b = new AlertDialog.Builder(this)
                 .setTitle(oldText == null ? "新增快捷短语" : "编辑快捷短语")
                 .setView(et)
                 .setPositiveButton("保存", new android.content.DialogInterface.OnClickListener() {
                     @Override public void onClick(android.content.DialogInterface d, int w) {
-                        String v = et.getText().toString().trim();
-                        if (v.length() == 0) {
-                            return;
-                        }
-                        if (v.length() > PHRASE_MAX_LEN) {
-                            v = v.substring(0, PHRASE_MAX_LEN);
-                        }
-                        JSONArray list = loadPhrases();
-                        JSONArray next = new JSONArray();
-                        boolean replaced = false;
-                        for (int i = 0; i < list.length(); i++) {
-                            String cur = list.optString(i);
-                            if (oldText != null && !replaced && cur.equals(oldText)) {
-                                next.put(v);
-                                replaced = true;
-                            } else {
-                                next.put(cur);
-                            }
-                        }
-                        if (!replaced) {
-                            next.put(v);   // 新增，或原项已不存在
-                        }
-                        savePhrases(next);
-                        renderPhrases();
+                        savePhrase(oldText, et.getText().toString());
                     }
                 })
-                .setNegativeButton("取消", null)
-                .show();
+                .setNegativeButton("取消", null);
+        if (oldText != null) {
+            // 编辑时直接给「删除」入口——不必让用户去猜长按
+            b.setNeutralButton("删除", new android.content.DialogInterface.OnClickListener() {
+                @Override public void onClick(android.content.DialogInterface d, int w) {
+                    deletePhrase(oldText);
+                }
+            });
+        }
+        b.show();
+    }
+
+    /** 保存短语：oldText 非空＝就地替换该条，否则追加为新增 */
+    private void savePhrase(String oldText, String raw) {
+        String v = raw == null ? "" : raw.trim();
+        if (v.length() == 0) {
+            return;
+        }
+        if (v.length() > PHRASE_MAX_LEN) {
+            v = v.substring(0, PHRASE_MAX_LEN);
+        }
+        JSONArray list = loadPhrases();
+        JSONArray next = new JSONArray();
+        boolean replaced = false;
+        for (int i = 0; i < list.length(); i++) {
+            String cur = list.optString(i);
+            if (oldText != null && !replaced && cur.equals(oldText)) {
+                next.put(v);
+                replaced = true;
+            } else {
+                next.put(cur);
+            }
+        }
+        if (!replaced) {
+            next.put(v);   // 新增，或原项已不存在
+        }
+        savePhrases(next);
+        renderPhrases();
     }
 
     private void deletePhrase(String p) {
