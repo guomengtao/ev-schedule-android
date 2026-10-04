@@ -14,11 +14,15 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.text.TextUtils;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -40,7 +44,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 
-/** 导入 / 导出（按 mode 区分） */
+/**
+ * 导入 / 导出（按 mode 区分）。
+ *
+ * <p>v1 视图层重做（方案 docs/导入导出页全新设计方案-v1.md）：
+ * 一条动线（导出=选表→读→导出；导入=贴→预览→写回）、每张卡自带结果条的就地反馈、
+ * 破坏性动作独立成行、全页字号回到 Ui 既有档位（消除 12.5f/12f/11f 共 12 处越界）。
+ * 业务逻辑（读取 / 解析 / 摊平 / 导入 / 埋点）与重做前逐字节一致，只改「写进哪个 View」。
+ */
 public class TransferActivity extends Activity {
 
     private int lastThemeVersion = 0;
@@ -69,11 +80,20 @@ public class TransferActivity extends Activity {
             "A楼101", "B楼205", "数学楼301", "计算机楼201", "物理实验室102", "体育馆"};
 
     private String mode = MODE_EXPORT;
-    private TextView titleView, infoView, resultView, scheduleStatus, previewInfo;
+    private TextView titleView;
+
+    // ---- 反馈：每张卡自带结果条（原页面级反馈区已删除）----
+    private TextView pickRes, exportRes, pasteRes, previewRes, nameErr;
+
+    // ---- 导出：唯一读取按钮（清单读失败时文案自适应）----
+    private Button readBtn;
+    private boolean listFailed = false;
+
     private String lastExportJson;
 
     // ---- 导出：课程表清单 ----
     private LinearLayout scheduleBox;
+    private TextView pickSub;
     private String[] scheduleNames;
     private int selectedIndex = -1;
     private String selectedName = "";
@@ -81,9 +101,14 @@ public class TransferActivity extends Activity {
     // ---- 导出：JSON 编辑 ----
     private LinearLayout exportCard;
     private EditText exportBox;
+    private TextView exportSub;
 
     // P3：最近一次从手环读出的课程总数（供导出成功事件的 course_count）
     private int lastExportTotal = 0;
+
+    /** 未连接引导卡（连接后整张隐藏）；guideShown 记录上一次的显隐，用于识别「刚连上」 */
+    private LinearLayout guideCard;
+    private boolean guideShown = true;
 
     /** P3 埋点便捷入口：失败静默，绝不影响导入导出主流程 */
     private void ev(String kind, JSONObject payload) {
@@ -96,6 +121,7 @@ public class TransferActivity extends Activity {
     // ---- 导入：粘贴 / 预览 ----
     private JsonEditorView importEditor;
     private LinearLayout previewBox, previewCard;
+    private TextView previewInfo, previewSub;
     private final List<CheckBox> courseChecks = new ArrayList<>();
     private JSONArray parsedCourses;
 
@@ -103,10 +129,27 @@ public class TransferActivity extends Activity {
     private EditText nameBox;
     private String[] knownNames;
 
-    private static final String JSON_SPEC_HINT =
-            "字段规范：name 课程名(必填) · day 星期(1-7 或 星期X) · time 时间段(如 08:00 - 09:40)\n"
-                    + "teacher 老师 · location 教室 · notes 备注。\n"
-                    + "改完直接点「更新到手环」即写入（覆盖当前课表）；也可把这段 JSON 发给 AI 帮你规范整理。";
+    /** 字段规范：从页面正文移入顶栏 ⋯ 弹层（页面只留必要的短提示） */
+    private static final String SPEC_HINT =
+            "字段规范\n\n"
+                    + "name　　课程名（必填）\n"
+                    + "day　　 星期：1-7 或 星期X（必填）\n"
+                    + "time　　时间段：如 08:00 - 09:40（必填）\n"
+                    + "teacher　老师（选填）\n"
+                    + "location 教室（选填）\n"
+                    + "notes　　备注（选填）";
+
+    private static final String SPEC_OVERWRITE =
+            "覆盖与备份\n\n"
+                    + "导入会【覆盖】手环上 EV 课程表的当前课表。\n"
+                    + "EV 侧写盘前会自动备份到 astrobox_sync_backup，需要时可回滚。\n\n"
+                    + "也可以把这段 JSON 发给 AI 帮你规范整理后再导入。";
+
+    private static final String SPEC_WHERE =
+            "导出到哪\n\n"
+                    + "「保存为文件」→ 存到「下载 / EVSync」目录\n"
+                    + "「复制 JSON」→ 直接进剪贴板，可发到微信或用 AI 整理\n\n"
+                    + "两者导出的都是同一次读取的原始数据。";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -120,19 +163,22 @@ public class TransferActivity extends Activity {
         ViewGroup headerBar = Ui.header(this,
                 MODE_IMPORT.equals(mode) ? "导入课程表" : "导出课程表");
         titleView = (TextView) headerBar.getTag(); // 升级结果页会动态改标题
+        addHeaderMore(headerBar);
         root.addView(headerBar);
-        root.addView(Ui.space(this, 8));
-        ConnectionBar.attach(this, root);
-        root.addView(Ui.space(this, 8));
+        root.addView(Ui.space(this, Ui.GAP_SM));
+
+        // 未连接引导卡（连接状态全页唯一一处；已连接时不占位）
+        guideCard = buildGuideCard();
+        boolean guideHas = SyncEngine.get(this).hasNode();
+        guideShown = !guideHas;
+        guideCard.setVisibility(guideHas ? View.GONE : View.VISIBLE);
+        root.addView(guideCard);
 
         if (MODE_IMPORT.equals(mode)) {
             buildImport(root);
         } else {
             buildExport(root);
         }
-
-        root.addView(Ui.space(this, 8));
-        resultView.setTextIsSelectable(true);
 
         // tab=-1：导入/导出不是底栏三页之一，不高亮任何 tab —— 否则点「首页」会被当成当前页而失效
         setContentView(Ui.wrapWithBottomBar(this, root, -1));
@@ -154,154 +200,334 @@ public class TransferActivity extends Activity {
         }
     }
 
+    // ======================= 通用小件 =======================
+
+    /** 卡标题行；withRefresh=true 时右侧带「重新读取」图标（44dp 热区）*/
+    private LinearLayout cardTitle(String title, boolean withRefresh) {
+        LinearLayout r = new LinearLayout(this);
+        r.setOrientation(LinearLayout.HORIZONTAL);
+        r.setGravity(Gravity.CENTER_VERTICAL);
+        TextView t = Ui.text(this, title, Ui.SP_BODY, Ui.TEXT, true);
+        r.addView(t, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        if (withRefresh) {
+            ImageView iv = new ImageView(this);
+            iv.setImageResource(R.drawable.ic_refresh);
+            iv.setColorFilter(Ui.MUTED);
+            iv.setContentDescription("重新读取课程表清单");
+            iv.setClickable(true);
+            iv.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { loadSchedules(); }
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    Ui.dp(this, Ui.TOUCH_MIN), Ui.dp(this, Ui.TOUCH_MIN));
+            lp.leftMargin = Ui.dp(this, 4);
+            lp.rightMargin = -Ui.dp(this, 10);
+            r.addView(iv, lp);
+        }
+        return r;
+    }
+
+    /** 卡内结果条：CARD2 底 + R_CTRL 圆角，无内容时整条隐藏 */
+    private TextView resultBar() {
+        TextView t = Ui.text(this, "", Ui.SP_CAPTION, Ui.MUTED, false);
+        t.setPadding(Ui.dp(this, 10), Ui.dp(this, 8), Ui.dp(this, 10), Ui.dp(this, 8));
+        t.setBackground(Ui.round(Ui.CARD2, Ui.R_CTRL, 0, this));
+        t.setVisibility(View.GONE);
+        t.setLineSpacing(0, 1.2f);
+        return t;
+    }
+
+    /** 结果条统一的写入口（空串 = 隐藏） */
+    private void setRes(TextView bar, String msg, int color) {
+        if (bar == null) {
+            return;
+        }
+        if (msg == null || msg.length() == 0) {
+            bar.setVisibility(View.GONE);
+            return;
+        }
+        bar.setText(msg);
+        bar.setTextColor(color);
+        bar.setVisibility(View.VISIBLE);
+    }
+
+    /** 破坏性动作按钮：透明底 + 2dp ERR 描边（不新增 token，复用既有 ERR 色与 R_CTRL） */
+    private Button dangerButton(String s, View.OnClickListener l) {
+        Button b = new Button(this);
+        b.setText(s);
+        b.setAllCaps(false);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, Ui.SP_BODY);
+        b.setTextColor(Ui.ERR);
+        b.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
+        b.setBackground(Ui.round(0, Ui.R_CTRL, Ui.ERR, 2, this));
+        b.setMinimumHeight(0);
+        b.setMinimumWidth(0);
+        if (l != null) {
+            b.setOnClickListener(l);
+        }
+        return b;
+    }
+
+    /** 小字文字链（全选 / 全不选） */
+    private TextView linkText(String s, View.OnClickListener l) {
+        TextView t = Ui.text(this, s, Ui.SP_CAPTION, Ui.ACCENT, true);
+        t.setPadding(0, Ui.dp(this, 8), Ui.dp(this, 18), Ui.dp(this, 8));
+        t.setClickable(true);
+        t.setOnClickListener(l);
+        return t;
+    }
+
+    private void addHeaderMore(ViewGroup headerBar) {
+        ImageView more = new ImageView(this);
+        more.setImageResource(R.drawable.ic_more_vertical);
+        more.setColorFilter(Ui.MUTED);
+        more.setContentDescription("说明与更多");
+        more.setClickable(true);
+        more.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { showInfoMenu(); }
+        });
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                Ui.dp(this, Ui.TOUCH_MIN), Ui.dp(this, Ui.TOUCH_MIN),
+                Gravity.CENTER_VERTICAL | Gravity.END);
+        lp.rightMargin = Ui.dp(this, 8);
+        headerBar.addView(more, lp);
+    }
+
+    /** 顶栏 ⋯：字段规范 / 覆盖说明 / 导出位置 / 生成示例数据（自测用） */
+    private void showInfoMenu() {
+        final boolean imp = MODE_IMPORT.equals(mode);
+        String[] items = imp
+                ? new String[]{"字段格式说明", "覆盖与备份说明", "生成示例数据（自测用）"}
+                : new String[]{"字段格式说明", "导出到哪"};
+        new AlertDialog.Builder(this)
+                .setTitle(imp ? "导入说明" : "导出说明")
+                .setItems(items, new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        if (w == 0) {
+                            showTextDialog("字段格式说明", SPEC_HINT);
+                        } else if (imp && w == 1) {
+                            showTextDialog("覆盖与备份", SPEC_OVERWRITE);
+                        } else if (imp) {
+                            if (importEditor != null) {
+                                importEditor.setJson(randomSampleJson());
+                                parseFromText(importEditor.getJson(), "随机示例");
+                            }
+                        } else {
+                            showTextDialog("导出到哪", SPEC_WHERE);
+                        }
+                    }
+                })
+                .setNegativeButton("关闭", null)
+                .show();
+    }
+
+    private void showTextDialog(String title, String body) {
+        TextView t = Ui.text(this, body, Ui.SP_BODY, Ui.TEXT, false);
+        t.setLineSpacing(Ui.dp(this, 3), 1.15f);
+        int pad = Ui.dp(this, 20);
+        t.setPadding(pad, Ui.dp(this, 6), pad, 0);
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setView(t)
+                .setPositiveButton("知道了", null)
+                .show();
+    }
+
+    /** 未连接引导卡：全页唯一的连接状态来源 */
+    private LinearLayout buildGuideCard() {
+        LinearLayout g = Ui.card(this);
+        g.setBackground(Ui.round(Ui.CARD2, Ui.R_CARD, Ui.LINE, this));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        View dot = new View(this);
+        dot.setBackground(Ui.round(Ui.WARN, 4, 0, this));
+        LinearLayout.LayoutParams dp8 = new LinearLayout.LayoutParams(
+                Ui.dp(this, 8), Ui.dp(this, 8));
+        dp8.rightMargin = Ui.dp(this, 10);
+        row.addView(dot, dp8);
+
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.addView(Ui.text(this, "手环未连接", Ui.SP_BODY, Ui.TEXT, true));
+        col.addView(Ui.text(this, "导入与导出都需要手环在线",
+                Ui.SP_CAPTION, Ui.MUTED, false));
+        row.addView(col, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView go = Ui.text(this, "去连接 ›", Ui.SP_CAPTION, Ui.ACCENT, true);
+        go.setPadding(Ui.dp(this, 8), Ui.dp(this, 10), 0, Ui.dp(this, 10));
+        go.setClickable(true);
+        go.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                try {
+                    startActivity(new Intent(TransferActivity.this, BandActivity.class));
+                } catch (Throwable ignored) {
+                }
+            }
+        });
+        row.addView(go);
+        g.addView(row);
+        return g;
+    }
+
     // ======================= 布局：导出 =======================
 
     private void buildExport(LinearLayout root) {
+        // ---- 卡1：选择要导出的课表（原 pick + read 两卡合并）----
         LinearLayout pick = Ui.card(this);
-        pick.addView(Ui.text(this, "手环上的课程表（选择要导出的那一套）", 12.5f, Ui.TEXT, true));
-        pick.addView(Ui.space(this, 8));
+        pick.addView(cardTitle("选择要导出的课表", true));
+        pickSub = Ui.text(this, "正在读取课程表清单…", Ui.SP_CAPTION, Ui.MUTED, false);
+        pickSub.setPadding(0, Ui.dp(this, 3), 0, Ui.dp(this, 6));
+        pick.addView(pickSub);
 
         scheduleBox = new LinearLayout(this);
         scheduleBox.setOrientation(LinearLayout.VERTICAL);
-        scheduleBox.addView(Ui.text(this, "正在读取课程表清单…", 12f, Ui.MUTED, false));
+        scheduleBox.addView(Ui.text(this, "正在读取课程表清单…", Ui.SP_CAPTION, Ui.MUTED, false));
         pick.addView(scheduleBox);
 
-        scheduleStatus = Ui.text(this, "", 11.5f, Ui.MUTED, false);
-        scheduleStatus.setPadding(0, Ui.dp(this, 6), 0, 0);
-        pick.addView(scheduleStatus);
+        pickRes = resultBar();
+        pick.addView(pickRes);
+        pick.addView(Ui.space(this, Ui.GAP_SM));
 
-        pick.addView(Ui.space(this, 8));
-        pick.addView(Ui.grid(this,
-                Ui.button(this, "重新读取清单", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { loadSchedules(); }
-                }),
-                Ui.button(this, "读取当前课表", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) {
-                        selectedIndex = -1;
-                        selectedName = "";
-                        readFromBand();
-                    }
-                })));
+        readBtn = Ui.button(this, "读取选中的课表", true, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (listFailed) {
+                    selectedIndex = -1;
+                    selectedName = "";
+                }
+                readFromBand();
+            }
+        });
+        pick.addView(readBtn);
         root.addView(pick);
-        root.addView(Ui.space(this, 10));
+        root.addView(Ui.space(this, Ui.GAP_SM));
 
-        LinearLayout read = Ui.card(this);
-        infoView = Ui.text(this, "选好课程表后，点下面读取", 13f, Ui.TEXT, false);
-        read.addView(infoView);
-        read.addView(Ui.space(this, 10));
-        read.addView(Ui.button(this, "读取该课程表数据", true, new View.OnClickListener() {
-            @Override public void onClick(View v) { readFromBand(); }
-        }));
-        root.addView(read);
-        root.addView(Ui.space(this, 10));
-
-        // JSON 编辑卡（读取成功后显示）
+        // ---- 卡2：导出内容（读取成功后显示）----
         exportCard = Ui.card(this);
         exportCard.setVisibility(View.GONE);
-        exportCard.addView(Ui.text(this,
-                "JSON（可复制出去改，再点「更新到手环」）", 12.5f, Ui.TEXT, true));
-        exportCard.addView(Ui.space(this, 8));
+        exportCard.addView(cardTitle("导出内容", false));
+        exportSub = Ui.text(this, "", Ui.SP_CAPTION, Ui.MUTED, false);
+        exportSub.setPadding(0, Ui.dp(this, 3), 0, 0);
+        exportCard.addView(exportSub);
+        exportCard.addView(Ui.space(this, Ui.GAP_SM));
+
         exportBox = new EditText(this);
-        exportBox.setTextSize(11f);
+        exportBox.setTextSize(TypedValue.COMPLEX_UNIT_SP, Ui.SP_MICRO);
         exportBox.setTextColor(Ui.TEXT);
         exportBox.setMinLines(6);
-        exportBox.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+        exportBox.setGravity(Gravity.TOP | Gravity.START);
+        // 代码区自成一块：CARD2 底 + R_CTRL 圆角（与原型一致，不再裸文本贴在卡上）
+        exportBox.setBackground(Ui.round(Ui.CARD2, Ui.R_CTRL, Ui.LINE, this));
+        exportBox.setPadding(Ui.dp(this, 10), Ui.dp(this, 10),
+                Ui.dp(this, 10), Ui.dp(this, 10));
         exportCard.addView(exportBox);
-        exportCard.addView(Ui.space(this, 8));
+
+        exportRes = resultBar();
+        exportCard.addView(exportRes);
         exportCard.addView(Ui.grid(this,
-                Ui.button(this, "复制 JSON", false, new View.OnClickListener() {
+                Ui.button(this, "复制 JSON", true, new View.OnClickListener() {
                     @Override public void onClick(View v) { copyExportJson(); }
                 }),
-                Ui.button(this, "更新到手环", true, new View.OnClickListener() {
-                    @Override public void onClick(View v) { updateToBand(); }
+                Ui.button(this, "保存为文件", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { saveToFile(); }
                 })));
-        exportCard.addView(Ui.space(this, 6));
-        exportCard.addView(Ui.mono(this, JSON_SPEC_HINT));
-        root.addView(exportCard);
-        root.addView(Ui.space(this, 10));
 
-        resultView = Ui.text(this, "", 12f, Ui.MUTED, false);
-        root.addView(resultView);
-        root.addView(Ui.space(this, 8));
-        root.addView(Ui.mono(this, "导出结果保存到「下载 / EVSync」"));
+        // 破坏性动作独立成行：不与上面的安全动作并排
+        exportCard.addView(Ui.space(this, Ui.GAP_MD));
+        exportCard.addView(Ui.divider(this));
+        exportCard.addView(Ui.space(this, Ui.GAP_MD));
+        exportCard.addView(dangerButton("更新到手环（覆盖当前课表）",
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) { updateToBand(); }
+                }));
+        root.addView(exportCard);
     }
 
     // ======================= 布局：导入 =======================
 
     private void buildImport(LinearLayout root) {
+        // ---- 卡1：课程 JSON ----
         LinearLayout paste = Ui.card(this);
-        paste.addView(Ui.text(this, "课程 JSON（可直接编辑，工具栏在上方）", 12.5f, Ui.TEXT, true));
-        paste.addView(Ui.space(this, 8));
+        paste.addView(cardTitle("课程 JSON", false));
+        TextView hint = Ui.text(this, "可直接编辑；工具栏在编辑器上方",
+                Ui.SP_CAPTION, Ui.MUTED, false);
+        hint.setPadding(0, Ui.dp(this, 3), 0, 0);
+        paste.addView(hint);
+        paste.addView(Ui.space(this, Ui.GAP_SM));
+
         importEditor = new JsonEditorView(this);
         importEditor.setRows(10);
         paste.addView(importEditor);
-        paste.addView(Ui.space(this, 8));
+
+        pasteRes = resultBar();
+        paste.addView(pasteRes);
         paste.addView(Ui.grid(this,
                 Ui.button(this, "解析并预览", true, new View.OnClickListener() {
-                    @Override public void onClick(View v) { parseFromText(importEditor.getJson(), "粘贴内容"); }
-                }),
-                Ui.button(this, "生成示例课表", false, new View.OnClickListener() {
                     @Override public void onClick(View v) {
-                        importEditor.setJson(randomSampleJson());
-                        parseFromText(importEditor.getJson(), "随机示例");
+                        parseFromText(importEditor.getJson(), "粘贴内容");
                     }
+                }),
+                Ui.button(this, "选择文件", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) { pickFile(); }
                 })));
-        paste.addView(Ui.space(this, 8));
-        paste.addView(Ui.button(this, "选择文件", false, new View.OnClickListener() {
-            @Override public void onClick(View v) { pickFile(); }
-        }));
         root.addView(paste);
-        root.addView(Ui.space(this, 10));
+        root.addView(Ui.space(this, Ui.GAP_SM));
 
-        // 课程表名称（必填）
-        LinearLayout nameCard = Ui.card(this);
-        nameCard.addView(Ui.text(this, "课程表名称（必填）", 12.5f, Ui.TEXT, true));
-        nameCard.addView(Ui.space(this, 6));
-        nameBox = new EditText(this);
-        nameBox.setTextSize(13f);
-        nameBox.setTextColor(Ui.TEXT);
-        nameBox.setHintTextColor(Ui.MUTED);
-        nameBox.setHint("例如：2026 秋季学期 / 暑假辅导班");
-        nameCard.addView(nameBox);
-        nameCard.addView(Ui.space(this, 4));
-        nameCard.addView(Ui.mono(this, "导入时会先检查手环上是否已有同名课程表"));
-        root.addView(nameCard);
-        root.addView(Ui.space(this, 10));
-
-        // 预览卡（默认隐藏）
-        previewCard = new LinearLayout(this);
-        previewCard.setOrientation(LinearLayout.VERTICAL);
+        // ---- 卡2：预览与导入（解析成功后才出现）----
+        previewCard = Ui.card(this);
         previewCard.setVisibility(View.GONE);
-        previewInfo = Ui.text(this, "", 12.5f, Ui.TEXT, true);
+        previewInfo = Ui.text(this, "", Ui.SP_BODY, Ui.TEXT, true);
         previewCard.addView(previewInfo);
-        previewCard.addView(Ui.space(this, 8));
+        previewSub = Ui.text(this, "", Ui.SP_CAPTION, Ui.MUTED, false);
+        previewSub.setPadding(0, Ui.dp(this, 3), 0, 0);
+        previewCard.addView(previewSub);
+        previewCard.addView(Ui.space(this, Ui.GAP_XS));
+
         previewBox = new LinearLayout(this);
         previewBox.setOrientation(LinearLayout.VERTICAL);
         previewCard.addView(previewBox);
-        previewCard.addView(Ui.space(this, 8));
-        previewCard.addView(Ui.grid(this,
-                Ui.button(this, "全选", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { setAllChecked(true); }
-                }),
-                Ui.button(this, "全不选", false, new View.OnClickListener() {
-                    @Override public void onClick(View v) { setAllChecked(false); }
-                })));
-        previewCard.addView(Ui.button(this, "导入到手环（覆盖当前课表）", true,
+
+        LinearLayout links = new LinearLayout(this);
+        links.setOrientation(LinearLayout.HORIZONTAL);
+        links.addView(linkText("全选", new View.OnClickListener() {
+            @Override public void onClick(View v) { setAllChecked(true); }
+        }));
+        links.addView(linkText("全不选", new View.OnClickListener() {
+            @Override public void onClick(View v) { setAllChecked(false); }
+        }));
+        previewCard.addView(links);
+
+        previewCard.addView(Ui.space(this, Ui.GAP_MD));
+        previewCard.addView(Ui.divider(this));
+        previewCard.addView(Ui.space(this, Ui.GAP_MD));
+
+        // 名称紧邻导入按钮（原来夹在两卡中间，报错却写在页脚）
+        previewCard.addView(Ui.text(this, "课程表名称（必填）",
+                Ui.SP_CAPTION, Ui.TEXT, true));
+        previewCard.addView(Ui.space(this, Ui.GAP_XS));
+        nameBox = new EditText(this);
+        nameBox.setTextSize(TypedValue.COMPLEX_UNIT_SP, Ui.SP_BODY);
+        nameBox.setTextColor(Ui.TEXT);
+        nameBox.setHintTextColor(Ui.MUTED);
+        nameBox.setHint("例如：2026 秋季学期 / 暑假辅导班");
+        previewCard.addView(nameBox);
+
+        nameErr = Ui.text(this, "", Ui.SP_CAPTION, Ui.ERR, false);
+        nameErr.setPadding(0, Ui.dp(this, 5), 0, 0);
+        nameErr.setVisibility(View.GONE);
+        previewCard.addView(nameErr);
+
+        previewRes = resultBar();
+        previewCard.addView(previewRes);
+        previewCard.addView(Ui.space(this, Ui.GAP_SM));
+        previewCard.addView(dangerButton("导入到手环（覆盖当前课表）",
                 new View.OnClickListener() {
                     @Override public void onClick(View v) { confirmImportSelected(); }
                 }));
         root.addView(previewCard);
-        root.addView(Ui.space(this, 10));
-
-        infoView = Ui.text(this, "准备就绪", 12.5f, Ui.TEXT, false);
-        root.addView(infoView);
-        root.addView(Ui.space(this, 8));
-        resultView = Ui.text(this, "", 12f, Ui.MUTED, false);
-        root.addView(resultView);
-        root.addView(Ui.space(this, 8));
-        root.addView(Ui.mono(this,
-                "必填：name + day(1-7 或 星期X) + time\n"
-                        + "提示：导入会【覆盖】手环当前课表，EV 侧会自动备份到 astrobox_sync_backup"));
     }
 
     // ======================= 导出：读取清单 =======================
@@ -310,9 +536,16 @@ public class TransferActivity extends Activity {
         if (scheduleBox == null) {
             return;
         }
+        listFailed = false;
+        if (readBtn != null) {
+            readBtn.setText("读取选中的课表");
+        }
+        if (pickSub != null) {
+            pickSub.setText("正在读取课程表清单…");
+        }
+        setRes(pickRes, "", Ui.MUTED);
         scheduleBox.removeAllViews();
-        scheduleBox.addView(Ui.text(this, "正在读取课程表清单…", 12f, Ui.MUTED, false));
-        scheduleStatus.setText("");
+        scheduleBox.addView(Ui.text(this, "正在读取课程表清单…", Ui.SP_CAPTION, Ui.MUTED, false));
         SyncEngine.get(this).listSchedules(new SyncEngine.Reply() {
             @Override public void onReply(String json) {
                 try {
@@ -335,9 +568,9 @@ public class TransferActivity extends Activity {
                     selectedIndex = (cur >= 0 && cur < names.length()) ? cur : 0;
                     selectedName = scheduleNames[selectedIndex];
                     renderScheduleList();
-                    scheduleStatus.setTextColor(Ui.OK);
-                    scheduleStatus.setText("共 " + names.length() + " 套，当前激活："
+                    pickSub.setText("手环上共 " + names.length() + " 套 · 当前使用中："
                             + selectedName);
+                    setRes(pickRes, "已读取 " + names.length() + " 套课程表", Ui.OK);
                 } catch (Throwable t) {
                     failSchedules("清单回包无法解析：" + shortJson(json));
                 }
@@ -366,7 +599,7 @@ public class TransferActivity extends Activity {
         for (int i = 0; i < scheduleNames.length; i++) {
             RadioButton rb = new RadioButton(this);
             rb.setText(scheduleNames[i] + (i == selectedIndex ? "　（当前激活）" : ""));
-            rb.setTextSize(13f);
+            rb.setTextSize(TypedValue.COMPLEX_UNIT_SP, Ui.SP_BODY);
             rb.setTextColor(Ui.TEXT);
             rb.setId(i + 1);
             rb.setPadding(Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 6));
@@ -375,8 +608,7 @@ public class TransferActivity extends Activity {
                 @Override public void onClick(View v) {
                     selectedIndex = idx;
                     selectedName = scheduleNames[idx];
-                    scheduleStatus.setTextColor(Ui.OK);
-                    scheduleStatus.setText("已选择：" + selectedName);
+                    setRes(pickRes, "已选择：" + selectedName, Ui.OK);
                 }
             });
             group.addView(rb);
@@ -389,15 +621,21 @@ public class TransferActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT));
     }
 
+    /** 清单读失败：不新设按钮，改为让唯一读取按钮文案自适应（D3） */
     private void failSchedules(String why) {
         if (scheduleBox == null) {
             return;
         }
+        listFailed = true;
         scheduleBox.removeAllViews();
-        scheduleBox.addView(Ui.text(this,
-                "没能读出课程表清单。\n" + why, 12f, Ui.WARN, false));
-        scheduleStatus.setTextColor(Ui.WARN);
-        scheduleStatus.setText("可点「读取当前课表」先导出当前这一套");
+        scheduleBox.addView(Ui.text(this, why, Ui.SP_CAPTION, Ui.WARN, false));
+        if (pickSub != null) {
+            pickSub.setText("手环上读不到清单");
+        }
+        if (readBtn != null) {
+            readBtn.setText("直接读取当前课表");
+        }
+        setRes(pickRes, "读不到清单 · 可先导出当前这一套", Ui.WARN);
     }
 
     /**
@@ -432,8 +670,9 @@ public class TransferActivity extends Activity {
             selectedIndex = act;
             selectedName = (act >= 0) ? scheduleNames[act] : "";
             renderScheduleList();
-            scheduleStatus.setTextColor(Ui.MUTED);
-            scheduleStatus.setText("清单与「课程表管理 → 手环课表」一致 · 连接手环后可重新读取");
+            if (pickSub != null) {
+                pickSub.setText("来自本地课表库 · 连接手环后可重新读取");
+            }
         }
         if (lastJson != null) {
             // 优先还原上次从手环读到的原文（含昵称/版本等导出信息）
@@ -450,12 +689,9 @@ public class TransferActivity extends Activity {
                 }
             } catch (Throwable ignored) {
             }
-            showSaveButton();
-            infoView.setText("以下为上次连接时读取的手环课表"
-                    + (lastAt > 0 ? "（" + fmtTime(lastAt) + "）" : "")
-                    + "；连接手环后可重新读取最新数据");
-            resultView.setText("离线模式：数据已保存到本地，不会丢失");
-            resultView.setTextColor(Ui.MUTED);
+            setRes(exportRes, "离线数据 · 上次读取于 "
+                    + (lastAt > 0 ? fmtTime(lastAt) : "未知时间"), Ui.MUTED);
+            setSubForOffline();
         } else if (!watch.isEmpty()) {
             // 没有原文缓存：由当前激活的手环课表生成同样格式的 JSON
             for (ScheduleStore.Schedule s : watch) {
@@ -474,17 +710,27 @@ public class TransferActivity extends Activity {
                         setExportJson(flat);
                     } catch (Throwable ignored) {
                     }
-                    infoView.setText("数据来自本地课表库「" + s.name + "」（与课程表管理一致）；"
-                            + "连接手环后可重新读取原文");
-                    showSaveButton();
+                    setRes(exportRes, "离线数据 · 来自本地课表库「" + s.name + "」", Ui.MUTED);
+                    setSubForOffline();
                     break;
                 }
             }
         }
     }
 
+    private void setSubForOffline() {
+        if (exportSub != null) {
+            exportSub.setText((selectedName == null || selectedName.length() == 0 ? "手环课表" : selectedName)
+                    + " · 上次连接时读取 · 存到「下载 / EVSync」");
+        }
+    }
+
     private static String fmtTime(long ms) {
         return new SimpleDateFormat("MM-dd HH:mm", Locale.US).format(new Date(ms));
+    }
+
+    private static String nowHM() {
+        return new SimpleDateFormat("HH:mm", Locale.US).format(new Date());
     }
 
     private static String shortJson(String json) {
@@ -495,8 +741,7 @@ public class TransferActivity extends Activity {
     }
 
     private void readFromBand() {
-        infoView.setText("正在读取手环数据…");
-        resultView.setText("");
+        setRes(exportRes, "正在读取手环数据…", Ui.MUTED);
         SyncEngine.Reply cb = new SyncEngine.Reply() {
             @Override public void onReply(String json) {
                 lastExportJson = json;
@@ -522,47 +767,41 @@ public class TransferActivity extends Activity {
                 try {
                     JSONObject o = new JSONObject(json);
                     JSONObject d = o.optJSONObject("data");
-                    StringBuilder sb = new StringBuilder();
                     if (d != null) {
-                        sb.append("昵称：").append(d.optString("nickname")).append('\n');
-                        sb.append("版本：").append(d.optString("versionName"))
-                          .append(" (code ").append(d.optInt("versionCode")).append(")\n");
                         JSONArray sch = d.optJSONArray("schedule");
                         int total = 0;
                         if (sch != null) {
                             for (int i = 0; i < sch.length(); i++) {
                                 JSONObject day = sch.optJSONObject(i);
                                 JSONArray cs = (day == null) ? null : day.optJSONArray("classes");
-                                int n = (cs == null) ? 0 : cs.length();
-                                total += n;
-                                sb.append("  ").append(day == null ? "?" : day.optString("day"))
-                                  .append(" ").append(n).append(" 节\n");
+                                total += (cs == null) ? 0 : cs.length();
                             }
-                        }
-                        sb.append("合计：").append(total).append(" 节");
-                        if (sch != null) {
                             setExportJson(flattenFormatA(sch));
                         }
                         // P3：记住本次读出的课程数，供「保存/复制」成功事件带上 course_count
                         lastExportTotal = total;
                         ev("app_export_ok", Analytics.p("course_count", total, "target", "band_read"));
+                        String ver = d.optString("versionName");
+                        setRes(exportRes, "已读取 " + total + " 门课"
+                                + (ver.length() > 0 ? " · 手环 EV " + ver : ""), Ui.OK);
+                        if (exportSub != null) {
+                            exportSub.setText((selectedName == null || selectedName.length() == 0
+                                    ? "手环课表" : selectedName)
+                                    + " · " + total + " 门课 · " + nowHM()
+                                    + " 读取 · 存到「下载 / EVSync」");
+                        }
                     } else {
-                        sb.append("回包无 data：").append(shortJson(json));
+                        setRes(exportRes, "回包无 data：可稍后重试", Ui.WARN);
                     }
-                    if (selectedName != null && selectedName.length() > 0) {
-                        sb.insert(0, "课程表：" + selectedName + "\n");
-                    }
-                    infoView.setText(sb.toString());
-                    resultView.setText("共 " + json.length() + " 字节，可保存到文件");
-                    showSaveButton();
                 } catch (Throwable t) {
-                    infoView.setText("回包无法解析");
-                    resultView.setText(json);
+                    setRes(exportRes, "回包无法解析，可稍后重试", Ui.ERR);
                 }
             }
-            @Override public void onTimeout(String hint) { infoView.setText(hint); }
+            @Override public void onTimeout(String hint) {
+                setRes(exportRes, hint, Ui.WARN);
+            }
             @Override public void onError(String msg) {
-                infoView.setText("读取失败：" + msg);
+                setRes(exportRes, "读取失败：" + msg, Ui.ERR);
                 // P3：读手环失败（导出主链路断在这）→ 失败合并桶
                 ev("app_export_fail", Analytics.p("stage", "band_read", "reason", msg));
             }
@@ -592,7 +831,7 @@ public class TransferActivity extends Activity {
 
     private void copyExportJson() {
         if (exportBox == null || TextUtils.isEmpty(exportBox.getText().toString())) {
-            resultView.setText("还没有可复制的 JSON");
+            setRes(exportRes, "还没有可复制的 JSON", Ui.WARN);
             return;
         }
         copyToClipboard(exportBox.getText().toString(), "EV课程表");
@@ -607,14 +846,12 @@ public class TransferActivity extends Activity {
         }
         JSONArray courses = toCourseArray(parseLoose(exportBox.getText().toString()));
         if (courses == null || courses.length() == 0) {
-            resultView.setText("编辑框里的 JSON 解析不出课程数组");
-            resultView.setTextColor(Ui.ERR);
+            setRes(exportRes, "编辑框里的 JSON 解析不出课程数组", Ui.ERR);
             return;
         }
         final String payload = buildImportPayload(courses);
         if (payload == null) {
-            resultView.setText("构造报文失败");
-            resultView.setTextColor(Ui.ERR);
+            setRes(exportRes, "构造报文失败", Ui.ERR);
             return;
         }
         new AlertDialog.Builder(this)
@@ -648,52 +885,16 @@ public class TransferActivity extends Activity {
             ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
             if (cm != null) {
                 cm.setPrimaryClip(ClipData.newPlainText(label, text));
-                infoView.setText("已复制 " + text.length() + " 个字符到剪贴板，可到别处粘贴编辑");
-                infoView.setTextColor(Ui.OK);
+                setRes(exportRes, "已复制 " + text.length() + " 个字符到剪贴板", Ui.OK);
             }
         } catch (Throwable t) {
-            infoView.setText("复制失败：" + t);
-            infoView.setTextColor(Ui.ERR);
+            setRes(exportRes, "复制失败：" + t, Ui.ERR);
         }
-    }
-
-    /** 剪贴板 → 粘贴框，并自动解析预览（与 JSON 编辑器的粘贴同款行为）。 */
-    private void pasteToBox() {
-        try {
-            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            ClipData clip = cm.getPrimaryClip();
-            String text = (clip != null && clip.getItemCount() > 0)
-                    ? String.valueOf(clip.getItemAt(0).coerceToText(this)) : "";
-            if (text.trim().length() == 0) {
-                resultView.setText("剪贴板是空的");
-                resultView.setTextColor(Ui.WARN);
-                return;
-            }
-            importEditor.setJson(text);
-            parseFromText(text, "粘贴内容");
-        } catch (Throwable t) {
-            resultView.setText("粘贴失败");
-            resultView.setTextColor(Ui.ERR);
-        }
-    }
-
-    private void showSaveButton() {
-        LinearLayout root = (LinearLayout) resultView.getParent();
-        for (int i = 0; i < root.getChildCount(); i++) {
-            View v = root.getChildAt(i);
-            if (v instanceof Button
-                    && "保存到下载目录".equals(((Button) v).getText().toString())) {
-                return;
-            }
-        }
-        root.addView(Ui.button(this, "保存到下载目录", true, new View.OnClickListener() {
-            @Override public void onClick(View v) { saveToFile(); }
-        }), root.getChildCount() - 2);
     }
 
     private void saveToFile() {
         if (lastExportJson == null) {
-            resultView.setText("还没有数据");
+            setRes(exportRes, "还没有可保存的数据，先读取", Ui.WARN);
             return;
         }
         String safe = (selectedName == null) ? "" : selectedName.replaceAll("[\\\\/:*?\"<>|]", "_");
@@ -712,7 +913,7 @@ public class TransferActivity extends Activity {
                 os.write(lastExportJson.getBytes(UTF8));
                 os.flush();
                 os.close();
-                resultView.setText("已保存：下载 / EVSync / " + name);
+                setRes(exportRes, "已保存：下载 / EVSync / " + name, Ui.OK);
                 // P3：保存到下载目录成功（导出落地口径之一）
                 ev("app_export_ok", Analytics.p("course_count", lastExportTotal, "target", "file"));
             } else {
@@ -724,14 +925,12 @@ public class TransferActivity extends Activity {
                 FileOutputStream fos = new FileOutputStream(f);
                 fos.write(lastExportJson.getBytes(UTF8));
                 fos.close();
-                resultView.setText("已保存：" + f.getAbsolutePath());
+                setRes(exportRes, "已保存：" + f.getAbsolutePath(), Ui.OK);
                 // P3：保存到应用目录成功（老系统路径）
                 ev("app_export_ok", Analytics.p("course_count", lastExportTotal, "target", "file"));
             }
-            resultView.setTextColor(Ui.OK);
         } catch (Throwable t) {
-            resultView.setText("保存失败：" + t);
-            resultView.setTextColor(Ui.ERR);
+            setRes(exportRes, "保存失败：" + t, Ui.ERR);
             // P3：保存失败 → 失败合并桶
             ev("app_export_fail", Analytics.p("stage", "save_file", "reason", String.valueOf(t)));
         }
@@ -772,7 +971,7 @@ public class TransferActivity extends Activity {
             i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/json", "text/plain"});
             startActivityForResult(i, REQ_PICK);
         } catch (Throwable t) {
-            infoView.setText("无法打开文件选择器：" + t);
+            setRes(pasteRes, "无法打开文件选择器：" + t, Ui.ERR);
         }
     }
 
@@ -796,7 +995,7 @@ public class TransferActivity extends Activity {
             importEditor.setJson(text);
             parseFromText(text, uri.getLastPathSegment());
         } catch (Throwable t) {
-            infoView.setText("读取文件失败：" + t);
+            setRes(pasteRes, "读取文件失败：" + t, Ui.ERR);
         }
     }
 
@@ -816,14 +1015,14 @@ public class TransferActivity extends Activity {
         }
         if (courses == null || courses.length() == 0) {
             previewCard.setVisibility(View.GONE);
-            infoView.setTextColor(Ui.ERR);
-            infoView.setText("没能从「" + srcName + "」解析出课程数组");
+            setRes(pasteRes, "没能从「" + srcName + "」解析出课程数组", Ui.ERR);
             return;
         }
         parsedCourses = courses;
+        hideNameErr();
         renderPreview();
         previewCard.setVisibility(View.VISIBLE);
-        infoView.setTextColor(Ui.TEXT);
+        setRes(pasteRes, "已解析出 " + courses.length() + " 门课程", Ui.OK);
     }
 
     private void renderPreview() {
@@ -838,7 +1037,8 @@ public class TransferActivity extends Activity {
             String name = c.optString("name");
             String day = dayLabel(c.opt("day"));
             String time = c.optString("time");
-            if (name.length() > 0 && day.length() > 0 && time.length() > 0) {
+            boolean complete = name.length() > 0 && day.length() > 0 && time.length() > 0;
+            if (complete) {
                 valid++;
             }
             StringBuilder sb = new StringBuilder();
@@ -853,14 +1053,15 @@ public class TransferActivity extends Activity {
             }
             CheckBox cb = new CheckBox(this);
             cb.setText(sb.toString());
-            cb.setTextSize(11.5f);
-            cb.setTextColor(Ui.TEXT);
+            cb.setTextSize(TypedValue.COMPLEX_UNIT_SP, Ui.SP_CAPTION);
+            // 必填字段不完整的整行标黄（原先完整与不完整长得一模一样）
+            cb.setTextColor(complete ? Ui.TEXT : Ui.WARN);
             cb.setChecked(true);
             previewBox.addView(cb);
             courseChecks.add(cb);
         }
-        previewInfo.setText("待导入 " + courseChecks.size() + " 门（其中 " + valid
-                + " 门必填字段完整，默认全选）");
+        previewInfo.setText("待导入 " + courseChecks.size() + " 门");
+        previewSub.setText("其中 " + valid + " 门字段完整 · 缺字段的已标黄");
     }
 
     private void setAllChecked(boolean v) {
@@ -869,17 +1070,32 @@ public class TransferActivity extends Activity {
         }
     }
 
+    private void showNameErr(String msg) {
+        if (nameErr == null) {
+            return;
+        }
+        nameErr.setText(msg);
+        nameErr.setVisibility(View.VISIBLE);
+    }
+
+    private void hideNameErr() {
+        if (nameErr != null) {
+            nameErr.setVisibility(View.GONE);
+        }
+    }
+
     private void confirmImportSelected() {
         if (parsedCourses == null || parsedCourses.length() == 0) {
-            infoView.setText("还没有可导入的课程，先解析");
+            setRes(pasteRes, "还没有可导入的课程，先点「解析并预览」", Ui.WARN);
             return;
         }
         final String name = (nameBox == null) ? "" : nameBox.getText().toString().trim();
         if (name.length() == 0) {
-            infoView.setText("请先填写课程表名称（必填）");
-            infoView.setTextColor(Ui.ERR);
+            // 错误就地显示在名称输入框下方（原来写在页面最底部）
+            showNameErr("请先填写课程表名称（必填）");
             return;
         }
+        hideNameErr();
         JSONArray picked = new JSONArray();
         for (int i = 0; i < parsedCourses.length() && i < courseChecks.size(); i++) {
             if (courseChecks.get(i).isChecked()) {
@@ -890,15 +1106,13 @@ public class TransferActivity extends Activity {
             }
         }
         if (picked.length() == 0) {
-            infoView.setText("一门课都没勾选");
-            infoView.setTextColor(Ui.WARN);
+            setRes(previewRes, "一门课都没勾选", Ui.WARN);
             return;
         }
         final JSONArray finalPicked = picked;
         int idx = indexOfName(name);
         if (idx >= 0) {
-            infoView.setText("检测到同名课程表，正在读取它的课程数…");
-            infoView.setTextColor(Ui.MUTED);
+            setRes(previewRes, "检测到同名课程表，正在读取它的课程数…", Ui.MUTED);
             SyncEngine.get(this).exportSchedule(idx, new SyncEngine.Reply() {
                 @Override public void onReply(String json) {
                     showImportConfirm(name, countCourses(json), finalPicked);
@@ -914,8 +1128,7 @@ public class TransferActivity extends Activity {
     private void showImportConfirm(String name, int existingCount, JSONArray picked) {
         final String payload = buildImportPayload(picked, name);
         if (payload == null) {
-            infoView.setText("构造报文失败");
-            infoView.setTextColor(Ui.ERR);
+            setRes(previewRes, "构造报文失败", Ui.ERR);
             return;
         }
         String dup = existingCount >= 0
@@ -1017,43 +1230,36 @@ public class TransferActivity extends Activity {
     }
 
     private void doImport(String payload) {
-        infoView.setText("正在导入到手环…");
-        infoView.setTextColor(Ui.TEXT);
+        setRes(previewRes, "正在导入到手环…", Ui.MUTED);
         SyncEngine.get(this).send(payload, new SyncEngine.Reply() {
             @Override public void onReply(String json) {
                 try {
                     JSONObject o = new JSONObject(json);
                     if (o.optBoolean("ok", false)) {
                         int count = o.optInt("count", -1);
-                        infoView.setText("导入成功" + (count >= 0 ? ("，共 " + count + " 门课") : ""));
-                        infoView.setTextColor(Ui.OK);
-                        resultView.setText(json);
+                        setRes(previewRes, "导入成功"
+                                + (count >= 0 ? ("，共 " + count + " 门课") : ""), Ui.OK);
                         // P3（§4.4）：导入成功 → 实时推送（每 kind 每分钟 ≤5 条节流在服务端）
                         ev("app_import_ok", Analytics.p("course_count", count >= 0 ? count : 0,
                                 "source", selectedName == null ? "" : selectedName));
                     } else {
-                        infoView.setText("手环拒绝：" + o.optString("reason"));
-                        infoView.setTextColor(Ui.ERR);
-                        resultView.setText(json);
+                        setRes(previewRes, "手环拒绝：" + o.optString("reason"), Ui.ERR);
                         // P3：手环拒绝写入 → 失败合并桶（不逐条打扰）
                         ev("app_import_fail", Analytics.p("stage", "band_reject",
                                 "reason", o.optString("reason")));
                     }
                 } catch (Throwable t) {
-                    infoView.setText("回包无法解析");
-                    resultView.setText(json);
+                    setRes(previewRes, "回包无法解析", Ui.ERR);
                     ev("app_import_fail", Analytics.p("stage", "reply_parse",
                             "reason", String.valueOf(t)));
                 }
             }
             @Override public void onTimeout(String hint) {
-                infoView.setText(hint);
-                infoView.setTextColor(Ui.WARN);
+                setRes(previewRes, hint, Ui.WARN);
                 ev("app_import_fail", Analytics.p("stage", "timeout", "reason", hint));
             }
             @Override public void onError(String msg) {
-                infoView.setText("导入失败：" + msg);
-                infoView.setTextColor(Ui.ERR);
+                setRes(previewRes, "导入失败：" + msg, Ui.ERR);
                 ev("app_import_fail", Analytics.p("stage", "network", "reason", msg));
             }
         });
@@ -1161,5 +1367,20 @@ public class TransferActivity extends Activity {
             return;
         }
         lastThemeVersion = Ui.themeVersion;
+        // 「去连接 → 回来」：引导卡随之收敛；刚连上则刷新一次数据
+        if (guideCard != null) {
+            boolean show = !SyncEngine.get(this).hasNode();
+            if (show != guideShown) {
+                guideShown = show;
+                guideCard.setVisibility(show ? View.VISIBLE : View.GONE);
+                if (!show) {
+                    if (MODE_IMPORT.equals(mode)) {
+                        loadKnownNames();
+                    } else {
+                        loadSchedules();
+                    }
+                }
+            }
+        }
     }
 }
