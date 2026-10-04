@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Ev 课程表 · 导入 / 导出页 全新设计原型 v1</title>
+<style>
+  :root{
+    /* ===== 浅色「晴空蓝」—— 取自 Ui.java 权威 token ===== */
+    --l-bg:#F4F7FB; --l-canvas:#E9EAEF; --l-card:#FFFFFF; --l-card2:#EAF0F8;
+    --l-line:#E3EAF3; --l-text:#0F172A; --l-muted:#64748B;
+    --l-accent:#2F6BFF; --l-accentLight:#EBF0FF;
+    --l-ok:#16A34A; --l-warn:#F59E0B; --l-err:#DC2626; --l-onAccent:#FFFFFF;
+    --l-okLight:rgba(34,197,94,.14); --l-warnLight:rgba(253,230,138,.30);
+    /* ===== 深色「夜幕蓝」 ===== */
+    --d-bg:#0B1020; --d-canvas:#060912; --d-card:#151C30; --d-card2:#1C2542; --d-line:#27314C;
+    --d-text:#E9EEF9; --d-muted:#8695B4; --d-accent:#5B9BFF; --d-accentLight:#1A2544;
+    --d-ok:#34C759; --d-warn:#FFB020; --d-err:#FF6B6B;
+    --d-okLight:rgba(52,199,89,.16); --d-warnLight:rgba(255,176,32,.18);
+    /* 文档底板 */
+    --doc-bg:#eef1f6; --doc-fg:#1a2233; --doc-muted:#5c6779; --doc-line:#d5dbe6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--doc-bg); color:var(--doc-fg);
+    padding:40px 24px 80px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;letter-spacing:.2px}
+  h2{font-size:19px;font-weight:600;margin:52px 0 6px;padding-top:18px;border-top:2px solid var(--doc-line)}
+  h2 .num{color:var(--l-accent);font-weight:600;margin-right:8px}
+  .sub{color:var(--doc-muted);font-size:13.5px;margin-top:8px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12px;padding:4px 10px;border-radius:999px;background:#fff;border:1px solid var(--doc-line);color:var(--doc-muted)}
+  .chip b{color:var(--l-accent);font-weight:600}
+  .note{margin:16px 0;padding:13px 16px;border-radius:10px;font-size:13px;border:1px solid var(--doc-line);background:#fff}
+  .note.warn{background:#fff8ec;border-color:#f2d9ad}
+  .note.ok{background:#eefaf1;border-color:#bfe6c9}
+  .note b{font-weight:600}
+  ul{margin:10px 0 0 20px} li{margin:5px 0;font-size:13.5px}
+
+  /* ===== 手机框 ===== */
+  .frames{display:flex;flex-wrap:wrap;gap:34px;margin-top:26px;align-items:flex-start}
+  .frame{width:360px}
+  .frame .cap{font-size:12.5px;color:var(--doc-muted);margin-bottom:9px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .frame .cap b{color:var(--doc-fg);font-weight:600}
+  .tag{font-size:10.5px;padding:2px 7px;border-radius:5px;background:var(--l-accentLight);color:var(--l-accent);font-weight:600}
+  .tag.dark{background:#20293f;color:#8fb4ff}
+  .tag.new{background:rgba(22,163,74,.14);color:var(--l-ok)}
+  .tag.del{background:rgba(220,38,38,.12);color:var(--l-err)}
+  .screen{
+    width:360px;height:640px;border-radius:22px;overflow:hidden;position:relative;
+    box-shadow:0 18px 40px -12px rgba(20,32,60,.32),0 0 0 1px rgba(20,32,60,.06);
+    display:flex;flex-direction:column;
+  }
+  .anno{font-size:12px;color:var(--doc-muted);margin-top:10px;line-height:1.55}
+  .anno b{color:var(--doc-fg);font-weight:600}
+
+  /* ---- 通用原子 ---- */
+  .L{background:var(--l-canvas);color:var(--l-text)} .D{background:var(--d-canvas);color:var(--d-text)}
+  .body{flex:1;overflow:hidden;display:flex;flex-direction:column}
+
+  /* ---- 顶栏 44dp ---- */
+  .topbar{height:44px;display:flex;align-items:center;padding:0 16px;flex:0 0 auto;position:relative}
+  .tbtitle{font-size:17px;font-weight:600;color:var(--l-text);flex:1;text-align:center}
+  .D .tbtitle{color:var(--d-text)}
+  .tbic{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .tbic svg{width:18px;height:18px;stroke:var(--l-text);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .D .tbic svg{stroke:var(--d-text)}
+  .tbic.dim svg{stroke:var(--l-muted)}
+  .D .tbic.dim svg{stroke:var(--d-muted)}
+
+  /* ---- 卡 ---- */
+  .card{margin:8px 16px 0;background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;padding:14px}
+  .D .card{background:var(--d-card);border-color:var(--d-line)}
+  .card.plain{background:var(--l-card2);border-color:var(--l-line)}
+  .D .card.plain{background:var(--d-card2)}
+  .card.dashed{background:transparent;border:1px dashed var(--l-line);text-align:center}
+  .D .card.dashed{border-color:var(--d-line)}
+  .ctitle{font-size:13px;font-weight:600;color:var(--l-text);letter-spacing:.1px;display:flex;align-items:center;gap:8px}
+  .D .ctitle{color:var(--d-text)}
+  .ctitle .sp{flex:1}
+  .ctitle .ico{width:28px;height:28px;margin:-6px -6px -6px 0;border-radius:9px;display:flex;align-items:center;justify-content:center}
+  .ctitle .ico svg{width:15px;height:15px;stroke:var(--l-muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .D .ctitle .ico svg{stroke:var(--d-muted)}
+  .csub{font-size:11.5px;color:var(--l-muted);margin-top:4px}
+  .D .csub{color:var(--d-muted)}
+  .hr{height:1px;background:var(--l-line);margin:12px -14px}
+  .D .hr{background:var(--d-line)}
+
+  /* ---- 单选清单行 ---- */
+  .row{display:flex;align-items:center;gap:10px;height:44px;border-radius:10px;padding:0 8px;position:relative}
+  .row.sel{background:var(--l-accentLight);box-shadow:inset 3px 0 0 var(--l-accent)}
+  .D .row.sel{background:var(--d-accentLight);box-shadow:inset 3px 0 0 var(--d-accent)}
+  .row .rn{font-size:13px;color:var(--l-text);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .D .row .rn{color:var(--d-text)}
+  .radio{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--l-muted);flex:0 0 auto}
+  .row.sel .radio{border:5px solid var(--l-accent)}
+  .D .row.sel .radio{border-color:var(--d-accent)}
+  .badge{font-size:10.5px;padding:1px 6px;border-radius:5px;background:var(--l-okLight);color:var(--l-ok);font-weight:600;flex:0 0 auto}
+  .D .badge{background:var(--d-okLight);color:var(--d-ok)}
+
+  /* ---- 结果条 ---- */
+  .res{margin-top:10px;padding:8px 10px;border-radius:12px;background:var(--l-card2);
+    font-size:11.5px;color:var(--l-muted);display:flex;align-items:center;gap:8px}
+  .D .res{background:var(--d-card2);color:var(--d-muted)}
+  .res.ok{color:var(--l-ok)} .res.warn{color:var(--l-warn)} .res.err{color:var(--l-err)}
+  .D .res.ok{color:var(--d-ok)} .D .res.warn{color:var(--d-warn)} .D .res.err{color:var(--d-err)}
+  .res b{font-weight:600}
+  .res svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+
+  /* ---- 按钮 ---- */
+  .btn{height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:600;flex:1}
+  .btn.pri{background:var(--l-accent);color:var(--l-onAccent)}
+  .D .btn.pri{background:var(--d-accent)}
+  .btn.sec{background:var(--l-card2);color:var(--l-text);border:1px solid var(--l-line)}
+  .D .btn.sec{background:var(--d-card2);color:var(--d-text);border-color:var(--d-line)}
+  .btn.danger{background:transparent;color:var(--l-err);border:1.5px solid var(--l-err);font-weight:600}
+  .D .btn.danger{color:var(--d-err);border-color:var(--d-err)}
+  .grid2{display:flex;gap:8px;margin-top:10px}
+  .grid2 .btn{margin-top:0}
+
+  /* ---- 输入 / JSON ---- */
+  .json{margin-top:10px;background:var(--l-card2);border:1px solid var(--l-line);border-radius:12px;padding:10px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;line-height:1.65;color:var(--l-muted);
+    white-space:pre;overflow:hidden}
+  .D .json{background:var(--d-card2);border-color:var(--d-line);color:var(--d-muted)}
+  .inp{margin-top:10px;height:44px;border-radius:12px;border:1.5px solid var(--l-accent);background:var(--l-card);
+    display:flex;align-items:center;padding:0 12px;font-size:13px;color:var(--l-text)}
+  .D .inp{background:var(--d-card);border-color:var(--d-accent);color:var(--d-text)}
+  .inp.ph{color:var(--l-muted);border-color:var(--l-line)}
+  .D .inp.ph{color:var(--d-muted);border-color:var(--d-line)}
+  .caret{width:1.5px;height:16px;background:var(--l-accent);margin-left:1px;animation:bl 1.1s steps(1) infinite}
+  @keyframes bl{50%{opacity:0}}
+  .lb{font-size:11.5px;font-weight:600;color:var(--l-text);margin-top:12px}
+  .D .lb{color:var(--d-text)}
+  .errtip{font-size:11.5px;color:var(--l-err);margin-top:5px}
+  .D .errtip{color:var(--d-err)}
+
+  /* ---- 课程勾选行 ---- */
+  .crow{display:flex;align-items:flex-start;gap:9px;padding:7px 0}
+  .cb{width:17px;height:17px;border-radius:5px;background:var(--l-accent);flex:0 0 auto;margin-top:1px;
+    display:flex;align-items:center;justify-content:center}
+  .D .cb{background:var(--d-accent)}
+  .cb svg{width:11px;height:11px;stroke:#fff;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+  .cb.off{background:transparent;border:1.5px solid var(--l-muted)}
+  .D .cb.off{border-color:var(--d-muted)}
+  .crow .ct{font-size:13px;color:var(--l-text);line-height:1.35}
+  .D .crow .ct{color:var(--d-text)}
+  .crow .cd{font-size:11.5px;color:var(--l-muted);margin-top:1px}
+  .D .crow .cd{color:var(--d-muted)}
+  .crow.bad .ct,.crow.bad .cd{color:var(--l-warn)}
+  .D .crow.bad .ct,.D .crow.bad .cd{color:var(--d-warn)}
+  .linkrow{display:flex;gap:16px;margin-top:8px}
+  .link{font-size:11.5px;color:var(--l-accent);font-weight:600}
+  .D .link{color:var(--d-accent)}
+
+  /* ---- 引导卡 ---- */
+  .devrow{display:flex;align-items:center;gap:10px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--l-ok);flex:0 0 auto}
+  .dot.warn{background:var(--l-warn)} .dot.mut{background:var(--l-muted)}
+  .D .dot{background:var(--d-ok)} .D .dot.warn{background:var(--d-warn)} .D .dot.mut{background:var(--d-muted)}
+  .devtxt{font-size:13px;font-weight:600;color:var(--l-text)}
+  .D .devtxt{color:var(--d-text)}
+  .devsub{font-size:11.5px;color:var(--l-muted);margin-top:3px}
+  .D .devsub{color:var(--d-muted)}
+  .go{font-size:11.5px;color:var(--l-accent);font-weight:600;flex:0 0 auto}
+
+  .ph-empty{font-size:11.5px;color:var(--l-muted);padding:14px 0}
+  .D .ph-empty{color:var(--d-muted)}
+  .placeholder{text-align:center;color:var(--l-muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>导入 / 导出页 全新设计原型 v1</h1>
+  <p class="sub">对象 <b>TransferActivity</b>（一个 Activity 两个模式）· 1dp = 1px · 360dp 宽 · 全部复用 Ui.java 既有 token</p>
+  <div class="meta">
+    <span class="chip">零新增 token</span>
+    <span class="chip">消灭 <b>12 处</b>越界字号（12.5f / 12f / 11f）</span>
+    <span class="chip">删 <b>ConnectionBar</b> · <b>resultView</b> · <b>Ui.mono×4</b></span>
+    <span class="chip">反馈就地化</span>
+  </div>
+
+  <!-- ================= 态 1：导出 · 未连接 ================= -->
+  <h2><span class="num">01</span>导出 · 未连接（引导卡）</h2>
+  <div class="frames">
+    <div class="frame">
+      <div class="cap"><b>导出课程表</b><span class="tag new">删 ConnectionBar</span></div>
+      <div class="screen L">
+        <div class="topbar">
+          <div class="tbic dim"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="tbtitle">导出课程表</div>
+          <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></div>
+        </div>
+        <div class="body">
+          <div class="card plain">
+            <div class="devrow">
+              <div class="dot warn"></div>
+              <div style="flex:1;min-width:0">
+                <div class="devtxt">手环未连接</div>
+                <div class="devsub">导入与导出都需要手环在线</div>
+              </div>
+              <div class="go">去连接 ›</div>
+            </div>
+          </div>
+          <div class="card dashed" style="margin-top:16px">
+            <div class="ph-empty">连接手环后<br>这里会列出可导出的课程表</div>
+          </div>
+        </div>
+      </div>
+      <div class="anno">
+        <b>状态只说一遍。</b>已连接时这张卡**完全不占位**，顶栏之下直接是内容。<br>
+        原页面用 <b>ConnectionBar + infoView + resultView</b> 三处各说一遍连接与结果。
+      </div>
+    </div>
+
+    <!-- ================= 态 2：导出 · 清单已读 ================= -->
+    <div class="frame">
+      <div class="cap"><b>导出课程表 · 已连接</b><span class="tag new">三卡 → 两卡</span></div>
+      <div class="screen L">
+        <div class="topbar">
+          <div class="tbic dim"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="tbtitle">导出课程表</div>
+          <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></div>
+        </div>
+        <div class="body">
+          <div class="card">
+            <div class="ctitle">
+              <span>选择要导出的课表</span><span class="sp"></span>
+              <span class="ico"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></span>
+            </div>
+            <div class="csub" style="margin-bottom:6px">手环上共 3 套 · 当前使用中：秋季课表</div>
+            <div class="row sel"><div class="radio"></div><div class="rn">秋季课表</div><span class="badge">使用中</span></div>
+            <div class="row"><div class="radio"></div><div class="rn">春季课表</div></div>
+            <div class="row"><div class="radio"></div><div class="rn">暑假辅导班</div></div>
+            <div class="res ok">
+              <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+              <span>已读取 3 套课程表</span>
+            </div>
+            <div class="grid2"><div class="btn pri">读取选中的课表</div></div>
+          </div>
+          <div class="card dashed" style="margin-top:8px">
+            <div class="ph-empty">读取后在这里显示可导出的内容</div>
+          </div>
+        </div>
+      </div>
+      <div class="anno">
+        <b>唯一读取入口。</b>原页面有三个按钮都叫「读取」（其中两个调的是同一个方法）。<br>
+        清单读失败时，这个按钮文案自动变 <b>「直接读取当前课表」</b> —— 一个按钮两种情形，不再堆按钮。
+      </div>
+    </div>
+
+    <!-- ================= 态 3：导出 · 已读取 ================= -->
+    <div class="frame">
+      <div class="cap"><b>导出课程表 · 已读取</b><span class="tag">破坏性动作隔离</span></div>
+      <div class="screen L">
+        <div class="topbar">
+          <div class="tbic dim"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="tbtitle">导出课程表</div>
+          <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></div>
+        </div>
+        <div class="body">
+          <div class="card" style="padding:11px 14px">
+            <div class="ctitle"><span>选择要导出的课表</span><span class="sp"></span>
+              <span class="ico"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></span>
+            </div>
+            <div class="row sel" style="margin-top:4px"><div class="radio"></div><div class="rn">秋季课表</div><span class="badge">使用中</span></div>
+          </div>
+          <div class="card">
+            <div class="ctitle"><span>导出内容</span></div>
+            <div class="csub">12 门课 · 读取于 04:52 · 存到「下载 / EVSync」</div>
+            <div class="json">{
+  "courses": [
+    { "name": "高等数学", "day": 1,
+      "time": "08:00 - 08:45" },
+    { "name": "大学英语", "day": 1,
+      "time": "08:55 - 09:40" },
+    …
+  ]
+}</div>
+            <div class="grid2">
+              <div class="btn pri">复制 JSON</div>
+              <div class="btn sec">保存为文件</div>
+            </div>
+            <div class="hr"></div>
+            <div class="btn danger">更新到手环（覆盖当前课表）</div>
+          </div>
+        </div>
+      </div>
+      <div class="anno">
+        <b>破坏性动作离手。</b>原页面把「复制 JSON」（只读）与「更新到手环」（<b>覆盖手环课程</b>）并排等权。<br>
+        「保存为文件」不再是读取成功后动态插进去的幽灵按钮，固定在此处。
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 态 4：导入 · 空态 ================= -->
+  <h2><span class="num">02</span>导入 · 空态</h2>
+  <div class="frames">
+    <div class="frame">
+      <div class="cap"><b>导入课程表</b><span class="tag">第一步：贴 JSON</span></div>
+      <div class="screen L">
+        <div class="topbar">
+          <div class="tbic dim"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="tbtitle">导入课程表</div>
+          <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></div>
+        </div>
+        <div class="body">
+          <div class="card">
+            <div class="ctitle"><span>课程 JSON</span></div>
+            <div class="csub">可直接编辑；工具栏在这一行的上方</div>
+            <div class="json" style="min-height:150px">{
+  "courses": [
+    <span style="color:var(--l-accent)">|</span>
+  ]
+}</div>
+            <div class="res">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v.5M12 11.5v4.5"/></svg>
+              <span>还没解析 —— 粘贴或选择文件后点「解析并预览」</span>
+            </div>
+            <div class="grid2">
+              <div class="btn pri">解析并预览</div>
+              <div class="btn sec">选择文件</div>
+            </div>
+          </div>
+          <div class="card dashed" style="margin-top:8px">
+            <div class="ph-empty">解析后在这里逐门预览、勾选、命名并导入</div>
+          </div>
+        </div>
+      </div>
+      <div class="anno">
+        <b>结果条就在按钮上方。</b>原页面的「准备就绪 / 解析失败」写在<b>页面最底部</b>，而按钮在中部 —— 点完看不到回应。<br>
+        「生成示例课表」已收进顶栏 ⋯（自测功能不占主位）。
+      </div>
+    </div>
+
+    <!-- ================= 态 5：导入 · 已解析 ================= -->
+    <div class="frame">
+      <div class="cap"><b>导入课程表 · 已解析</b><span class="tag new">名称下移 + 缺字段标黄</span></div>
+      <div class="screen L">
+        <div class="topbar">
+          <div class="tbic dim"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="tbtitle">导入课程表</div>
+          <div class="tbic dim"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></div>
+        </div>
+        <div class="body">
+          <div class="card" style="padding:11px 14px">
+            <div class="ctitle"><span>课程 JSON</span></div>
+            <div class="res ok" style="margin-top:8px">
+              <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+              <span>已解析出 <b>4</b> 门课程</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="ctitle"><span>待导入 4 门</span></div>
+            <div class="csub">其中 <b>3</b> 门字段完整 · 缺字段的已标黄</div>
+            <div style="margin-top:8px">
+              <div class="crow"><div class="cb"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+                <div><div class="ct">高等数学</div><div class="cd">星期一 · 08:00 - 08:45 · A楼101</div></div></div>
+              <div class="crow"><div class="cb"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+                <div><div class="ct">大学英语</div><div class="cd">星期一 · 08:55 - 09:40 · B楼205</div></div></div>
+              <div class="crow"><div class="cb"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+                <div><div class="ct">线性代数</div><div class="cd">星期二 · 10:00 - 10:45</div></div></div>
+              <div class="crow bad"><div class="cb"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+                <div><div class="ct">⚠ 缺 time —— 这门会被跳过</div><div class="cd">星期四 · （缺 time）</div></div></div>
+            </div>
+            <div class="linkrow"><span class="link">全选</span><span class="link">全不选</span></div>
+            <div class="hr"></div>
+            <div class="lb">课程表名称（必填）</div>
+            <div class="inp">2026 秋季学期<span class="caret"></span></div>
+            <div class="errtip" style="visibility:hidden">请先填写课程表名称</div>
+            <div class="btn danger" style="margin-top:10px">导入到手环（覆盖当前课表）</div>
+          </div>
+        </div>
+      </div>
+      <div class="anno">
+        <b>名称输入移到导入按钮上方</b>（原来夹在两张卡中间，报错却写在页脚）。<br>
+        未填名时错误就地出现在输入框下方 —— 上方那行红色小字即该位置（此处置为 hidden 以示留白）。<br>
+        缺字段行 <b>整行标黄 + ⚠</b>，不再让完整与不完整的课长得一模一样。
+      </div>
+    </div>
+
+    <!-- ================= 态 6：深色 · 导出已读取 ================= -->
+    <div class="frame">
+      <div class="cap"><b>导出课程表 · 深色</b><span class="tag dark">夜幕蓝</span></div>
+      <div class="screen D">
+        <div class="topbar">
+          <div class="tbic"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="tbtitle">导出课程表</div>
+          <div class="tbic"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></div>
+        </div>
+        <div class="body">
+          <div class="card" style="padding:11px 14px">
+            <div class="ctitle"><span>选择要导出的课表</span><span class="sp"></span>
+              <span class="ico"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></span>
+            </div>
+            <div class="row sel" style="margin-top:4px"><div class="radio"></div><div class="rn">秋季课表</div><span class="badge">使用中</span></div>
+          </div>
+          <div class="card">
+            <div class="ctitle"><span>导出内容</span></div>
+            <div class="csub">12 门课 · 读取于 04:52 · 存到「下载 / EVSync」</div>
+            <div class="json">{
+  "courses": [
+    { "name": "高等数学", "day": 1,
+      "time": "08:00 - 08:45" },
+    …
+  ]
+}</div>
+            <div class="grid2">
+              <div class="btn pri">复制 JSON</div>
+              <div class="btn sec">保存为文件</div>
+            </div>
+            <div class="hr"></div>
+            <div class="btn danger">更新到手环（覆盖当前课表）</div>
+          </div>
+        </div>
+      </div>
+      <div class="anno">
+        <b>深色同构。</b>结果条 / 危险按钮 / JSON 区全部走 <code>--d-*</code> 变量，无硬编码色。
+      </div>
+    </div>
+  </div>
+
+  <h2><span class="num">03</span>字号 token 化对照</h2>
+  <div class="note warn">
+    <b>本页原是全系列唯一 `SP_` 使用数 = 0 的一页</b>，字号全是裸写魔数。本轮一次清零：
+    <ul>
+      <li><code>12.5f</code> × 6 处 → <b>SP_BODY 13f</b>（卡标题）</li>
+      <li><code>12f</code> × 5 处 → <b>SP_CAPTION 11.5f</b>（加载态 / 结果条）</li>
+      <li><code>11f</code> × 1 处（JSON 正文）→ <b>SP_MICRO 10.5f</b></li>
+      <li><code>13f</code> × 3 / <code>11.5f</code> × 2 —— 本来就合规，改用常量</li>
+    </ul>
+  </div>
+  <div class="note ok">
+    <b>零新增 token。</b>圆角只用 R_CARD 14 / R_CTRL 12；间距只用 GAP_XS/SM/MD；热区一律 TOUCH_MIN 44dp。
+  </div>
+</div>
+</body>
+</html>
