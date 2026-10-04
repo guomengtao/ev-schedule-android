@@ -280,7 +280,7 @@ public class HomeActivity extends Activity {
         }), cellLp());
         row1.addView(quickCell(R.drawable.ic_bell_ring, "上课了", new View.OnClickListener() {
             @Override public void onClick(View v) {
-                quickSend("{\"action\":\"call\",\"text\":\"上课了\"}", "上课了");
+                classNotify("上课了", "class_start");
             }
         }), cellLp());
         box.addView(row1);
@@ -294,7 +294,7 @@ public class HomeActivity extends Activity {
         }), cellLp());
         row2.addView(quickCell(R.drawable.ic_bell, "下课了", new View.OnClickListener() {
             @Override public void onClick(View v) {
-                quickSend("{\"action\":\"call\",\"text\":\"下课了\"}", "下课了");
+                classNotify("下课了", "class_end");
             }
         }), cellLp());
         box.addView(row2);
@@ -1025,6 +1025,62 @@ public class HomeActivity extends Activity {
                         }, 3500);
                     }
                 });
+            }
+        });
+    }
+
+    /**
+     * 「上课了 / 下课了」：双通道提醒手环（2026-10-04 起，替代原先直接复用 action=call 的做法）。
+     *
+     * 背景：原先两个按钮都发 {@code {"action":"call"}}，而手环端 call 只做「一次长震动」、
+     * 完全忽略 text —— 于是「上课了」和「呼叫手环」效果一模一样，手环上不会有任何「上课了」提示。
+     *
+     * 现在走两条互补通道：
+     *  ① 系统通知（{@link SyncEngine#notifyWatch} → sendNotify）：手环弹一张通知卡，
+     *     **不依赖手环是否装了 EV 课程表**，是留言页已在用的成熟通道。
+     *  ② EV 协议（interconnect，{@code action=notify}）：新版手环弹提示条 + 上课/下课区分震动，
+     *     并回 {@code {ok:true}}；手机端据回包判定端到端送达。
+     *
+     * 兼容：旧版手环不认 notify（会掉进 import 兜底回 "no courses"）→ 自动回落
+     * {@code action=call}（长震动），保证老用户点了也有反馈、不空点。
+     */
+    private void classNotify(final String label, final String type) {
+        final SyncEngine e = SyncEngine.get(this);
+        if (!e.hasNode()) {
+            miniStatus("手环未连接，无法" + label, Ui.WARN);
+            return;
+        }
+        miniStatus("正在提醒手环「" + label + "」…", Ui.ACCENT);
+
+        // ① 系统通知卡（尽力而为：失败不影响 ② EV 通道，故不给 UI 噪音）
+        final boolean isEnd = "class_end".equals(type);
+        e.notifyWatch(label, isEnd ? "下课了，休息一下吧" : "上课了，看看接下来的课", new SyncEngine.Cb() {
+            @Override public void on(boolean ok, String info) { /* best-effort */ }
+        });
+
+        // ② EV 协议：notify（新版手环弹提示条 + 专用震动）；失败回落 call（长震动）
+        final String json = "{\"action\":\"notify\",\"type\":\"" + type + "\",\"text\":\"" + label + "！\"}";
+        e.sendWake(json, new SyncEngine.Reply() {
+            @Override public void onReply(String r) {
+                boolean ok = true;
+                try {
+                    JSONObject o = new JSONObject(r);
+                    ok = o.optBoolean("ok", true);   // 无 ok 字段按兼容成功
+                } catch (Throwable ignored) {
+                }
+                if (ok) {
+                    miniStatus("「" + label + "」已提醒手环 ✓", Ui.OK);
+                } else {
+                    // 旧版手环不认 notify → 回落长震动，保证有反馈
+                    miniStatus("手环版本较旧，改用震动提醒「" + label + "」…", Ui.MUTED);
+                    quickSend("{\"action\":\"call\",\"text\":\"" + label + "\"}", label, false);
+                }
+            }
+            @Override public void onTimeout(String hint) {
+                miniStatus("手环无回应（" + label + "）", Ui.WARN);
+            }
+            @Override public void onError(String msg) {
+                miniStatus(label + "提醒失败：" + msg, Ui.ERR);
             }
         });
     }
