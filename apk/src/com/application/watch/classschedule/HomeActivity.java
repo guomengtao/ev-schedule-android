@@ -574,6 +574,7 @@ public class HomeActivity extends Activity {
         if (legacy || weekBox == null) {
             return;
         }
+        applyQuickBoxVisibility();
         // 周标签：按 weekOffset 推算周一~周日（点标签回到本周）
         java.util.Calendar mon = java.util.Calendar.getInstance();
         mon.add(java.util.Calendar.DAY_OF_MONTH, -CourseCache.todayIndex() + weekOffset * 7);
@@ -1424,6 +1425,7 @@ public class HomeActivity extends Activity {
             }
         }
         errorCard.setVisibility(View.GONE);
+        applyQuickBoxVisibility();
     }
 
     private void fail(String hint) {
@@ -1445,6 +1447,7 @@ public class HomeActivity extends Activity {
             miniBarView.setVisibility(View.GONE);
         }
         // 连不上也保持课表在屏（默认本地课表兜底），只是迷你条提示未连接
+        applyQuickBoxVisibility();
     }
 
     private void miniStatus(String s, int color) {
@@ -1460,6 +1463,7 @@ public class HomeActivity extends Activity {
 
     /** 迷你条按引擎状态刷新（状态回调驱动；与 ConnectionBar 同一数据源）。 */
     private void refreshMiniFromEngine() {
+        applyQuickBoxVisibility();
         SyncEngine e = SyncEngine.get(this);
         if (e.connected()) {
             int n = e.bandScheduleCount;
@@ -1471,6 +1475,17 @@ public class HomeActivity extends Activity {
             String p = e.connectProgress();
             miniStatus("● " + (p.length() > 0 ? p : "重连中…"), Ui.ACCENT);
         }
+    }
+
+    /**
+     * 首页「呼叫手环」快捷区（呼叫手环 / 上课了 / 留言 / 下课了）全都依赖手环连接——
+     * 未连接时整块隐藏，避免点了只弹「未连接」；连上后自动恢复。
+     */
+    private void applyQuickBoxVisibility() {
+        if (legacy || quickBox == null) {
+            return;
+        }
+        quickBox.setVisibility(SyncEngine.get(this).connected() ? View.VISIBLE : View.GONE);
     }
 
     private void launchEv() {

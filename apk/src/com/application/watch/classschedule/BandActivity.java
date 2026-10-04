@@ -28,6 +28,8 @@ public class BandActivity extends Activity {
     private android.widget.Button heroActionBtn;
     private Runnable heroTick;
     private EditText nickView;
+    /** 未连接手环时整体隐藏的区块容器（昵称 / 首页设置 / 工具箱 / 留言 均为「连上才有意义」） */
+    private LinearLayout cfgBox;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -116,7 +118,12 @@ public class BandActivity extends Activity {
         ConnectionBar.attach(this, root);
         root.addView(Ui.space(this, 10));
 
-        // ===== 昵称（一行式：标签 + 输入框 + 修改按钮） =====
+        // ===== 以下四项都是「连上手环才有意义」的配置/入口，未连接时整块隐藏 =====
+        //       （昵称 / 首页设置 / 工具箱 / 留言；由 applyConnectionVisibility 按连接状态切换）
+        cfgBox = new LinearLayout(this);
+        cfgBox.setOrientation(LinearLayout.VERTICAL);
+
+        // ----- 昵称（一行式：标签 + 输入框 + 修改按钮）-----
         LinearLayout nickCard = Ui.card(this);
         LinearLayout nickRow = new LinearLayout(this);
         nickRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -145,40 +152,42 @@ public class BandActivity extends Activity {
         nbp.leftMargin = Ui.dp(this, 8);
         nickRow.addView(nickBtn, nbp);
         nickCard.addView(nickRow);
-        root.addView(nickCard);
-        root.addView(Ui.space(this, 10));
+        cfgBox.addView(nickCard);
+        cfgBox.addView(Ui.space(this, 6));
 
-        resultView = Ui.text(this, "", 12.5f, Ui.MUTED, false);
-        root.addView(resultView);
-
-        // ===== 首页设置（模板/字号，写回手环） =====
-        root.addView(Ui.space(this, 6));
-        root.addView(Ui.row(this, "首页设置", "显示开关 / 模板 / 字号（写回手环生效）", Ui.TEXT,
+        // ----- 首页设置（模板/字号，写回手环）-----
+        cfgBox.addView(Ui.row(this, "首页设置", "显示开关 / 模板 / 字号（写回手环生效）", Ui.TEXT,
                 new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         startActivity(new Intent(BandActivity.this, HomepageSettingsActivity.class));
                     }
                 }));
+        cfgBox.addView(Ui.space(this, 6));
 
-        // ===== 工具箱（找手机/状态/静音/倒计时） =====
-        root.addView(Ui.space(this, 6));
-        root.addView(Ui.row(this, "工具箱", "找手机 / 手机状态 / 静音 / 倒计时", Ui.TEXT,
+        // ----- 工具箱（找手机/状态/静音/倒计时）-----
+        cfgBox.addView(Ui.row(this, "工具箱", "找手机 / 手机状态 / 静音 / 倒计时", Ui.TEXT,
                 new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         startActivity(new Intent(BandActivity.this, ToolboxActivity.class));
                     }
                 }));
+        cfgBox.addView(Ui.space(this, 6));
 
-        // ===== 留言（原底栏入口取消后的固定去处） =====
-        root.addView(Ui.space(this, 6));
-        root.addView(Ui.row(this, "留言", "给手环发消息 / 查看手环发来的留言", Ui.TEXT,
+        // ----- 留言（原底栏入口取消后的固定去处）-----
+        cfgBox.addView(Ui.row(this, "留言", "给手环发消息 / 查看手环发来的留言", Ui.TEXT,
                 new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         startActivity(new Intent(BandActivity.this, MessageActivity.class));
                     }
                 }));
 
-        // ===== 连接调试：连不上手环时在这里分步排查（主入口放本页，紧挨连接管理） =====
+        root.addView(cfgBox);
+        root.addView(Ui.space(this, 10));
+
+        resultView = Ui.text(this, "", 12.5f, Ui.MUTED, false);
+        root.addView(resultView);
+
+        // ===== 连接调试：连不上手环时在这里分步排查（主入口放本页，紧挨连接管理；始终显示） =====
         root.addView(Ui.space(this, 6));
         root.addView(Ui.row(this, "连接调试", "四步逐步执行，看卡在哪一步", Ui.TEXT,
                 new View.OnClickListener() {
@@ -188,6 +197,7 @@ public class BandActivity extends Activity {
                 }));
 
         refresh();
+        updateHero(); // cfgBox 已建好：立即按当前连接状态设定显隐（前面那次 updateHero 时 cfgBox 还没创建）
         setContentView(Ui.wrapWithBottomBar(this, root, 2));
         Analytics.pageView(this, "/apk/band");
     }
@@ -393,6 +403,17 @@ public class BandActivity extends Activity {
                 @Override public void onClick(View v) { manualSync(); }
             });
         }
+        // 昵称 / 首页设置 / 工具箱 / 留言：只在已连接时显示（未连接时整块收起）
+        applyConnectionVisibility(e.connected());
+    }
+
+    /** 未连接手环时隐藏「连接后才有意义」的区块（昵称 / 首页设置 / 工具箱 / 留言），
+     *  让手环页只剩「连接管理 + 连接调试」；连上后自动恢复显示。 */
+    private void applyConnectionVisibility(boolean connected) {
+        if (cfgBox == null) {
+            return;
+        }
+        cfgBox.setVisibility(connected ? View.VISIBLE : View.GONE);
     }
 
     private void refresh() {
