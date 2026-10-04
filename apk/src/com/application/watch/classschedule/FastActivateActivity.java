@@ -258,7 +258,7 @@ public class FastActivateActivity extends Activity {
 
     // ======================= 呼叫手环 =======================
 
-    /** 推一条手表通知让手环响铃/震动，帮用户在蓝牙范围内找到手环。 */
+    /** 呼叫手环：双通道（① 系统通知卡 + ② EV {@code action=call}），一路断开另一路兜底。 */
     private void callBand() {
         if (!SyncEngine.get(this).hasNode()) {
             resultView.setText("手环未连接，无法呼叫。请先回首页连接手环");
@@ -267,22 +267,21 @@ public class FastActivateActivity extends Activity {
         }
         resultView.setText("正在呼叫手环…");
         resultView.setTextColor(Ui.ACCENT);
-        SyncEngine.get(this).notifyWatch("呼叫手环", "🔔 你的手环在这里！—— 来自手机 Ev课程表同步器",
-                new SyncEngine.Cb() {
-                    @Override public void on(final boolean ok, final String msg) {
-                        runOnUiThread(new Runnable() {
-                            @Override public void run() {
-                                if (ok) {
-                                    resultView.setText("已发送呼叫，看一下手环（会弹通知并震动）");
-                                    resultView.setTextColor(Ui.OK);
-                                } else {
-                                    resultView.setText("呼叫失败：" + msg);
-                                    resultView.setTextColor(Ui.ERR);
-                                }
-                            }
-                        });
+        SyncEngine.get(this).ringBand(new SyncEngine.Cb() {
+            @Override public void on(final boolean ok, final String msg) {
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (ok) {
+                            resultView.setText("已发送呼叫（" + msg + "），看一下手环");
+                            resultView.setTextColor(Ui.OK);
+                        } else {
+                            resultView.setText("呼叫失败：" + msg);
+                            resultView.setTextColor(Ui.ERR);
+                        }
                     }
                 });
+            }
+        });
     }
 
     // ======================= 购买入口 =======================

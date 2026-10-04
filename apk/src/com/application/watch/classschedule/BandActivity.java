@@ -271,7 +271,7 @@ public class BandActivity extends Activity {
         resultView.setTextColor(Ui.OK);
     }
 
-    /** 呼叫手环：action=call（响铃+震动+亮屏+通知）。 */
+    /** 呼叫手环：双通道（① 系统通知卡 + ② EV {@code action=call}），一路断开另一路兜底。 */
     private void callBand() {
         SyncEngine e = SyncEngine.get(this);
         if (!e.hasNode()) {
@@ -281,18 +281,15 @@ public class BandActivity extends Activity {
         }
         resultView.setText("正在呼叫手环…");
         resultView.setTextColor(Ui.ACCENT);
-        e.sendWake("{\"action\":\"call\",\"text\":\"请查看手机\"}", new SyncEngine.Reply() {
-            @Override public void onReply(String r) {
-                resultView.setText("呼叫已送达 ✓ 看看手腕吧");
-                resultView.setTextColor(Ui.OK);
-            }
-            @Override public void onTimeout(String h) {
-                resultView.setText("手环无回应。可到「连接调试」拉起 EV 后重试");
-                resultView.setTextColor(Ui.WARN);
-            }
-            @Override public void onError(String msg) {
-                resultView.setText("发送失败：" + msg);
-                resultView.setTextColor(Ui.ERR);
+        e.ringBand(new SyncEngine.Cb() {
+            @Override public void on(boolean ok, String info) {
+                if (ok) {
+                    resultView.setText("呼叫已送达 ✓（" + info + "）看看手腕吧");
+                    resultView.setTextColor(Ui.OK);
+                } else {
+                    resultView.setText("呼叫失败：" + info + "。可到「连接调试」拉起 EV 后重试");
+                    resultView.setTextColor(Ui.WARN);
+                }
             }
         });
     }

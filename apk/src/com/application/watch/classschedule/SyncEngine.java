@@ -16,6 +16,7 @@ import com.xiaomi.xms.wearable.tasks.OnSuccessListener;
 
 import java.nio.charset.Charset;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 同步引擎：把"连上手环 EV 课程表"这件事封装成 4 个可观测的步骤。
@@ -1429,6 +1430,44 @@ public final class SyncEngine {
         } catch (Throwable t) {
             cb.on(false, humanize(t));
         }
+    }
+
+    /**
+     * 「呼叫手环」双通道（2026-10-04 起）—— 两路互补，任一路断开另一路兜底：
+     *   ① 系统通知卡 {@link #notifyWatch} → {@link NotifyApi#sendNotify}：
+     *      走小米运动健康通知转发，**完全不经过 EV 的 interconnect 点对点通道**，
+     *      因此**不依赖手环上是否装了 EV 课程表**；
+     *   ② EV 协议 {@code action=call}（interconnect）：手环端 EV 响铃 + 长震动，
+     *      冷启动无回应时 {@link #sendWake} 会自动拉起 EV 并重试 3 次。
+     *
+     * 只要任一路送达，手环就会震动/弹卡提醒；两路都失败才算呼叫失败。
+     * 结果经 {@code cb} 合并回报：{@code ok} = 至少一路送达（① 成功即视为已呼叫到手环）。
+     */
+    public void ringBand(final Cb cb) {
+        if (nodeId == null) {
+            cb.on(false, "手环未连接");
+            return;
+        }
+        // ① 系统通知卡（best-effort：结果只用于文案，不阻塞 ②；不依赖手环装没装 EV）
+        final AtomicBoolean notifyOk = new AtomicBoolean(false);
+        notifyWatch("呼叫手环", "🔔 你的手环在这里 —— 来自手机 Ev课程表同步器", new Cb() {
+            @Override public void on(boolean ok, String msg) { notifyOk.set(ok); }
+        });
+
+        // ② EV 协议 action=call（响铃 + 长震动；超时自动拉起 EV 重试 3 次）
+        sendWake("{\"action\":\"call\",\"text\":\"请查看手机\"}", new Reply() {
+            @Override public void onReply(String r) {
+                cb.on(true, notifyOk.get() ? "通知卡 + 震动" : "震动提醒");
+            }
+            @Override public void onTimeout(String hint) {
+                boolean n = notifyOk.get();
+                cb.on(n, n ? "通知卡" : "EV 无回应");
+            }
+            @Override public void onError(String msg) {
+                boolean n = notifyOk.get();
+                cb.on(n, n ? "通知卡" : "EV 未连接（" + msg + "）");
+            }
+        });
     }
 
     public void evInstalled(final Cb cb) {

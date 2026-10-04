@@ -481,11 +481,12 @@ public class HomeActivity extends Activity {
         });
     }
 
-    /** 呼叫手环：与设备卡「呼叫手环」按钮同一条 EV 指令（action=call）——
-     *  手环响铃、震动、亮屏并弹通知提示，结果反馈在首页 mini 状态条上。
-     *  蓝牙未连接时 call 发不出去 → 弹窗明确提醒，并提供一键去连接。 */
+    /** 呼叫手环：双通道（① 系统通知卡 + ② EV {@code action=call}），一路断开另一路兜底——
+     *  手环响铃、震动、亮屏并弹提示，结果反馈在首页 mini 状态条上。
+     *  蓝牙未连接时两路都发不出去 → 弹窗明确提醒，并提供一键去连接。 */
     private void callBand() {
-        if (!SyncEngine.get(this).hasNode()) {
+        final SyncEngine e = SyncEngine.get(this);
+        if (!e.hasNode()) {
             // 共用美化弹窗：图标章 + 提示 + 去连接
             Dialogs.confirm(this, R.drawable.ic_unlink, 0,
                     "手环未连接",
@@ -498,7 +499,16 @@ public class HomeActivity extends Activity {
                     });
             return;
         }
-        quickSend("{\"action\":\"call\",\"text\":\"请查看手机\"}", "呼叫手环");
+        miniStatus("正在呼叫手环…", Ui.ACCENT);
+        e.ringBand(new SyncEngine.Cb() {
+            @Override public void on(boolean ok, String info) {
+                if (ok) {
+                    miniStatus("已呼叫手环 ✓（" + info + "）", Ui.OK);
+                } else {
+                    miniStatus("呼叫手环失败：" + info, Ui.WARN);
+                }
+            }
+        });
     }
 
     private void renderDateStrip() {
@@ -971,12 +981,10 @@ public class HomeActivity extends Activity {
 
     // ======================= 快捷操作 =======================
 
-    /** 呼叫手环 / 上课了 / 下课了：走 sendWake（超时会自动拉起手环 EV 并重试 3 次） */
-    private void quickSend(final String json, final String label) {
-        quickSend(json, label, true);
-    }
-
     /**
+     * 发一条 EV 指令（超时会自动拉起手环 EV 并重试 3 次）。
+     * 现仅由「上课了/下课了」在旧版手环不认 notify 时回落调用。
+     *
      * @param allowWakeRetry SDK 直接报错时，是否补一次「先拉起手环 EV → 再发」。
      *   对端快应用没起来时 sendMessage 会【立刻失败】（sendMessage failed），
      *   而 sendWake 只在超时时才拉起对端，覆盖不到这种立即失败 → 这里补一步。
