@@ -86,10 +86,10 @@
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
         <activity android:name="com.application.watch.classschedule.JsonEditorActivity"
-            android:exported="true"
+            android:exported="false"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.CourseEditActivity"
-            android:exported="true"
+            android:exported="false"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.DebugActivity"
             android:exported="true"
@@ -107,7 +107,7 @@
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
         <activity android:name="com.application.watch.classschedule.TransferActivity"
-            android:exported="true"
+            android:exported="false"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.FastActivateActivity"
             android:exported="true"

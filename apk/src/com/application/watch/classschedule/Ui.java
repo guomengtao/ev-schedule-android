@@ -44,6 +44,9 @@ public final class Ui {
     public static int OK;
     public static int WARN;
     public static int ERR;
+    public static int ON_ACCENT;     // 主色底上的文字（保证对比度）
+    public static int OK_LIGHT;      // 假期/成功语义淡背景
+    public static int WARN_LIGHT;    // 调休/警告语义淡背景
     public static int themeVersion = 0;
     private static boolean dark = true;
 
@@ -61,6 +64,9 @@ public final class Ui {
             0xFF16A34A, // OK
             0xFFF59E0B, // WARN
             0xFFDC2626, // ERR
+            0xFFFFFFFF, // ON_ACCENT
+            0x2E22C55E, // OK_LIGHT
+            0x40FDE68A, // WARN_LIGHT
     };
 
     // ============ 深色「夜幕蓝」（ACCENT 提亮一档保证对比度） ============
@@ -77,6 +83,9 @@ public final class Ui {
             0xFF34C759, // OK
             0xFFFFB020, // WARN
             0xFFFF6B6B, // ERR
+            0xFFFFFFFF, // ON_ACCENT
+            0x2E22C55E, // OK_LIGHT
+            0x40FDE68A, // WARN_LIGHT
     };
 
     /** 7 色语义课程区分色（浅/深两套主题共用；同一门课永远同色） */
@@ -89,6 +98,39 @@ public final class Ui {
             0xFFFF7AA8, // c-pink
             0xFFFF6B6B, // c-red
     };
+
+    // ============ 排版 / 间距 / 圆角 令牌（2026-10-03 首页精细化新增）============
+    /**
+     * 字号阶梯：首页原散落 11 档（26/16/15/13/12.5/12/11.5/11/10.5/10/9），
+     * 相邻档差 <1sp 视觉无差别纯属噪音 → 收敛为 7 档。新页面一律用这些常量。
+     */
+    public static final float SP_DISPLAY = 22f;   // 页面大标题
+    public static final float SP_TITLE = 17f;     // 分区标题 / 顶栏
+    public static final float SP_SUBTITLE = 15f;  // 次标题 / 日期数字
+    public static final float SP_BODY = 13f;      // 正文 / 按钮 / 课表名
+    public static final float SP_CAPTION = 11.5f; // 次要说明 / 备注 / 星期
+    public static final float SP_MICRO = 10.5f;   // 时间轴 / 地点 / 表头
+    public static final float SP_TAB = 10.5f;     // 底部导航
+    public static final float SP_NUM = 16f;       // 日期/数值强调（正文加一级）
+
+    /** 行高倍数：中文正文 1.5 起，小字 ~1.48，标题收紧到 1.27 */
+    public static final float LH_DISPLAY = 1.27f;
+    public static final float LH_TITLE = 1.41f;
+    public static final float LH_SUBTITLE = 1.47f;
+    public static final float LH_BODY = 1.54f;
+    public static final float LH_CAPTION = 1.52f;
+    public static final float LH_MICRO = 1.48f;
+    /** 课程块内空间紧张，适度收紧 */
+    public static final float LH_TIGHT = 1.33f;
+
+    /** 间距栅格（4dp 基线）：首页所有间距都应落在这四档上 */
+    public static final int GAP_XS = 4, GAP_SM = 8, GAP_MD = 12, GAP_LG = 16;
+
+    /** 圆角三档（原 20/16/15/14/12/8 六种 → 收敛） */
+    public static final int R_CARD = 16, R_CTRL = 12, R_BLOCK = 6;
+
+    /** 最小触摸热区（Material 建议值） */
+    public static final int TOUCH_MIN = 44;
 
     public static boolean isDark() {
         return dark;
@@ -131,7 +173,7 @@ public final class Ui {
         dark = night;
         int[] p = dark ? D : L;
         // custom palette (WatchAppearance) has 7 elements: {bg, card, card2, line, text, muted, accent}
-        // built-in palette has 12: {bg, canvas, card, card2, line, text, muted, accent, accentLight, ok, warn, err}
+        // built-in palette has 15: {bg, canvas, card, card2, line, text, muted, accent, accentLight, ok, warn, err, onAccent, okLight, warnLight}
         if (custom != null) {
             BG = custom[0];
             CANVAS = p[1];                          // custom palette has no canvas
@@ -156,6 +198,10 @@ public final class Ui {
         OK = p[9];
         WARN = p[10];
         ERR = p[11];
+        // custom palette has no ON_ACCENT / OK_LIGHT / WARN_LIGHT → always use system palette
+        ON_ACCENT = p[12];
+        OK_LIGHT = p[13];
+        WARN_LIGHT = p[14];
         // 系统控件（Switch / AlertDialog / EditText 光标等）也要跟着换：
         // 必须在 setContentView 之前 setTheme —— 每个页面都是先走 Ui.screen()，恰好满足
         if (c instanceof Activity) {
@@ -206,6 +252,45 @@ public final class Ui {
         TextView t = text(c, s, size, color, false);
         t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         return t;
+    }
+
+    /**
+     * 带行高的文本（中文精致度的关键）：Ui.text() 默认不设行高，中文会挤成一团。
+     * add = sp × (mult − 1)，按当前 density 换算成 dp。
+     */
+    public static TextView textLh(Context c, String s, float sp, int color,
+                                  boolean bold, float mult) {
+        TextView t = text(c, s, sp, color, bold);
+        setLineHeight(c, t, sp, mult);
+        return t;
+    }
+
+    /** medium 字重 + 行高（中文标题主用：bold 是伪粗体，发糊）*/
+    public static TextView textMediumLh(Context c, String s, float sp, int color, float mult) {
+        TextView t = textMedium(c, s, sp, color);
+        setLineHeight(c, t, sp, mult);
+        return t;
+    }
+
+    /** 按「字号 × 倍数」设置行高；mult=1 表示用系统默认 */
+    public static void setLineHeight(Context c, TextView t, float sp, float mult) {
+        float add = sp * (mult - 1f);
+        t.setLineSpacing(dp(c, (int) Math.round(add)), 1f);
+    }
+
+    /**
+     * 把小视觉元素撑到 ≥TOUCH_MIN 热区。
+     * ⚠️ 前提：调用方必须把 LayoutParams 一起放大到 TOUCH_MIN，
+     * 固定 LP 下只加 padding 不会扩大点击区（padding 在背景之内）。
+     */
+    public static void ensureTouch(Context c, View v, int visualDp) {
+        int pad = (TOUCH_MIN - visualDp) / 2;
+        if (pad <= 0) {
+            return;
+        }
+        int p = dp(c, pad);
+        v.setPadding(v.getPaddingLeft() + p, v.getPaddingTop() + p,
+                v.getPaddingRight() + p, v.getPaddingBottom() + p);
     }
 
     /**

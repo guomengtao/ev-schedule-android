@@ -44,6 +44,14 @@ public class ScheduleListActivity extends Activity {
     private boolean syncPendingConnect = false;
     private String editingId;
     private long lastPullAt = 0;
+    /** 本次会话已做过一次自动补齐（onResume/连上瞬间强制一次，其余走 30s 节流） */
+    private boolean pulledThisSession = false;
+    /** 连接状态边沿检测：断开→连上时强制补齐一次 */
+    private boolean wasConnected = false;
+    /** 上次 render() 时的课表总数：状态回调里据此决定全量重建还是只刷状态条（防闪烁） */
+    private int lastRenderedCount = -1;
+    /** 自动补齐失败后允许点状态条重试 */
+    private boolean pullRetryArmed = false;
     /** 头部设备条：明确「当前某某手环的课表」+ 切换入口（P3 多设备分组） */
     private LinearLayout deviceBar;
     private TextView deviceBarTitle;
@@ -56,18 +64,35 @@ public class ScheduleListActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         ScheduleStore.ensureInitialized(this);
+        if (ScheduleStore.lastReadCorrupt) {
+            ScheduleStore.lastReadCorrupt = false;
+            Toast.makeText(this, "本地课表数据曾损坏，已保留损坏备份；连接手环后可重新拉取",
+                    Toast.LENGTH_LONG).show();
+        }
         buildUi();
         // 状态回调：手环真实套数读到后刷新分组标题；并把「手环上有、本机没有」的课表
         // 自动读取到本机（入库即标记 source=sync，仍属「手环课表」组，无需手动操作）
         SyncEngine.get(this).addStatusCallback(new Runnable() {
             @Override public void run() {
-                render();
-                // 自动补齐节流：30s 一次即可，避免频繁重建列表影响点击
                 SyncEngine e = SyncEngine.get(ScheduleListActivity.this);
+                boolean nowConnected = e.connected();
+                // 连接边沿：断开→连上 强制补齐一次（不计 30s 节流），否则刚在手环建的课表要等最多 30s
+                boolean edge = nowConnected && !wasConnected;
+                wasConnected = nowConnected;
+                // 列表数据没变（课表总数不变）时只刷新状态条/设备条，不全量重建列表（防闪烁）
+                int n = ScheduleStore.list(ScheduleListActivity.this).size();
+                if (n != lastRenderedCount) {
+                    render();
+                } else {
+                    refreshSyncView();
+                    renderDeviceBar();
+                }
+                // 自动补齐节流：常规 30s 一次；首次进页/刚连上时立即触发
                 long now = System.currentTimeMillis();
-                if (e.hasNode() && now - lastPullAt > 30000) {
+                if (e.hasNode() && (edge || !pulledThisSession || now - lastPullAt > 30000)) {
                     lastPullAt = now;
-                    e.pullMissingFromWatch(ScheduleListActivity.this);
+                    pulledThisSession = true;
+                    startPull(e);
                 }
             }
         });
@@ -144,6 +169,20 @@ public class ScheduleListActivity extends Activity {
         deviceBarTitle = Ui.text(this, "", 12.5f, Ui.TEXT, true);
         deviceBar.addView(deviceBarTitle, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        // 手动刷新：强制向手环要一次清单并补齐（点击带旋转反馈；子控件 clickable 会消费点击，
+        // 不会误触发整条的展开/收起）
+        ImageView refreshBtn = new ImageView(this);
+        refreshBtn.setImageResource(R.drawable.ic_refresh_cw);
+        refreshBtn.setColorFilter(Ui.ACCENT);
+        refreshBtn.setPadding(Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 2), Ui.dp(this, 4));
+        refreshBtn.setContentDescription("刷新手环课表清单");
+        refreshBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                v.animate().rotation(v.getRotation() + 360f).setDuration(700).start();
+                forcePull("正在刷新手环课表清单…");
+            }
+        });
+        deviceBar.addView(refreshBtn);
         // 「切换 ›」按钮已移除：在线状态直接在标题前用绿色实心圆点标识，整条可点进连接页
         root.addView(deviceBar, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
@@ -154,6 +193,16 @@ public class ScheduleListActivity extends Activity {
         root.addView(listBox);
 
         statusView = Ui.text(this, "", 12f, Ui.MUTED, false);
+        // 自动补齐失败后：点状态条重试（平时无动作）
+        statusView.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (!pullRetryArmed) {
+                    return;
+                }
+                pullRetryArmed = false;
+                forcePull(null);
+            }
+        });
         root.addView(statusView);
         root.addView(Ui.space(this, 10));
 
@@ -189,8 +238,13 @@ public class ScheduleListActivity extends Activity {
         renderDeviceBar();
         final String activeId = ScheduleStore.activeId(this);
         List<ScheduleStore.Schedule> all = ScheduleStore.list(this);
+        lastRenderedCount = all.size();
         if (all.isEmpty()) {
-            listBox.addView(Ui.text(this, "还没有课表，点下方按钮新建", 12.5f, Ui.MUTED, false));
+            // 空态按语境给引导：连着手环 = 手环侧是空的；没连 = 引导连接后自动导入
+            String hint = SyncEngine.get(this).connected()
+                    ? "手环上还没有课表 · 可在下方新建本地课表"
+                    : "还没有课表 · 连接手环后自动导入手环已有课表，或点下方按钮新建";
+            listBox.addView(Ui.text(this, hint, 12.5f, Ui.MUTED, false));
             return;
         }
         SyncEngine e = SyncEngine.get(this);
@@ -230,8 +284,11 @@ public class ScheduleListActivity extends Activity {
                 label = "未识别手环（旧数据，连接后归位）";
             } else {
                 label = devLabel(key, g);
-                // 已连接且组名与手环名一致 → 视为「它的课程」，deviceBar 点击展开此组
-                if (e.connected() && !curName.isEmpty() && label.startsWith(curName)) {
+                // 仅当手环端未回 get_device_id（curDev 为空）时，才按「设备展示名精确相等」
+                // 兜底归组；deviceId 已知时一律走上面的精确匹配，绝不前缀猜测
+                //（「小米手环」与「小米手环 9 Pro」前缀重叠，startsWith 会互相串组）。
+                if (e.connected() && curDev.isEmpty() && !curName.isEmpty()
+                        && curName.equals(devName(g))) {
                     curDeviceGroupKey = key;
                 }
             }
@@ -281,10 +338,10 @@ public class ScheduleListActivity extends Activity {
         deviceBarTitle.setText(withGreenDot(title));
     }
 
-    /** 标题开头加一个绿色实心圆点（●），仅圆点着色，表示在线 */
+    /** 标题开头加一个绿色实心圆点（●），仅圆点着色，表示在线（颜色走主题 token，勿写死） */
     private CharSequence withGreenDot(String text) {
         SpannableString ss = new SpannableString("● " + text);
-        ss.setSpan(new ForegroundColorSpan(0xFF4CAF50), 0, 1, SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
+        ss.setSpan(new ForegroundColorSpan(Ui.OK), 0, 1, SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
         return ss;
     }
 
@@ -323,39 +380,19 @@ public class ScheduleListActivity extends Activity {
 
     /** 非当前设备的分组标题：手环展示名 + 设备 ID 后4位（取组内第一个带设备名的课表） */
     private String devLabel(String devId, List<ScheduleStore.Schedule> g) {
-        String nm = "";
-        for (ScheduleStore.Schedule s : g) {
-            if (!s.deviceName.isEmpty()) {
-                nm = s.deviceName;
-                break;
-            }
-        }
+        String nm = devName(g);
         String tail = tail4(devId);
         return (nm.isEmpty() ? "手环" : nm) + (tail.isEmpty() ? "" : " ··" + tail);
     }
 
-    /** 只存在于手环、本机还没有的课表：显示名字 + 提示（不需要手动点，进页面会自动读取） */
-    private View bandOnlyCard(final String name) {
-        LinearLayout card = Ui.card(this);
-        card.addView(Ui.text(this, name, 14.5f, Ui.TEXT, true));
-        TextView sub = Ui.text(this, "手环课表 · 正在自动读取到本机…", 11.5f, Ui.MUTED, false);
-        sub.setPadding(0, Ui.dp(this, 4), 0, 0);
-        card.addView(sub);
-        return card;
-    }
-
-    /** 分组小标题：名称 + 数量 */
-    private View sectionHead(String label, int n) {
-        TextView t = Ui.text(this, label + " · " + n + " 套", 11.5f, Ui.MUTED, true);
-        t.setPadding(Ui.dp(this, 2), 0, 0, Ui.dp(this, 6));
-        return t;
-    }
-
-    /** 分组小标题（数量已含在 label 里，不重复追加） */
-    private View sectionHead(String label) {
-        TextView t = Ui.text(this, label, 11.5f, Ui.MUTED, true);
-        t.setPadding(Ui.dp(this, 2), 0, 0, Ui.dp(this, 6));
-        return t;
+    /** 组内第一个非空设备展示名（分组的「精确相等」兜底归组与展示共用） */
+    private String devName(List<ScheduleStore.Schedule> g) {
+        for (ScheduleStore.Schedule s : g) {
+            if (!s.deviceName.isEmpty()) {
+                return s.deviceName;
+            }
+        }
+        return "";
     }
 
     /** 组间分割线 */
@@ -494,6 +531,48 @@ public class ScheduleListActivity extends Activity {
                         render();
                     }
                 });
+    }
+
+    // ======================= 操作：从手环自动补齐 =======================
+
+    /** 强制补齐一次（手动刷新 / 失败重试共用）：绕过 30s 节流与「本会话已拉过」标记 */
+    private void forcePull(String busyHint) {
+        pullRetryArmed = false;
+        SyncEngine e = SyncEngine.get(this);
+        if (!e.hasNode()) {
+            status("手环未连接 · 连接后自动拉取课表清单", Ui.WARN);
+            return;
+        }
+        lastPullAt = 0;
+        pulledThisSession = false;
+        if (busyHint != null) {
+            status(busyHint, Ui.ACCENT);
+        }
+        // 先要一次清单（结果经状态回调触发补齐），避免清单未就绪时空跑
+        e.refreshBandScheduleCount();
+    }
+
+    /** 自动补齐（带 UI 反馈）：加载中 → 成功 N 套 / 失败可点状态条重试 */
+    private void startPull(final SyncEngine e) {
+        if (e.isPullingMissing()) {
+            return;
+        }
+        status("正在从手环读取课表清单…", Ui.ACCENT);
+        e.pullMissingFromWatch(this, new SyncEngine.PullCallback() {
+            @Override public void onStart() { }
+            @Override public void onDone(int pulled, int failed) {
+                if (pulled > 0) {
+                    status("已从手环同步 " + pulled + " 套课表到本机 ✓", Ui.OK);
+                    Toast.makeText(ScheduleListActivity.this,
+                            "已从手环同步 " + pulled + " 套课表", Toast.LENGTH_SHORT).show();
+                } else if (failed > 0) {
+                    pullRetryArmed = true;
+                    status("从手环读取课表失败（" + failed + " 项）· 点此重试", Ui.ERR);
+                } else {
+                    status("", Ui.MUTED);
+                }
+            }
+        });
     }
 
     // ======================= 操作：同步到手环 =======================

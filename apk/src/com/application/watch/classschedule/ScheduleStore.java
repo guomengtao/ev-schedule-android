@@ -29,12 +29,21 @@ import java.util.List;
  *   - 手环本地课表按名称管理（单机），多设备隔离完全在安卓侧：安卓把「设备A的课表」
  *     与「设备B的课表」存成两份，分别 import 回各自连接的设备（BLE 路由分开）。
  *
- * ⚠️ 所有方法吞异常：存储是锦上添花，绝不能把 App 搞崩。
+ * ⚠️ 所有方法吞异常（绝不能把 App 搞崩），但不再「无声失败」：
+ *   - 读到损坏数据 → 备份原始内容到 KEY_CORRUPT + 置 lastReadCorrupt（UI 层提示后复位）
+ *   - 写盘异常 → 置 lastWriteFailed（调用方可感知）
  */
 public final class ScheduleStore {
 
     private static final String PREF = "ev_schedules";
     private static final String KEY_DATA = "data";
+    /** 存储损坏时原始内容的备份 key（只备份一次，供人工找回；App 侧重新初始化） */
+    private static final String KEY_CORRUPT = "corrupt_backup";
+
+    /** 最近一次读取发现存储损坏并已备份重建（UI 层读后应提示用户并复位） */
+    public static volatile boolean lastReadCorrupt = false;
+    /** 最近一次写盘失败（SharedPreferences.apply 异步，这里只标记提交异常；UI 层可提示） */
+    public static volatile boolean lastWriteFailed = false;
 
     public static final String SOURCE_LOCAL = "local";
     public static final String SOURCE_SYNC = "sync";
@@ -589,7 +598,20 @@ public final class ScheduleStore {
             SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
             String raw = sp.getString(KEY_DATA, "");
             if (raw.length() > 0) {
-                return new JSONObject(raw);
+                try {
+                    return new JSONObject(raw);
+                } catch (Throwable bad) {
+                    // 数据损坏：不静默清空——先备份原始内容（只备份一次），再重建空库。
+                    // 否则用户表现为「课表列表无故清空」，排查时连证据都没有。
+                    lastReadCorrupt = true;
+                    try {
+                        if (sp.getString(KEY_CORRUPT, "").length() == 0) {
+                            sp.edit().putString(KEY_CORRUPT, raw).apply();
+                        }
+                        sp.edit().remove(KEY_DATA).apply();
+                    } catch (Throwable ignored) {
+                    }
+                }
             }
         } catch (Throwable ignored) {
         }
@@ -606,7 +628,9 @@ public final class ScheduleStore {
         try {
             c.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
                     .putString(KEY_DATA, root.toString()).apply();
+            lastWriteFailed = false;
         } catch (Throwable ignored) {
+            lastWriteFailed = true;
         }
     }
 

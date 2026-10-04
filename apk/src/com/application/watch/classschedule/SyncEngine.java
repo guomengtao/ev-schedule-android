@@ -576,6 +576,20 @@ public final class SyncEngine {
     public int bandCurrent = -1;
     private boolean pullingMissing = false;
     private int pulledCount = 0;
+    private int pullFailCount = 0;
+
+    /** 自动补齐的进度回调（仅注册方收到，主线程回调）；给「课程表」Tab 做加载/成功/失败提示用 */
+    public interface PullCallback {
+        /** 开始拉取 */
+        void onStart();
+        /** 结束：pulled=本次成功入库套数，failed=超时/失败项数（0 = 全部顺利或本机已齐） */
+        void onDone(int pulled, int failed);
+    }
+
+    private volatile PullCallback pullCb = null;
+
+    /** 是否正在自动补齐（UI 显示加载态用） */
+    public boolean isPullingMissing() { return pullingMissing; }
 
     /** 注册状态刷新回调；连接进度 / 心跳 / 套数刷新都会触发（主线程）。重复注册会重复回调。 */
     public void addStatusCallback(Runnable r) {
@@ -693,21 +707,46 @@ public final class SyncEngine {
     /** 自动把「手环上有、本机还没有」的课表读到本机（按清单下标逐个 export → 入库）。
      *  全部标记为 source=sync，归属「手环课表」组；静默执行，单例锁防重复跑。 */
     public void pullMissingFromWatch(final Context c) {
+        pullMissingFromWatch(c, null);
+    }
+
+    /** 同上，带进度回调（onStart/onDone 均在主线程；cb 只保留最近一次注册的）。 */
+    public void pullMissingFromWatch(final Context c, final PullCallback cb) {
         if (nodeId == null || bandScheduleNames == null || pullingMissing) {
             return;
         }
         pullingMissing = true;
         pulledCount = 0;
+        pullFailCount = 0;
+        pullCb = cb;
+        if (cb != null) {
+            main.post(new Runnable() {
+                @Override public void run() {
+                    try { cb.onStart(); } catch (Throwable ignored) { }
+                }
+            });
+        }
         pullNextMissing(c, 0);
     }
 
     private void pullNextMissing(final Context c, final int i) {
         if (i >= bandScheduleNames.length) {
             pullingMissing = false;
+            final PullCallback cb = pullCb;
+            pullCb = null;
+            final int pulled = pulledCount;
+            final int failed = pullFailCount;
             // ⚠️ 只在真的拉到课表时才 notify：否则「通知 → 回调 → 再补齐（瞬间完成）」会
             // 形成主线程死循环，界面直接卡死、所有按钮失灵。
             if (pulledCount > 0) {
                 notifyStatus();
+            }
+            if (cb != null) {
+                main.post(new Runnable() {
+                    @Override public void run() {
+                        try { cb.onDone(pulled, failed); } catch (Throwable ignored) { }
+                    }
+                });
             }
             return;
         }
@@ -730,8 +769,8 @@ public final class SyncEngine {
                 }
                 pullNextMissing(c, i + 1);
             }
-            @Override public void onTimeout(String hint) { pullNextMissing(c, i + 1); }
-            @Override public void onError(String msg) { pullNextMissing(c, i + 1); }
+            @Override public void onTimeout(String hint) { pullFailCount++; pullNextMissing(c, i + 1); }
+            @Override public void onError(String msg) { pullFailCount++; pullNextMissing(c, i + 1); }
         });
     }
 
@@ -924,6 +963,11 @@ public final class SyncEngine {
         if (low.contains("not found") || low.contains("unavailable")) {
             return "服务不可用";
         }
+        // 穿戴 SDK 通道没建立时会直接报 "sendMessage failed"：
+        // 它短且无冒号，会掉进下面兜底分支把英文糊给用户，必须先拦掉
+        if (low.contains("sendmessage failed") || low.contains("send message failed")) {
+            return "手环通道未建立";
+        }
         // 兜底：只有 message 足够短、且不含类名前缀时才敢直接用，否则给通用文案
         if (msg.length() > 0 && msg.length() <= 40 && msg.indexOf(':') < 0) {
             return msg;
@@ -942,6 +986,9 @@ public final class SyncEngine {
         }
         if (low.contains("signature")) {
             return "APK 与手环端签名不一致，无法互通。请安装与手环匹配的版本。";
+        }
+        if (low.contains("sendmessage failed") || low.contains("send message failed")) {
+            return "手机到手环的通道还没建立。请在「小米运动健康」确认手环已连接，并在手表上打开一次「EV 课程表」，然后重试。";
         }
         return "请安装并打开「小米运动健康」App，并让它在后台运行";
     }
