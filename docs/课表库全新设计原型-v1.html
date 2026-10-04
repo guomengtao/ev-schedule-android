@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Ev 课程表 · 课表库页面 全新设计原型 v1</title>
+<style>
+  :root{
+    /* ===== 浅色「晴空蓝」—— 取自 Ui.java 权威 token ===== */
+    --l-bg:#F4F7FB; --l-canvas:#E9EAEF; --l-card:#FFFFFF; --l-card2:#EAF0F8;
+    --l-line:#E3EAF3; --l-text:#0F172A; --l-muted:#64748B;
+    --l-accent:#2F6BFF; --l-accentLight:#EBF0FF;
+    --l-ok:#16A34A; --l-warn:#F59E0B; --l-err:#DC2626; --l-onAccent:#FFFFFF;
+    --l-okLight:rgba(34,197,94,.18); --l-warnLight:rgba(253,230,138,.25);
+    /* ===== 深色「夜幕蓝」 ===== */
+    --d-bg:#0B1020; --d-canvas:#0B1020; --d-card:#151C30; --d-card2:#1C2542; --d-line:#27314C;
+    --d-text:#E9EEF9; --d-muted:#8695B4; --d-accent:#5B9BFF; --d-accentLight:#1A2544;
+    --d-ok:#34C759; --d-warn:#FFB020; --d-err:#FF6B6B;
+    --d-okLight:rgba(52,199,89,.18); --d-warnLight:rgba(255,176,32,.18);
+    /* 文档底板 */
+    --doc-bg:#eef1f6; --doc-fg:#1a2233; --doc-muted:#5c6779; --doc-line:#d5dbe6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--doc-bg); color:var(--doc-fg);
+    padding:40px 24px 80px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px;margin:0 auto}
+  h1{font-size:26px;font-weight:600;letter-spacing:.2px}
+  h2{font-size:19px;font-weight:600;margin:52px 0 6px;padding-top:18px;border-top:2px solid var(--doc-line)}
+  h2 .num{color:var(--l-accent);font-weight:600;margin-right:8px}
+  h3{font-size:15px;font-weight:600;margin:26px 0 10px}
+  .sub{color:var(--doc-muted);font-size:13.5px;margin-top:8px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12px;padding:4px 10px;border-radius:999px;background:#fff;border:1px solid var(--doc-line);color:var(--doc-muted)}
+  .chip b{color:var(--l-accent);font-weight:600}
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--doc-line);vertical-align:top}
+  th{background:#f3f6fb;font-weight:600;color:var(--doc-muted);font-size:12px}
+  td code,.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    background:#eef2f8;padding:1px 5px;border-radius:4px;color:#33415c}
+  .note{margin:16px 0;padding:13px 16px;border-radius:10px;font-size:13px;border:1px solid var(--doc-line);background:#fff}
+  .note.warn{background:#fff8ec;border-color:#f2d9ad}
+  .note.ok{background:#eefaf1;border-color:#bfe6c9}
+  .note b{font-weight:600}
+  ul{margin:10px 0 0 20px} li{margin:5px 0;font-size:13.5px}
+
+  /* ===== 手机框 ===== */
+  .frames{display:flex;flex-wrap:wrap;gap:34px;margin-top:26px;align-items:flex-start}
+  .frame{width:360px}
+  .frame .cap{font-size:12.5px;color:var(--doc-muted);margin-bottom:9px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .frame .cap b{color:var(--doc-fg);font-weight:600}
+  .tag{font-size:10.5px;padding:2px 7px;border-radius:5px;background:var(--l-accentLight);color:var(--l-accent);font-weight:600}
+  .tag.dark{background:#20293f;color:#8fb4ff}
+  .tag.new{background:rgba(22,163,74,.14);color:var(--l-ok)}
+  .screen{
+    width:360px;height:640px;border-radius:22px;overflow:hidden;position:relative;
+    box-shadow:0 18px 40px -12px rgba(20,32,60,.32),0 0 0 1px rgba(20,32,60,.06);
+    display:flex;flex-direction:column;
+  }
+
+  /* ---- 通用原子 ---- */
+  .L{background:var(--l-bg)} .D{background:var(--d-bg)}
+  .body{flex:1;overflow:hidden;display:flex;flex-direction:column}
+  .scroll{flex:1;overflow:hidden}
+  .pad{padding:0 16px}
+
+  /* ---- 顶栏 44dp ---- */
+  .topbar{height:44px;display:flex;align-items:center;gap:8px;padding:0 16px;flex:0 0 auto}
+  .tbtitle{font-size:17px;font-weight:600;color:var(--l-text);flex:1}
+  .icbtn{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+    background:var(--l-card2);flex:0 0 auto}
+  .icbtn svg{width:17px;height:17px;stroke:var(--l-accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- 设备条（合并原 ConnectionBar + deviceBar）---- */
+  .devbar{margin:2px 16px 0;display:flex;align-items:center;gap:8px;
+    background:var(--l-card);border:1px solid var(--l-line);border-radius:12px;
+    padding:10px 12px;box-shadow:0 3px 10px -8px rgba(20,32,60,.2)}
+  .devdot{width:8px;height:8px;border-radius:50%;background:var(--l-ok);flex:0 0 auto}
+  .devdot.off{background:var(--l-muted)}
+  .devname{font-size:12.5px;font-weight:600;color:var(--l-text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .devname.off{font-weight:500;color:var(--l-muted)}
+  .devcount{font-size:11px;font-weight:600;color:var(--l-accent);background:var(--l-accentLight);
+    padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .devref{width:26px;height:26px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .devref svg{width:15px;height:15px;stroke:var(--l-accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .devref.off svg{stroke:var(--l-muted)}
+
+  /* ---- 分组头（细行，不是厚卡）---- */
+  .ghead{display:flex;align-items:center;gap:8px;padding:16px 16px 7px}
+  .ghead .gname{font-size:11.5px;font-weight:600;color:var(--l-muted);letter-spacing:.3px;flex:1}
+  .ghead .gcount{font-size:11px;color:var(--l-muted)}
+  .ghead svg{width:13px;height:13px;stroke:var(--l-muted);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- 课表卡片 ---- */
+  .card{position:relative;margin:0 16px 8px;background:var(--l-card);border:1px solid var(--l-line);
+    border-radius:14px;padding:12px 12px 11px 14px;box-shadow:0 3px 10px -8px rgba(20,32,60,.16)}
+  .card.cur{border-color:var(--l-accent);box-shadow:0 5px 16px -8px rgba(47,107,255,.42)}
+  .card.cur::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+    background:var(--l-accent);border-radius:14px 0 0 14px}
+  .crow1{display:flex;align-items:center;gap:8px}
+  .ctitle{font-size:17px;font-weight:600;color:var(--l-text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card.cur .ctitle{color:var(--l-accent)}
+  .dots{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+    background:var(--l-card2);flex:0 0 auto}
+  .dots svg{width:15px;height:15px;stroke:var(--l-muted);fill:none;stroke-width:2.4;stroke-linecap:round}
+  .csub{font-size:11.5px;color:var(--l-muted);margin-top:3px}
+  .crow3{display:flex;align-items:center;gap:8px;margin-top:9px}
+  .sync{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .sync.ok{background:var(--l-okLight);color:var(--l-ok)}
+  .sync.pending{background:var(--l-accentLight);color:var(--l-accent)}
+  .sync.warn{background:var(--l-warnLight);color:var(--l-warn)}
+  .ctime{font-size:10.5px;color:var(--l-muted);flex:1}
+  .ghost{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--l-accent);
+    border:1px solid var(--l-accent);border-radius:999px;padding:5px 13px;background:transparent;white-space:nowrap}
+  .used{margin-left:auto;font-size:11px;font-weight:600;color:var(--l-ok);
+    background:var(--l-okLight);padding:3px 9px;border-radius:999px}
+
+  /* ---- 溢出菜单 ---- */
+  .sheet{margin:0 16px;background:var(--l-card);border:1px solid var(--l-line);border-radius:14px;
+    overflow:hidden;box-shadow:0 10px 26px -12px rgba(20,32,60,.4)}
+  .sheet .mi{display:flex;align-items:center;gap:11px;padding:13px 14px;font-size:13px;color:var(--l-text);
+    border-bottom:1px solid var(--l-line)}
+  .sheet .mi:last-child{border-bottom:0}
+  .sheet .mi svg{width:16px;height:16px;stroke:var(--l-accent);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .sheet .mi.danger{color:var(--l-err)} .sheet .mi.danger svg{stroke:var(--l-err)}
+
+  /* ---- 空态 ---- */
+  .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:0 34px;text-align:center}
+  .empty .art{width:96px;height:96px;margin-bottom:18px}
+  .empty .art svg{width:100%;height:100%;stroke:var(--l-line);fill:none;stroke-width:2;
+    stroke-linecap:round;stroke-linejoin:round}
+  .empty h4{font-size:17px;font-weight:600;color:var(--l-text)}
+  .empty p{font-size:11.5px;color:var(--l-muted);margin-top:6px;line-height:1.6}
+  .empty .btns{margin-top:20px;display:flex;flex-direction:column;gap:9px;width:100%}
+  .btn-primary{background:var(--l-accent);color:var(--l-onAccent);font-size:13px;font-weight:600;
+    padding:12px;border-radius:12px;text-align:center}
+  .btn-ghost{border:1px solid var(--l-accent);color:var(--l-accent);font-size:13px;font-weight:600;
+    padding:11px;border-radius:12px;text-align:center;background:transparent}
+
+  /* ---- 底栏 ---- */
+  .bottom{height:56px;display:flex;align-items:center;border-top:1px solid var(--l-line);
+    background:var(--l-card);flex:0 0 auto}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .tab svg{width:19px;height:19px;stroke:var(--l-muted);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .tab span{font-size:10.5px;color:var(--l-muted)}
+  .tab.on svg{stroke:var(--l-accent)} .tab.on span{color:var(--l-accent);font-weight:600}
+
+  /* ---- 深色覆写 ---- */
+  .D .tbtitle,.D .devname,.D .ctitle{color:var(--d-text)}
+  .D .card,.D .devbar,.D .sheet{background:var(--d-card);border-color:var(--d-line)}
+  .D .card.cur{border-color:var(--d-accent)}
+  .D .card.cur::before{background:var(--d-accent)}
+  .D .icbtn,.D .dots{background:var(--d-card2)}
+  .D .icbtn svg,.D .devref svg{stroke:var(--d-accent)}
+  .D .dots svg,.D .devref.off svg{stroke:var(--d-muted)}
+  .D .ctitle{color:var(--d-text)} .D .card.cur .ctitle{color:var(--d-accent)}
+  .D .csub,.D .ctime,.D .ghead .gname,.D .ghead .gcount{color:var(--d-muted)}
+  .D .ghead svg{stroke:var(--d-muted)}
+  .D .devcount{background:var(--d-accentLight);color:var(--d-accent)}
+  .D .sync.ok{background:var(--d-okLight);color:var(--d-ok)}
+  .D .sync.pending{background:var(--d-accentLight);color:var(--d-accent)}
+  .D .sync.warn{background:var(--d-warnLight);color:var(--d-warn)}
+  .D .used{background:var(--d-okLight);color:var(--d-ok)}
+  .D .ghost{border-color:var(--d-accent);color:var(--d-accent)}
+  .D .sheet .mi{color:var(--d-text);border-color:var(--d-line)}
+  .D .sheet .mi svg{stroke:var(--d-accent)}
+  .D .sheet .mi.danger{color:var(--d-err)} .D .sheet .mi.danger svg{stroke:var(--d-err)}
+  .D .bottom{background:var(--d-card);border-color:var(--d-line)}
+  .D .tab.on svg{stroke:var(--d-accent)} .D .tab.on span{color:var(--d-accent)}
+  .D .empty h4{color:var(--d-text)} .D .empty .art svg{stroke:var(--d-line)}
+  .D .btn-primary{background:var(--d-accent);color:#0B1020}
+  .D .btn-ghost{border-color:var(--d-accent);color:var(--d-accent)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;font-size:12px;color:var(--doc-muted)}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .anno{margin-top:12px;font-size:12.5px;color:var(--doc-muted);line-height:1.7}
+  .anno b{color:var(--doc-fg)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>课表库页面 · 全新设计原型 v1</h1>
+  <p class="sub">
+    目标页面：底部 tab「<b>课表库</b>」＝ <span class="code">ScheduleListActivity</span>（页内标题原为「课程表管理」）。<br>
+    画布：手机真机 <b>360 × 640 dp</b>，本原型 <b>1 dp = 1 px</b>，标注数值可直接换算代码。<br>
+    全部颜色 / 字号 / 圆角 / 间距取自 <span class="code">Ui.java</span> 既有 token，<b>零新增 token</b>。
+  </p>
+  <div class="meta">
+    <span class="chip">交付：<b>原型 + 设计规范</b></span>
+    <span class="chip">状态：<b>待评审</b></span>
+    <span class="chip">改动范围：<b>仅 ScheduleListActivity.java</b></span>
+    <span class="chip">2026-10-05</span>
+  </div>
+
+  <h2><span class="num">1</span>现状诊断：这个页面真正的毛病不是"不好看"</h2>
+  <p class="sub">读完 <span class="code">ScheduleListActivity.java</span> 全部 710 行后的结论。<b>没有一条是"审美"问题，全是"信息架构"问题。</b></p>
+
+  <table>
+    <tr><th style="width:56px">#</th><th>现状</th><th>为什么是问题</th></tr>
+    <tr>
+      <td><b>H1</b></td>
+      <td><b>三条状态条竖直叠放</b>：① <span class="code">ConnectionBar</span>「已连接 · 小米手环 · v1.7.x」② <span class="code">syncView</span> 胶囊「3 门课未同步 · 点此同步」③ <span class="code">deviceBar</span>「● 在线 · 小米手环 ··a1b2 · 3 套 ▸」</td>
+      <td>三条<b>全宽、同形、同色系</b>，视觉重量完全一致 → 用户不知道该先看哪条。更糟的是 ① 和 ③ <b>说的是同一件事</b>（设备 + 连接状态），只是措辞不同。</td>
+    </tr>
+    <tr>
+      <td><b>H2</b></td>
+      <td>一行纯说明文字：「本机保存的全部课表：可切换、编辑、同步到手环」（11.5sp 灰）</td>
+      <td><b>解释 UI 而不是服务用户</b>。占一整行（约 26dp 竖高），却零可操作信息——用户点开界面 3 秒就懂的事。</td>
+    </tr>
+    <tr>
+      <td><b>H3</b></td>
+      <td>分组<b>默认全部折叠</b>：进页面只看到 <span class="code">▸ 本地课程 · 3 套</span>，<b>一个课表名都看不到</b></td>
+      <td>这是「库」页面，核心内容就是课表清单。默认把清单藏起来 = 每个用户每次都要多点一下。<b>管理页应当先"展示"后"操作"。</b></td>
+    </tr>
+    <tr>
+      <td><b>H4</b></td>
+      <td>卡片右上角<b>常驻三个图标</b>：<span class="code">[同步] 编辑 删除</span>，同色同大小并排</td>
+      <td>「删除」是<b>不可逆破坏性操作</b>，却与「编辑」相邻、同形、无区分 → 误触风险高。且三个图标（各 ~30dp）把课表名挤压到不足 200dp。</td>
+    </tr>
+    <tr>
+      <td><b>H5</b></td>
+      <td>切换当前课表用 <span class="code">CheckBox「当前」</span> 放在卡片右下角</td>
+      <td><b>语义错误</b>：当前课表是<b>互斥单选</b>，却用多选控件；且这是本页<b>最高频的动作</b>，却用了视觉最弱、位置最偏的控件。</td>
+    </tr>
+    <tr>
+      <td><b>H6</b></td>
+      <td>层级扁平：课表名 14.5sp / 分组头 12.5sp / 设备条 12.5sp / 同步胶囊 12sp 全挤在 12–14.5 区间</td>
+      <td>没有明确的主次。用户扫视时找不到锚点。</td>
+    </tr>
+    <tr>
+      <td><b>H7</b></td>
+      <td>空态 = 一行灰字（12.5sp MUTED）</td>
+      <td>新用户首次进入看到一句灰话，<b>没有插画、没有主 CTA</b>，不知道下一步干什么。</td>
+    </tr>
+    <tr>
+      <td><b>H8</b></td>
+      <td>创建入口分裂：底部「＋ 新建本地课表」按钮 + 下方「导入 / 导出」卡（EV 变体）</td>
+      <td>三类"创建/迁移"动作（新建 / 导入 / 导出）分散在页面两处，认知上是一件事却要点两个地方。</td>
+    </tr>
+  </table>
+
+  <h2><span class="num">2</span>设计原则</h2>
+  <p class="sub">页面定位：<b>课表库是"管理"页。</b>用户来这里只干四件事——<b>看我有哪些课表 → 切换当前 → 同步到手环 → 增 / 删 / 改</b>。所有决策围绕这四件事排序。</p>
+  <table>
+    <tr><th style="width:150px">原则</th><th>含义</th><th>落到哪个决策</th></tr>
+    <tr><td><b>P1 先展示，后操作</b></td><td>「库」的第一职责是把清单摊开给人看，而不是先让人点</td><td>D2 分组默认展开</td></tr>
+    <tr><td><b>P2 一件事只说一处</b></td><td>设备只有一个、连接状态只有一个真相 —— 不要三条栏说同一件事</td><td>D1 合并 ConnectionBar + deviceBar；D3 同步态降级为徽标</td></tr>
+    <tr><td><b>P3 破坏性操作不露脸</b></td><td>删除不可逆，就不能和编辑并排常驻</td><td>D5 溢出菜单「⋯」收纳</td></tr>
+    <tr><td><b>P4 互斥用单选语义</b></td><td>当前课表只能有一套 —— 控件语义必须匹配</td><td>D4「设为当前」按钮 + 「使用中」徽标</td></tr>
+    <tr><td><b>P5 分层靠色彩与位置，不靠新字号</b></td><td>字号阶梯是硬规范（7 档禁增），层级要用色 / 空间 / 描边做</td><td>全部决策</td></tr>
+    <tr><td><b>P6 零新增 token</b></td><td>落地不能牵动全局样式</td><td>见 §6 映射表</td></tr>
+  </table>
+
+  <h2><span class="num">3</span>信息架构 Before → After</h2>
+  <table>
+    <tr><th style="width:34%">Before（现状 9 段）</th><th style="width:33%">After（新 5 段）</th><th>动作</th></tr>
+    <tr><td>顶栏「课程表管理」</td><td>顶栏「<b>课表库</b>」+ 右侧 ⊕</td><td>标题对齐 tab 名；⊕ 收纳全部创建入口（D6）</td></tr>
+    <tr><td>ConnectionBar「已连接 · 设备 · v1.7.x」</td><td rowspan="2"><b>① 设备条</b>（唯一一条）<br><span class="code">● 小米手环 9 Pro ··a1b2</span> ｜ <span class="code">3 套</span> ｜ ⟳</td><td rowspan="2"><b>两条合成一条</b>（D1）</td></tr>
+    <tr><td>deviceBar「● 在线 · 设备 ··a1b2 · 3 套 ▸」</td></tr>
+    <tr><td>说明文字「本机保存的全部课表…」</td><td>—</td><td><b>删除</b>（自解释）</td></tr>
+    <tr><td>syncView 全宽胶囊「3 门课未同步 · 点此同步」</td><td>降级为<b>当前卡内的一枚徽标</b></td><td><b>降级</b>（D3）——同步是"某套课表"的属性，该贴着它</td></tr>
+    <tr><td>分组头（厚卡 CARD2 圆角 12 + ▸）</td><td><b>② 分组头</b>（细行 11.5sp 灰 + 计数 + ▾）</td><td><b>减重</b>（D2 的一部分）</td></tr>
+    <tr><td>单条长列表（当前设备组 / 其它设备 / 本地）</td><td><b>③ 分组列表</b>（<b>默认全展开</b>）</td><td><b>默认摊开</b>（D2）</td></tr>
+    <tr><td>卡片：标题 + [同步]编辑删除 + CheckBox「当前」</td><td><b>④ 卡片</b>：标题 + ⋯ ｜ 副行 ｜ 同步徽标 / 「设为当前」</td><td><b>重排</b>（D3/D4/D5）</td></tr>
+    <tr><td>「＋ 新建本地课表」按钮 + 导入/导出卡</td><td>并入顶栏 ⊕ 菜单</td><td><b>入口唯一化</b>（D6）</td></tr>
+    <tr><td>空态一行灰字</td><td><b>⑤ 空态</b>：插画 + 标题 + 双 CTA</td><td><b>补全</b>（D7）</td></tr>
+  </table>
+
+  <h3>七条设计决策</h3>
+  <table>
+    <tr><th style="width:52px">决策</th><th>做什么</th><th>解决</th></tr>
+    <tr><td><b>D1</b></td><td><b>ConnectionBar 与 deviceBar 合并为一条「设备条」</b>：左绿点 + 设备名 + `··尾号`，右「N 套」计数徽标 + 刷新图标。未连接时整条转灰 + 文案变「未连接手环 · 点此连接」。</td><td>H1</td></tr>
+    <tr><td><b>D2</b></td><td><b>分组默认展开</b>；组头由厚卡降为<b>细行</b>（11.5sp MUTED 小标签 + 右侧「N 套」+ ▾）。保留折叠能力（多设备时仍可收）。</td><td>H3 / H6</td></tr>
+    <tr><td><b>D3</b></td><td><b>同步状态从页顶胶囊降级为「当前课表卡」内的徽标</b>：<span class="code">✓ 已同步</span>(OK) / <span class="code">3 门课未同步</span>(ACCENT) / <span class="code">尚未同步</span>(WARN)，点击即同步。</td><td>H1 / H6</td></tr>
+    <tr><td><b>D4</b></td><td><b>当前课表用「主卡」样式</b>：4dp ACCENT 左竖条 + ACCENT 描边 + 标题 ACCENT 17sp + 右上「使用中」徽标。其余卡片右下角给<b>「设为当前」描边按钮</b>（SP_CAPTION / ACCENT / 44dp 热区）。<b>删掉 CheckBox</b>。</td><td>H5 / H6</td></tr>
+    <tr><td><b>D5</b></td><td><b>破坏性操作收进溢出菜单「⋯」</b>：编辑课表 / 同步到手环 / 从本机移除（红）。卡片右上只留一个 ⋯。</td><td>H4</td></tr>
+    <tr><td><b>D6</b></td><td><b>创建入口唯一化 → 顶栏 ⊕</b>，弹出菜单「新建本地课表 / 导入课程表 / 导出课程表」。底部不再放常驻按钮（省 56dp 竖高给列表）。</td><td>H8</td></tr>
+    <tr><td><b>D7</b></td><td><b>空态补全</b>：线稿插画 + 「还没有课表」17sp + 说明 + 双 CTA（主：＋ 新建本地课表 / 次：连接手环）。</td><td>H7</td></tr>
+  </table>
+
+  <h2><span class="num">4</span>高保真原型</h2>
+  <p class="sub">5 态 · 1 dp = 1 px · 360×640 dp。</p>
+
+  <div class="frames">
+
+    <!-- ============ F1 默认态 ============ -->
+    <div class="frame">
+      <div class="cap"><span class="tag new">F1 主态</span><b>浅色 · 已连接 · 分组展开</b></div>
+      <div class="screen L">
+        <div class="topbar">
+          <span class="tbtitle">课表库</span>
+          <span class="icbtn">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          </span>
+        </div>
+        <div class="body">
+          <div class="scroll">
+            <!-- 设备条 -->
+            <div class="devbar">
+              <span class="devdot"></span>
+              <span class="devname">小米手环 9 Pro ··a1b2</span>
+              <span class="devcount">3 套</span>
+              <span class="devref"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg></span>
+            </div>
+            <!-- 分组：手环 -->
+            <div class="ghead">
+              <span class="gname">手环课表 · 小米手环 9 Pro ··a1b2</span>
+              <span class="gcount">3 套</span>
+              <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <!-- 当前卡 -->
+            <div class="card cur">
+              <div class="crow1">
+                <span class="ctitle">我的主课表</span>
+                <span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+              </div>
+              <div class="csub">来自手环 · 5 门课</div>
+              <div class="crow3">
+                <span class="sync ok">✓ 已同步</span>
+                <span class="ctime">3 分钟前</span>
+                <span class="used">使用中</span>
+              </div>
+            </div>
+            <!-- 次卡 -->
+            <div class="card">
+              <div class="crow1">
+                <span class="ctitle">实验课表</span>
+                <span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+              </div>
+              <div class="csub">来自手环 · 3 门课</div>
+              <div class="crow3">
+                <span class="sync pending">2 门课未同步</span>
+                <span class="ctime">昨天</span>
+                <span class="ghost">设为当前</span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="crow1">
+                <span class="ctitle">选修课表</span>
+                <span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+              </div>
+              <div class="csub">来自手环 · 2 门课</div>
+              <div class="crow3">
+                <span class="sync ok">✓ 已同步</span>
+                <span class="ctime">9 月 28 日</span>
+                <span class="ghost">设为当前</span>
+              </div>
+            </div>
+            <!-- 分组：本地 -->
+            <div class="ghead">
+              <span class="gname">本地课程</span>
+              <span class="gcount">1 套</span>
+              <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div class="card">
+              <div class="crow1">
+                <span class="ctitle">我的工作日课表</span>
+                <span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+              </div>
+              <div class="csub">仅本机 · 6 门课</div>
+              <div class="crow3">
+                <span class="sync warn">尚未同步到手环</span>
+                <span class="ctime"></span>
+                <span class="ghost">设为当前</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="bottom">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span>首页</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span>课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="4"/><path d="M9 7h6"/></svg><span>手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12"/></svg><span>设置</span></div>
+        </div>
+      </div>
+      <div class="anno">
+        <b>看什么：</b>① 设备条只有一条（<b>替代原来的两条</b>）；② 分组标题是<b>细行小灰字</b>，不再是与卡片同重的厚块；③ 当前卡有 <b>4dp 主色左竖条 + 描边 + 「使用中」徽标</b>，一眼定位；④ 同步态是<b>卡内徽标</b>，颜色语义化（绿=已同步 / 蓝=有未同步 / 琥珀=从未同步）；⑤ 卡片右上只有一个 <b>⋯</b>，删除不再露脸。
+      </div>
+    </div>
+
+    <!-- ============ F2 溢出菜单 ============ -->
+    <div class="frame">
+      <div class="cap"><span class="tag">F2 交互</span><b>⋯ 溢出菜单展开</b><span class="tag">替代三图标并排</span></div>
+      <div class="screen L">
+        <div class="topbar">
+          <span class="tbtitle">课表库</span>
+          <span class="icbtn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="body">
+          <div class="scroll">
+            <div class="devbar">
+              <span class="devdot"></span>
+              <span class="devname">小米手环 9 Pro ··a1b2</span>
+              <span class="devcount">3 套</span>
+              <span class="devref"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg></span>
+            </div>
+            <div class="ghead">
+              <span class="gname">手环课表 · 小米手环 9 Pro ··a1b2</span>
+              <span class="gcount">3 套</span>
+              <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div class="card cur">
+              <div class="crow1">
+                <span class="ctitle">我的主课表</span>
+                <span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+              </div>
+              <div class="csub">来自手环 · 5 门课</div>
+              <div class="crow3">
+                <span class="sync ok">✓ 已同步</span>
+                <span class="ctime">3 分钟前</span>
+                <span class="used">使用中</span>
+              </div>
+            </div>
+            <!-- 菜单（展开在卡片正下方） -->
+            <div class="sheet" style="margin-bottom:8px">
+              <div class="mi"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>编辑课表</div>
+              <div class="mi"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>同步到手环</div>
+              <div class="mi danger"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>从本机移除</div>
+            </div>
+            <div class="card">
+              <div class="crow1">
+                <span class="ctitle">实验课表</span>
+                <span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+              </div>
+              <div class="csub">来自手环 · 3 门课</div>
+            </div>
+          </div>
+        </div>
+        <div class="bottom">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span>首页</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span>课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="4"/><path d="M9 7h6"/></svg><span>手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12"/></svg><span>设置</span></div>
+        </div>
+      </div>
+      <div class="anno">
+        <b>看什么：</b>原「[同步] 编辑 删除」三图标并排被<b>一个 ⋯ 取代</b>，菜单在卡片正下方展开。「从本机移除」<b>红色 + 图标红</b>，与其它两项在视觉上隔离。菜单项高 44dp 满足热区。<br>
+        <b>注：</b>「同步到手环」对 <span class="code">isSync()</span> 的课表隐藏（已在手环上，无需再同步）——与原逻辑一致。
+      </div>
+    </div>
+
+    <!-- ============ F3 未连接 ============ -->
+    <div class="frame">
+      <div class="cap"><span class="tag">F3 边界</span><b>浅色 · 未连接手环</b></div>
+      <div class="screen L">
+        <div class="topbar">
+          <span class="tbtitle">课表库</span>
+          <span class="icbtn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="body">
+          <div class="scroll">
+            <div class="devbar">
+              <span class="devdot off"></span>
+              <span class="devname off">未连接手环 · 点此连接</span>
+              <span class="devref off"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg></span>
+            </div>
+            <div class="ghead">
+              <span class="gname">本地课程</span>
+              <span class="gcount">2 套</span>
+              <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div class="card cur">
+              <div class="crow1">
+                <span class="ctitle">我的工作日课表</span>
+                <span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+              </div>
+              <div class="csub">仅本机 · 6 门课</div>
+              <div class="crow3">
+                <span class="sync warn">未连接 · 无法同步</span>
+                <span class="ctime"></span>
+                <span class="used">使用中</span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="crow1">
+                <span class="ctitle">周末补习表</span>
+                <span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+              </div>
+              <div class="csub">仅本机 · 2 门课</div>
+              <div class="crow3">
+                <span class="sync warn">未连接 · 无法同步</span>
+                <span class="ctime"></span>
+                <span class="ghost">设为当前</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="bottom">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span>首页</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span>课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="4"/><path d="M9 7h6"/></svg><span>手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12"/></svg><span>设置</span></div>
+        </div>
+      </div>
+      <div class="anno">
+        <b>看什么：</b>未连接时设备条整体转灰、去掉「N 套」计数（因为拿不到真实数），文案变成<b>可点的「点此连接」</b>。所有卡的同步徽标转琥珀「未连接 · 无法同步」，<b>不再误导用户以为是自己没同步</b>（原实现里这个语义是混的）。
+      </div>
+    </div>
+
+    <!-- ============ F4 空态 ============ -->
+    <div class="frame">
+      <div class="cap"><span class="tag">F4 空态</span><b>浅色 · 一套课表都没有</b></div>
+      <div class="screen L">
+        <div class="topbar">
+          <span class="tbtitle">课表库</span>
+          <span class="icbtn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="body">
+          <div class="devbar">
+            <span class="devdot"></span>
+            <span class="devname">小米手环 9 Pro ··a1b2</span>
+            <span class="devref"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg></span>
+          </div>
+          <div class="empty">
+            <div class="art">
+              <svg viewBox="0 0 96 96">
+                <rect x="14" y="20" width="68" height="62" rx="10"/>
+                <path d="M14 36h68M32 12v16M64 12v16"/>
+                <path d="M34 54h28M34 66h18" stroke-dasharray="4 5"/>
+              </svg>
+            </div>
+            <h4>还没有课表</h4>
+            <p>连接手环会自动导入手环里的课表，<br>也可以直接新建一套本地课表。</p>
+            <div class="btns">
+              <div class="btn-primary">＋ 新建本地课表</div>
+              <div class="btn-ghost">连接手环</div>
+            </div>
+          </div>
+        </div>
+        <div class="bottom">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span>首页</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span>课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="4"/><path d="M9 7h6"/></svg><span>手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12"/></svg><span>设置</span></div>
+        </div>
+      </div>
+      <div class="anno">
+        <b>看什么：</b>空态按<b>连接状态给两条不同主 CTA</b>——已连接（手环侧是空的）主推「新建本地课表」；未连接主推「连接手环」。插画只用 <span class="code">Ui.LINE</span> 单色线稿，<b>不引入新色</b>。
+      </div>
+    </div>
+
+    <!-- ============ F5 深色 ============ -->
+    <div class="frame">
+      <div class="cap"><span class="tag dark">F5 深色</span><b>夜幕蓝 · 已连接</b></div>
+      <div class="screen D">
+        <div class="topbar">
+          <span class="tbtitle">课表库</span>
+          <span class="icbtn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="body">
+          <div class="scroll">
+            <div class="devbar">
+              <span class="devdot"></span>
+              <span class="devname">小米手环 9 Pro ··a1b2</span>
+              <span class="devcount">3 套</span>
+              <span class="devref"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg></span>
+            </div>
+            <div class="ghead">
+              <span class="gname">手环课表 · 小米手环 9 Pro ··a1b2</span>
+              <span class="gcount">3 套</span>
+              <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div class="card cur">
+              <div class="crow1">
+                <span class="ctitle">我的主课表</span>
+                <span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+              </div>
+              <div class="csub">来自手环 · 5 门课</div>
+              <div class="crow3">
+                <span class="sync ok">✓ 已同步</span>
+                <span class="ctime">3 分钟前</span>
+                <span class="used">使用中</span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="crow1">
+                <span class="ctitle">实验课表</span>
+                <span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+              </div>
+              <div class="csub">来自手环 · 3 门课</div>
+              <div class="crow3">
+                <span class="sync pending">2 门课未同步</span>
+                <span class="ctime">昨天</span>
+                <span class="ghost">设为当前</span>
+              </div>
+            </div>
+            <div class="ghead">
+              <span class="gname">本地课程</span>
+              <span class="gcount">1 套</span>
+              <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div class="card">
+              <div class="crow1">
+                <span class="ctitle">我的工作日课表</span>
+                <span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+              </div>
+              <div class="csub">仅本机 · 6 门课</div>
+              <div class="crow3">
+                <span class="sync warn">尚未同步到手环</span>
+                <span class="ctime"></span>
+                <span class="ghost">设为当前</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="bottom">
+          <div class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span>首页</span></div>
+          <div class="tab on"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span>课表库</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="4"/><path d="M9 7h6"/></svg><span>手环</span></div>
+          <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12"/></svg><span>设置</span></div>
+        </div>
+      </div>
+      <div class="anno">
+        <b>看什么：</b>深色下所有色值走 <span class="code">Ui.java</span> 的深色 token，<b>语义不变</b>：主色亮蓝、已同步亮绿、未同步琥珀。深色底上 <span class="code">CARD</span> 与 <span class="code">BG</span> 的明度差撑起卡片边界，<b>不靠阴影</b>（深色下阴影不可见）。
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <span><i style="background:#16A34A"></i>OK / 已同步</span>
+    <span><i style="background:#2F6BFF"></i>ACCENT / 有未同步 · 主操作</span>
+    <span><i style="background:#F59E0B"></i>WARN / 尚未同步 · 不可同步</span>
+    <span><i style="background:#DC2626"></i>ERR / 删除类</span>
+    <span><i style="background:#64748B"></i>MUTED / 次要信息</span>
+  </div>
+
+  <h2><span class="num">5</span>组件规格</h2>
+
+  <h3>① 顶栏 · 44dp</h3>
+  <table>
+    <tr><th style="width:130px">元素</th><th>规格</th></tr>
+    <tr><td>标题</td><td><span class="code">SP_TITLE 17sp</span> / SemiBold / <span class="code">TEXT</span> / 左对齐</td></tr>
+    <tr><td>右侧 ⊕</td><td>34×34dp 视觉（圆角 <span class="code">R_CTRL 12</span>），底 <span class="code">CARD2</span>，图标 17dp <span class="code">ACCENT</span>；<b>热区 ≥ 44dp</b></td></tr>
+    <tr><td>行为</td><td>点击 → 弹出菜单「新建本地课表 / 导入课程表 / 导出课程表」（仅 EV 变体显示后两项）</td></tr>
+  </table>
+
+  <h3>② 设备条（D1：合并两条）</h3>
+  <table>
+    <tr><th style="width:130px">元素</th><th>规格</th></tr>
+    <tr><td>容器</td><td>左右外边距 16dp；底 <span class="code">CARD</span>，描边 <span class="code">LINE</span>，圆角 <span class="code">R_CTRL 12</span>；内边距 10×12dp</td></tr>
+    <tr><td>状态点</td><td>8dp 圆点。已连接 = <span class="code">OK</span>；未连接 = <span class="code">MUTED</span></td></tr>
+    <tr><td>设备名</td><td><span class="code">12.5sp</span> SemiBold <span class="code">TEXT</span>（未连接 → Medium <span class="code">MUTED</span>）；单行省略。文案：<span class="code">小米手环 9 Pro ··a1b2</span> / <span class="code">未连接手环 · 点此连接</span></td></tr>
+    <tr><td>计数徽标</td><td><span class="code">11sp</span> SemiBold <span class="code">ACCENT</span> / 底 <span class="code">ACCENT_LIGHT</span>，内边距 2×8dp，圆角 pill。<b>仅已连接且已知真实套数时显示</b></td></tr>
+    <tr><td>刷新图标</td><td>15dp <span class="code">ACCENT</span>（未连接 → <span class="code">MUTED</span>）；容器 26×26dp，<b>热区 44dp</b>；点击带 360° 旋转反馈</td></tr>
+    <tr><td>整条点击</td><td>→ 跳「手环」页（连接/调试）。<b>不再承担展开分组</b>（展开交给分组头，职责分离）</td></tr>
+  </table>
+
+  <h3>③ 分组头（D2：厚卡 → 细行）</h3>
+  <table>
+    <tr><th style="width:130px">元素</th><th>规格</th></tr>
+    <tr><td>容器</td><td>上下内边距 16 / 7dp，左右 16dp，<b>无背景无描边</b>（对比原来的 CARD2 厚块）</td></tr>
+    <tr><td>组名</td><td><span class="code">SP_CAPTION 11.5sp</span> SemiBold <span class="code">MUTED</span>，字距 +0.3px</td></tr>
+    <tr><td>计数</td><td><span class="code">11sp</span> <span class="code">MUTED</span>，纯文本「3 套」</td></tr>
+    <tr><td>折叠箭头</td><td>13dp <span class="code">MUTED</span>，展开 ▾ / 折叠 ▸</td></tr>
+    <tr><td>默认状态</td><td><b>全部展开</b>（<span class="code">expandedGroups</span> 初始即含所有 key）</td></tr>
+  </table>
+
+  <h3>④ 课表卡片</h3>
+  <table>
+    <tr><th style="width:130px">元素</th><th>普通卡</th><th>当前卡（primary）</th></tr>
+    <tr><td>容器</td><td>底 <span class="code">CARD</span> / 描边 <span class="code">LINE</span> / 圆角 <span class="code">R_CARD 14</span> / 内边距 12·12·11·14dp / 卡间距 8dp</td><td>描边 <b><span class="code">ACCENT</span></b> + 左 4dp <span class="code">ACCENT</span> 竖条</td></tr>
+    <tr><td>标题</td><td><span class="code">SP_TITLE 17sp</span> SemiBold <span class="code">TEXT</span></td><td>同字号，色 <b><span class="code">ACCENT</span></b></td></tr>
+    <tr><td>右上操作</td><td colspan="2">单个「⋯」：30×30dp 视觉（圆角 9）+ 底 <span class="code">CARD2</span> + 图标 15dp <span class="code">MUTED</span>；<b>热区 44dp</b></td></tr>
+    <tr><td>副信息行</td><td colspan="2"><span class="code">SP_CAPTION 11.5sp</span> <span class="code">MUTED</span>，上边距 3dp。格式：<span class="code">来自手环 · 5 门课</span> / <span class="code">仅本机 · 6 门课</span></td></tr>
+    <tr><td>第三行</td><td>左：同步徽标 ｜ 右：<b>「设为当前」</b>描边按钮</td><td>左：同步徽标 + 相对时间 ｜ 右：<b>「使用中」</b>实底徽标</td></tr>
+    <tr><td>同步徽标</td><td colspan="2"><span class="code">11sp</span> SemiBold / 内边距 3×9dp / 圆角 pill。三态见下表</td></tr>
+    <tr><td>「设为当前」</td><td colspan="2"><span class="code">SP_CAPTION 11.5sp</span> SemiBold <span class="code">ACCENT</span>，1dp <span class="code">ACCENT</span> 描边，圆角 pill，内边距 5×13dp，右对齐；<b>热区 44dp</b></td></tr>
+    <tr><td>「使用中」</td><td colspan="2"><span class="code">11sp</span> SemiBold <span class="code">OK</span> / 底 <span class="code">OK_LIGHT</span>，圆角 pill。<b>不可点</b>（当前课表不能取消自己）</td></tr>
+  </table>
+
+  <h3>同步徽标三态（D3）</h3>
+  <table>
+    <tr><th style="width:150px">条件</th><th>文案</th><th>色</th><th>点击</th></tr>
+    <tr><td><span class="code">unsaved == 0 &amp;&amp; isSync()</span></td><td>✓ 已同步</td><td><span class="code">OK</span> / <span class="code">OK_LIGHT</span></td><td>无</td></tr>
+    <tr><td><span class="code">unsaved &gt; 0</span></td><td>N 门课未同步</td><td><span class="code">ACCENT</span> / <span class="code">ACCENT_LIGHT</span></td><td>立即三向同步</td></tr>
+    <tr><td><span class="code">!isSync()</span> 或 未连接</td><td>尚未同步到手环 / 未连接 · 无法同步</td><td><span class="code">WARN</span> / <span class="code">WARN_LIGHT</span></td><td>未连接 → 去连接页</td></tr>
+  </table>
+
+  <h3>⑤ 空态</h3>
+  <table>
+    <tr><th style="width:130px">元素</th><th>规格</th></tr>
+    <tr><td>插画</td><td>96×96dp 单色线稿（日历 + 虚线行），描边 <span class="code">LINE</span>，2px</td></tr>
+    <tr><td>标题</td><td><span class="code">SP_TITLE 17sp</span> SemiBold <span class="code">TEXT</span>，「还没有课表」</td></tr>
+    <tr><td>说明</td><td><span class="code">SP_CAPTION 11.5sp</span> <span class="code">MUTED</span>，2 行，居中</td></tr>
+    <tr><td>主 CTA</td><td>底 <span class="code">ACCENT</span> / 字 <span class="code">ON_ACCENT</span> / <span class="code">SP_BODY 13sp</span> SemiBold / 圆角 <span class="code">R_CTRL 12</span> / 高 44dp</td></tr>
+    <tr><td>次 CTA</td><td>1dp <span class="code">ACCENT</span> 描边 + <span class="code">ACCENT</span> 字 / 透明底 / 同尺寸</td></tr>
+  </table>
+
+  <h2><span class="num">6</span>Token 复用映射（零新增）</h2>
+  <table>
+    <tr><th style="width:190px">Token</th><th>值</th><th>用在哪</th></tr>
+    <tr><td><span class="code">SP_TITLE</span></td><td>17sp</td><td>顶栏标题 · <b>课表名</b> · 空态标题</td></tr>
+    <tr><td><span class="code">SP_BODY</span></td><td>13sp</td><td>菜单项 · 按钮文字</td></tr>
+    <tr><td>12.5sp（现状既有）</td><td>12.5sp</td><td>设备名</td></tr>
+    <tr><td><span class="code">SP_CAPTION</span></td><td>11.5sp</td><td>组名 · 卡片副信息 · 「设为当前」</td></tr>
+    <tr><td><span class="code">SP_MICRO</span></td><td>10.5sp</td><td>相对时间 · 底栏标签</td></tr>
+    <tr><td>11sp（现状既有计数/徽标字号）</td><td>11sp</td><td>计数徽标 · 同步徽标 · 「使用中」</td></tr>
+    <tr><td><span class="code">R_CARD / R_CTRL / R_BLOCK</span></td><td>14 / 12 / 4</td><td>课表卡 / 设备条·按钮·菜单 / 小方块</td></tr>
+    <tr><td><span class="code">GAP_XS/SM/MD/LG</span></td><td>4 / 8 / 12 / 16</td><td>卡间距 8 · 内边距 12 · 屏边距 16</td></tr>
+    <tr><td><span class="code">TOUCH_MIN</span></td><td>44dp</td><td>⋯ / ⟳ / 设为当前 / 菜单项 热区下限</td></tr>
+    <tr><td><span class="code">ACCENT / ACCENT_LIGHT</span></td><td>—</td><td>当前卡 · 计数徽标 · 主按钮 · 未同步徽标</td></tr>
+    <tr><td><span class="code">OK / OK_LIGHT</span></td><td>—</td><td>在线点 · 已同步徽标 · 使用中徽标</td></tr>
+    <tr><td><span class="code">WARN / WARN_LIGHT</span></td><td>—</td><td>尚未同步 / 无法同步</td></tr>
+    <tr><td><span class="code">ERR</span></td><td>—</td><td>移除菜单项</td></tr>
+    <tr><td><span class="code">CARD / CARD2 / LINE / TEXT / MUTED</span></td><td>—</td><td>容器 / 次级底（图标钮） / 描边 / 主文 / 次文</td></tr>
+  </table>
+  <div class="note ok"><b>结论：</b>本方案 <b>0 个新增 token</b>。唯一新增的"视觉元素"是一只 4dp 主色左竖条和一枚 96dp 线稿插画，两者都用现成色值与描边宽度，<b>不牵动全局样式</b>。</div>
+
+  <h2><span class="num">7</span>落地清单（3 批 · 每批独立可验收）</h2>
+
+  <h3>批次 1 — 结构减法（低风险，纯删/合并）</h3>
+  <ul>
+    <li><b>B1.1</b> 顶栏标题 <span class="code">"课程表管理"</span> → <span class="code">"课表库"</span>；右侧加 ⊕ 圆钮 + 弹出菜单（D6）。</li>
+    <li><b>B1.2</b> 删除 <span class="code">ConnectionBar.attach(...)</span> 调用；把它显示的信息并入设备条（D1）。</li>
+    <li><b>B1.3</b> 删除说明文字「本机保存的全部课表…」（H2）。</li>
+    <li><b>B1.4</b> <span class="code">groupHeader()</span> 从厚卡改为细行（去背景/描边，字号降到 <span class="code">SP_CAPTION</span> + MUTED）（D2）。</li>
+    <li><b>B1.5</b> <span class="code">expandedGroups</span> 初始值改为"包含全部组 key"（默认展开）（D2）。</li>
+    <li><b>B1.6</b> 删除底部「＋ 新建本地课表」按钮 + 导入/导出卡，并入顶栏 ⊕ 菜单（D6）。</li>
+  </ul>
+
+  <h3>批次 2 — 卡片重排（核心）</h3>
+  <ul>
+    <li><b>B2.1</b> <span class="code">scheduleCard()</span> 标题字号 14.5 → <span class="code">SP_TITLE 17sp</span>；当前卡标题色 <span class="code">ACCENT</span>（D4）。</li>
+    <li><b>B2.2</b> 当前卡加 <b>4dp ACCENT 左竖条 + ACCENT 描边</b>（用 <span class="code">Ui.round</span> + 背景 drawable，或外层套一个 4dp View）（D4）。</li>
+    <li><b>B2.3</b> 三图标行（<span class="code">icons</span>）→ 单个「⋯」按钮；菜单项：编辑课表 / 同步到手环 / 从本机移除（D5）。</li>
+    <li><b>B2.4</b> 删除 <span class="code">CheckBox</span>；改为：当前卡显「使用中」徽标，非当前卡显「设为当前」描边按钮（点 → <span class="code">ScheduleStore.setActive</span>）（D4）。</li>
+    <li><b>B2.5</b> 副信息 <span class="code">s.sub()</span> 拆成两段：主副行（来源 · N 门课）+ 相对时间（最后同步/—）；相对时间走 <span class="code">SP_MICRO</span>。</li>
+    <li><b>B2.6</b> <span class="code">syncView</span> 从页顶全宽胶囊 → 移入当前卡的同步徽标；点击行为不变（未连接 → 去连接页）。（D3）</li>
+  </ul>
+
+  <h3>批次 3 — 边界与打磨</h3>
+  <ul>
+    <li><b>B3.1</b> 空态改为插画 + 标题 + 双 CTA，按连接状态切换主 CTA（D7）。</li>
+    <li><b>B3.2</b> 未连接态：设备条转灰、隐藏计数徽标、徽标文案统一「未连接 · 无法同步」。</li>
+    <li><b>B3.3</b> 组间不再需要 <span class="code">divider()</span>（细行组头自带呼吸感）——确认视觉后删除。</li>
+    <li><b>B3.4</b> <span class="code">statusView</span> 瞬时反馈行保留（~10 处调用），但上移紧贴设备条，避免与列表尾部抢位。</li>
+  </ul>
+
+  <div class="note warn">
+    <b>风险与取舍（必须先说明，不能只报喜）：</b>
+    <ul>
+      <li><b>B1.6 有争议</b>：把「新建」从底部常驻按钮收进顶栏 ⊕，<b>多了一次点击</b>。我的判断是——管理页的高频动作是「切换当前」而非「新建」，且 ⊕ 与首页入口一致、认知统一；若产品认为新建足够高频，可<b>退回底部常驻按钮</b>，其余决策不受影响。</li>
+      <li><b>B1.5 默认展开</b>：多设备（3 台以上手环）时首屏会很长。缓解：保留分组折叠能力，且"其它设备"组仍可默认收——<b>只默认展开"当前设备组 + 本地组"</b>是更稳的折中，建议落地时二选一。</li>
+      <li><b>B2.6 同步徽标内嵌</b>：原 <span class="code">syncView</span> 在折叠当前组时仍可见，移入卡内后<b>折叠即不可见</b>。因 B1.5 已默认展开，实际影响很小；接受。</li>
+    </ul>
+  </div>
+
+  <h2><span class="num">8</span>验收标准（7 条）</h2>
+  <table>
+    <tr><th style="width:40px">#</th><th>验收项</th><th>判定方法</th></tr>
+    <tr><td>1</td><td>页面<b>只有一条</b>设备/连接状态栏</td><td>uiautomator dump：不含 "已连接 · " 开头的 ConnectionBar 文本</td></tr>
+    <tr><td>2</td><td>进页面<b>可见课表名</b>（无需任何点击）</td><td>dump 中直接出现课表名文本</td></tr>
+    <tr><td>3</td><td>卡片上<b>不存在</b>常驻的删除图标</td><td>dump 中删除图标无独立可点节点（藏在 ⋯ 菜单内）</td></tr>
+    <tr><td>4</td><td><b>不存在</b> CheckBox「当前」；存在「设为当前」/「使用中」</td><td>dump 中 <span class="code">class="android.widget.CheckBox"</span> 数量为 0</td></tr>
+    <tr><td>5</td><td>课表名与顶栏标题<b>同字号</b>（17sp），构成页内锚点</td><td>像素扫描字高比对</td></tr>
+    <tr><td>6</td><td>空态含插画 + 2 个可点 CTA</td><td>清空课表后 dump：2 个 button 节点 + 插画区域非空</td></tr>
+    <tr><td>7</td><td>深色 / 浅色切换后<b>语义色不变</b></td><td>两态截图比对：绿=已同步、蓝=主操作、琥珀=未同步</td></tr>
+  </table>
+
+  <div class="note">
+    <b>下一步：</b>本文件为<b>原型与规范</b>，<b>未改动任何代码</b>。若确认方向，建议按批次 1 → 2 → 3 逐批落地、每批真机截图验收；批次 2 是核心（卡片重排），建议单独一个会话专门做。
+  </div>
+
+</div>
+</body>
+</html>
