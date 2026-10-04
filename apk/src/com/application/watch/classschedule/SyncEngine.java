@@ -259,10 +259,43 @@ public final class SyncEngine {
                         }
                     }
                     ackIfNeeded(text);
+                    // 应用层回执：让手环能「确证」手机在线（此前手环→手机方向无 ACK，手环只能盲发）
+                    sendRxAck(text);
                 }
             });
         }
     };
+
+    /** 手环主动 push（chat / cmd）收到后，回一条应用层回执 rx_ack。
+     *  手环端 app.ux 收到后记「手机最后在线时间」，留言板据此显示手机在线状态。 */
+    private void sendRxAck(String text) {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(text);
+            String a = o.optString("action", "");
+            if (!"chat".equals(a) && !"cmd".equals(a)) {
+                return;
+            }
+            org.json.JSONObject ack = new org.json.JSONObject();
+            ack.put("action", "rx_ack");
+            ack.put("refAction", a);
+            ack.put("refId", o.optString("id", ""));
+            ack.put("ts", System.currentTimeMillis());
+            sendFireAndForget(ack.toString());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 直接发送、不进队列、不等回包（用于回执类报文，绝不能占用 pending / 超时窗口） */
+    private void sendFireAndForget(String json) {
+        try {
+            if (api == null || nodeId == null) {
+                return;
+            }
+            ensureListener();
+            api.sendMessage(nodeId, json.getBytes(Charset.forName("UTF-8")));
+        } catch (Throwable ignored) {
+        }
+    }
 
     /** 如果消息体含 messageId，则回 ACK 到后台用于投递追踪 */
     private void ackIfNeeded(String text) {
