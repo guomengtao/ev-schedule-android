@@ -348,7 +348,7 @@ public class BandActivity extends Activity {
             @Override public void onFinish(boolean ok, String hint) {
                 if (ok) {
                     resultView.setText("已连接 " + e.deviceName + " · v" + e.versionName
-                            + " · 课表 " + e.courseCount + " 节");
+                            + scheduleSetsSuffix(e));
                     resultView.setTextColor(Ui.OK);
                     updateHero();
                     refresh();
@@ -375,6 +375,7 @@ public class BandActivity extends Activity {
             e.requestBattery();     // 老路径（EV 上报），有结果经状态回调刷新头部
             e.queryDeviceState();   // SDK 直读：电量/连接/充电/佩戴/睡眠
             e.requestSysinfo();     // 手环端要一次存储/型号
+            e.refreshBandScheduleCount(); // 刷新手环真实课表套数（顶部「课表 N 套」）
         }
     }
 
@@ -392,7 +393,8 @@ public class BandActivity extends Activity {
                     ? ("电量 " + e.batteryPercent + "%"
                         + (e.batteryDays > 0 ? " · 距上次充满已 " + e.batteryDays + " 天" : "") + "　·　")
                     : "";
-            heroInfoView.setText(bat + "EV " + e.versionName + " · 课表 " + e.courseCount + " 节");
+            // 顶部只报「课表 N 套」（手环真实套数），不显示节数
+            heroInfoView.setText(bat + "EV " + e.versionName + scheduleSetsSuffix(e));
             heroInfoView.setTextColor(Ui.MUTED);
             heroActionBtn.setText("呼叫手环");
             heroActionBtn.setOnClickListener(new View.OnClickListener() {
@@ -412,6 +414,25 @@ public class BandActivity extends Activity {
         // 昵称 / 首页设置 / 工具箱 / 留言：只在已连接时显示（未连接时整块收起）
         applyConnectionVisibility(e.connected());
         updateStatus();
+    }
+
+    /** 课表套数后缀（顶部/连接完成文案共用）：优先手环真实套数（list_schedules 权威值，
+     *  由 {@code refreshBandScheduleCount} 刷新），未知时退回本机已存的本设备 sync 套数；
+     *  都拿不到则不带后缀 —— 只报「套」，不再显示「节」。
+     *  {@code bandScheduleCount >= 0} 是「已知」判据（见 SyncEngine）。 */
+    private String scheduleSetsSuffix(SyncEngine e) {
+        int n = e.bandScheduleCount;
+        if (n < 0) {
+            String dev = e.currentDeviceId();
+            int local = 0;
+            for (ScheduleStore.Schedule s : ScheduleStore.list(this)) {
+                if (s.isSync() && (dev == null || dev.length() == 0 || dev.equals(s.deviceId))) {
+                    local++;
+                }
+            }
+            n = (local > 0) ? local : -1;
+        }
+        return (n >= 0) ? (" · 课表 " + n + " 套") : "";
     }
 
     // ======================= 设备状态卡（电量/连接/充电/佩戴/睡眠/存储）=======================
