@@ -282,8 +282,10 @@ public class HomeActivity extends Activity {
                 startActivity(new Intent(HomeActivity.this, BandActivity.class));
             }
         });
+        // 热区：高度撑到 44dp，但【宽度必须 WRAP_CONTENT】——否则「已连接」会被挤成两行
+        statusPillBtn.setMinimumWidth(Ui.dp(this, Ui.TOUCH_MIN));
         android.widget.FrameLayout.LayoutParams sbP = new android.widget.FrameLayout.LayoutParams(
-                Ui.dp(this, Ui.TOUCH_MIN), Ui.dp(this, Ui.TOUCH_MIN),
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT, Ui.dp(this, Ui.TOUCH_MIN),
                 android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.END);
         sbP.rightMargin = Ui.dp(this, Ui.GAP_SM + Ui.TOUCH_MIN);
         header.addView(statusPillBtn, sbP);
@@ -747,7 +749,7 @@ public class HomeActivity extends Activity {
             show = next; running = false;
             int[] nm = CourseCache.minutes(next.time);
             kicker = "接下来 · 第" + (nextIdx + 1) + "节"
-                    + (nm != null ? "　" + CourseCache.hm(nm[0]) + " 开始" : "");
+                    + (nm != null ? "　" + CourseCache.hm(nm[0]) + "–" + CourseCache.hm(nm[1]) : "");
         } else {
             show = today.get(total - 1); running = false;
             kicker = "今天的课都上完了 🎉 · 最后一节";
@@ -804,13 +806,17 @@ public class HomeActivity extends Activity {
             track.setOrientation(LinearLayout.HORIZONTAL);
             track.setBackground(Ui.round(Ui.LINE, 2, 0, this));
             float frac = (float) (done + (running ? 1 : 0)) / (float) total;
-            if (frac < 0.04f) frac = 0.04f;
+            if (frac < 0f) frac = 0f;
             if (frac > 1f) frac = 1f;
-            View fill = new View(this);
-            fill.setBackground(Ui.round(Ui.ACCENT, 2, 0, this));
             View rest = new View(this);
-            track.addView(fill, new LinearLayout.LayoutParams(0, Ui.dp(this, 4), frac));
-            track.addView(rest, new LinearLayout.LayoutParams(0, Ui.dp(this, 4), 1f - frac));
+            // 0% 时不画填充（否则留一小截「毛刺」像渲染故障）
+            if (frac > 0.001f) {
+                View fill = new View(this);
+                fill.setBackground(Ui.round(Ui.ACCENT, 2, 0, this));
+                track.addView(fill, new LinearLayout.LayoutParams(0, Ui.dp(this, 4), frac));
+            }
+            track.addView(rest, new LinearLayout.LayoutParams(0, Ui.dp(this, 4),
+                    Math.max(0.0001f, 1f - frac)));
             card.addView(track);
             TextView pv = Ui.textLh(this, "今日 " + done + "/" + total + " 节",
                     Ui.SP_MICRO, Ui.MUTED, false, Ui.LH_CAPTION);
