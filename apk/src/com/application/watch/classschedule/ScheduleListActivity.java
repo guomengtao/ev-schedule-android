@@ -40,7 +40,12 @@ public class ScheduleListActivity extends Activity {
 
     private LinearLayout listBox;
     private TextView statusView;
-    private TextView syncView;
+    /** 同步徽标：原为页顶全宽胶囊，现降级进「当前课表卡」内（D3）。卡片未渲染时为空。 */
+    private TextView syncBadgeView;
+    /** 设备条右侧「N 套」计数徽标（仅已连接且已知真实套数时显示） */
+    private TextView deviceCountView;
+    /** 设备条刷新图标：未连接时转灰（与设备名同步降级） */
+    private ImageView deviceRefreshBtn;
     private boolean syncPendingConnect = false;
     private String editingId;
     private long lastPullAt = 0;
@@ -59,8 +64,10 @@ public class ScheduleListActivity extends Activity {
     private String curDeviceGroupKey = null;
     /** 当前设备分组内的课表套数（-1 = 无当前分组）：设备条据此显示「· N 套」，与分组标题行合并为一行 */
     private int curGroupCount = -1;
-    /** 已展开的分组 key（deviceId / "legacy" / "local"）；默认空 = 全部折叠收敛视图 */
-    private final Set<String> expandedGroups = new HashSet<String>();
+    /** 已折叠的分组 key（deviceId / "legacy" / "local"）。
+     *  ⚠️ 语义与旧版相反：默认空集合 = **全部展开**（D2 —— 管理页应先把课表清单摊开，
+     *  而不是让人每次进页面都要先点一下才看得到课表名）。 */
+    private final Set<String> collapsedGroups = new HashSet<String>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -118,36 +125,14 @@ public class ScheduleListActivity extends Activity {
 
     private void buildUi() {
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.topBar(this, "课程表管理"));
-        root.addView(Ui.space(this, 8));
-        ConnectionBar.attach(this, root);
-        root.addView(Ui.space(this, 8));
-        root.addView(Ui.space(this, 4));
-        root.addView(Ui.text(this, "本机保存的全部课表：可切换、编辑、同步到手环",
-                11.5f, Ui.MUTED, false));
-        root.addView(Ui.space(this, 10));
+        // 顶栏「课表库」+ 右侧 ⊕：创建入口唯一化（新建 / 导入 / 导出 全收进菜单，D6）
+        root.addView(buildTopBar(), new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 44)));
+        root.addView(Ui.space(this, Ui.GAP_SM));
 
-        // active schedule sync status: unsaved count, tap to force 3-way sync (moved here from home)
-        syncView = Ui.textMedium(this, "", 12f, Ui.ACCENT);
-        syncView.setGravity(android.view.Gravity.CENTER);
-        syncView.setPadding(Ui.dp(this, 10), Ui.dp(this, 7), Ui.dp(this, 10), Ui.dp(this, 7));
-        syncView.setBackground(Ui.round(Ui.CARD2, 14, Ui.LINE, this));
-        syncView.setClickable(true);
-        syncView.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (syncPendingConnect) {
-                    syncPendingConnect = false;
-                    startActivity(new Intent(ScheduleListActivity.this, BandActivity.class));
-                } else {
-                    syncActive();
-                }
-            }
-        });
-        root.addView(syncView, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        root.addView(Ui.space(this, 8));
-
-        // 头部设备条：明确「当前某某手环的课表」，点击切换设备（P3）
+        // 设备条（D1）：原 ConnectionBar「已连接 · 设备 · v1.7.x」与本条合并为唯一一条。
+        // 两栏原本说的是同一件事（设备 + 连接状态），竖直叠放只会互相打架、稀释注意力。
+        // 原「本机保存的全部课表：可切换、编辑、同步到手环」说明行已删（自解释，白占一行）。
         deviceBar = new LinearLayout(this);
         deviceBar.setOrientation(LinearLayout.HORIZONTAL);
         deviceBar.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -156,24 +141,36 @@ public class ScheduleListActivity extends Activity {
         deviceBar.setClickable(true);
         deviceBar.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                // 点击展开/收起「当前手环」对应的课程分组，而不是跳转到连接页
+                // 未连接：整条就是「去连接」入口；
+                // 已连接：本条即当前设备分组的组头，点按展开 / 收起它（保留原有能力，不另起一行）。
+                if (!SyncEngine.get(ScheduleListActivity.this).connected()) {
+                    startActivity(new Intent(ScheduleListActivity.this, BandActivity.class));
+                    return;
+                }
                 if (curDeviceGroupKey == null) {
                     return;
                 }
-                if (expandedGroups.contains(curDeviceGroupKey)) {
-                    expandedGroups.remove(curDeviceGroupKey);
+                if (collapsedGroups.contains(curDeviceGroupKey)) {
+                    collapsedGroups.remove(curDeviceGroupKey);
                 } else {
-                    expandedGroups.add(curDeviceGroupKey);
+                    collapsedGroups.add(curDeviceGroupKey);
                 }
                 render();
             }
         });
-        deviceBarTitle = Ui.text(this, "", 12.5f, Ui.TEXT, true);
+        deviceBarTitle = Ui.textMedium(this, "", 12.5f, Ui.TEXT);
         deviceBar.addView(deviceBarTitle, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        // 右侧「N 套」计数徽标（设备条同时承担「当前手环分组头」的职责）
+        deviceCountView = Ui.textMedium(this, "", 11f, Ui.ACCENT);
+        deviceCountView.setPadding(Ui.dp(this, 8), Ui.dp(this, 2), Ui.dp(this, 8), Ui.dp(this, 2));
+        deviceCountView.setBackground(Ui.round(Ui.ACCENT_LIGHT, 14, 0, this));
+        deviceCountView.setVisibility(View.GONE);
+        deviceBar.addView(deviceCountView);
         // 手动刷新：强制向手环要一次清单并补齐（点击带旋转反馈；子控件 clickable 会消费点击，
         // 不会误触发整条的展开/收起）
         ImageView refreshBtn = new ImageView(this);
+        deviceRefreshBtn = refreshBtn;
         refreshBtn.setImageResource(R.drawable.ic_refresh_cw);
         refreshBtn.setColorFilter(Ui.ACCENT);
         refreshBtn.setPadding(Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 2), Ui.dp(this, 4));
@@ -188,13 +185,12 @@ public class ScheduleListActivity extends Activity {
         // 「切换 ›」按钮已移除：在线状态直接在标题前用绿色实心圆点标识，整条可点进连接页
         root.addView(deviceBar, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        root.addView(Ui.space(this, 8));
 
-        listBox = new LinearLayout(this);
-        listBox.setOrientation(LinearLayout.VERTICAL);
-        root.addView(listBox);
-
+        // 瞬时状态行：原在列表下方，上移紧贴设备条（避免与列表尾部抢位，B3.4）
         statusView = Ui.text(this, "", 12f, Ui.MUTED, false);
+        statusView.setPadding(0, Ui.dp(this, 6), 0, 0);
+        // 初始无消息 → 直接收起（否则首帧会留一条空行，白占约 23dp）
+        statusView.setVisibility(View.GONE);
         // 自动补齐失败后：点状态条重试（平时无动作）
         statusView.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -206,48 +202,126 @@ public class ScheduleListActivity extends Activity {
             }
         });
         root.addView(statusView);
-        root.addView(Ui.space(this, 10));
 
-        root.addView(Ui.button(this, "＋ 新建本地课表", true, new View.OnClickListener() {
-            @Override public void onClick(View v) { createLocal(); }
-        }));
-
-        if (Variant.isEv(this)) {
-            root.addView(Ui.space(this, 14));
-            LinearLayout io = Ui.card(this);
-            io.addView(Ui.text(this, "导入 / 导出", 12.5f, Ui.TEXT, true));
-            io.addView(Ui.space(this, 6));
-            io.addView(Ui.grid(this,
-                    Ui.button(this, "导入课程表", false, new View.OnClickListener() {
-                        @Override public void onClick(View v) { open(TransferActivity.MODE_IMPORT); }
-                    }),
-                    Ui.button(this, "导出课程表", false, new View.OnClickListener() {
-                        @Override public void onClick(View v) { open(TransferActivity.MODE_EXPORT); }
-                    })));
-            root.addView(io);
-        }
+        root.addView(Ui.space(this, Ui.GAP_SM));
+        listBox = new LinearLayout(this);
+        listBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(listBox);
 
         setContentView(Ui.wrapWithBottomBar(this, root, 1));
         render();
+    }
+
+    // ======================= 顶栏 + 创建入口菜单 =======================
+
+    /** 顶栏：左「课表库」标题 + 右 ⊕（44dp 热区 / 34dp 视觉，与首页 ⊕ 位置一致）。 */
+    private View buildTopBar() {
+        android.widget.FrameLayout bar = new android.widget.FrameLayout(this);
+
+        TextView t = Ui.textMediumLh(this, "课表库", Ui.SP_TITLE, Ui.TEXT, Ui.LH_TITLE);
+        bar.addView(t, new android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.Gravity.CENTER_VERTICAL));
+
+        // 44dp 热区（视觉 34dp）：小控件也要点得中
+        android.widget.FrameLayout hit = new android.widget.FrameLayout(this);
+        ImageView plus = new ImageView(this);
+        plus.setImageResource(R.drawable.ic_plus);
+        plus.setColorFilter(Ui.ACCENT);
+        plus.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8));
+        plus.setBackground(Ui.round(Ui.CARD2, Ui.R_CTRL, 0, this));
+        hit.addView(plus, new android.widget.FrameLayout.LayoutParams(
+                Ui.dp(this, 34), Ui.dp(this, 34), android.view.Gravity.CENTER));
+        hit.setClickable(true);
+        hit.setContentDescription("新建或导入课表");
+        hit.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { showCreateMenu(v); }
+        });
+        bar.addView(hit, new android.widget.FrameLayout.LayoutParams(
+                Ui.dp(this, Ui.TOUCH_MIN), Ui.dp(this, Ui.TOUCH_MIN),
+                android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.END));
+        return bar;
+    }
+
+    /** ⊕ 菜单（沿用首页 showPlusMenu 的既有样式：白底圆角单框 + 纯文字行 + 细分隔线，点外面收起）。
+     *  把「新建本地课表 / 导入课程表 / 导出课程表」三类创建入口收拢到一处（D6）。 */
+    private void showCreateMenu(View anchor) {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(Ui.round(Ui.CARD, Ui.R_CTRL, Ui.LINE, this));
+        int pad = Ui.dp(this, Ui.GAP_SM);
+        panel.setPadding(pad, pad, pad, pad);
+
+        final android.widget.PopupWindow pw = new android.widget.PopupWindow(panel,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        pw.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0x00000000));
+        pw.setOutsideTouchable(true);
+
+        addMenuItem(panel, pw, "新建本地课表", null);
+        if (Variant.isEv(this)) {
+            panel.addView(menuDivider());
+            addMenuItem(panel, pw, "导入课程表", TransferActivity.MODE_IMPORT);
+            panel.addView(menuDivider());
+            addMenuItem(panel, pw, "导出课程表", TransferActivity.MODE_EXPORT);
+        }
+
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        int[] loc = new int[2];
+        anchor.getLocationOnScreen(loc);
+        pw.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY,
+                loc[0] + anchor.getWidth() - panel.getMeasuredWidth(),
+                loc[1] + anchor.getHeight() + Ui.dp(this, 6));
+    }
+
+    /** 菜单项之间的 1dp 细分隔线（左右留 12dp 不顶满）。 */
+    private View menuDivider() {
+        View v = new View(this);
+        v.setBackgroundColor(Ui.LINE);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 1)));
+        p.leftMargin = Ui.dp(this, Ui.GAP_MD);
+        p.rightMargin = Ui.dp(this, Ui.GAP_MD);
+        v.setLayoutParams(p);
+        return v;
+    }
+
+    /** 菜单里的一行：只有文字，点击即执行。 */
+    private void addMenuItem(LinearLayout panel, final android.widget.PopupWindow pw,
+                             String label, final String transferMode) {
+        TextView tx = Ui.textLh(this, label, Ui.SP_SUBTITLE, Ui.TEXT, false, Ui.LH_SUBTITLE);
+        tx.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        tx.setPadding(Ui.dp(this, Ui.GAP_LG), 0, Ui.dp(this, Ui.GAP_LG), 0);
+        tx.setClickable(true);
+        panel.addView(tx, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, Ui.TOUCH_MIN)));
+        tx.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                pw.dismiss();
+                if (transferMode != null) {
+                    open(transferMode);
+                } else {
+                    createLocal();
+                }
+            }
+        });
     }
 
     // ======================= 列表渲染 =======================
 
     private void render() {
         listBox.removeAllViews();
+        syncBadgeView = null;      // 卡片重建 → 旧徽标引用失效，列表构建完成后统一回填
         curDeviceGroupKey = null;
         curGroupCount = -1;
-        refreshSyncView();
         renderDeviceBar();
         final String activeId = ScheduleStore.activeId(this);
         List<ScheduleStore.Schedule> all = ScheduleStore.list(this);
         lastRenderedCount = all.size();
         if (all.isEmpty()) {
-            // 空态按语境给引导：连着手环 = 手环侧是空的；没连 = 引导连接后自动导入
-            String hint = SyncEngine.get(this).connected()
-                    ? "手环上还没有课表 · 可在下方新建本地课表"
-                    : "还没有课表 · 连接手环后自动导入手环已有课表，或点下方按钮新建";
-            listBox.addView(Ui.text(this, hint, 12.5f, Ui.MUTED, false));
+            listBox.addView(emptyState());
+            refreshSyncView();
             return;
         }
         SyncEngine e = SyncEngine.get(this);
@@ -310,26 +384,27 @@ public class ScheduleListActivity extends Activity {
             String label = "legacy".equals(key)
                     ? "未识别手环（旧数据，连接后归位）"
                     : devLabel(key, g);
-            listBox.addView(groupHeader(label, g.size(), key, false));
+            listBox.addView(groupHeader(label, g.size(), key));
             addGroupBody(key, g, activeId);
         }
-        // 本地课程分组
+        // 本地课程分组（组头已是细行、自带呼吸感 → 不再需要分割线，B3.3）
         if (!local.isEmpty()) {
-            listBox.addView(divider());
-            listBox.addView(groupHeader("本地课程", local.size(), "local", false));
+            listBox.addView(groupHeader("本地课程", local.size(), "local"));
             addGroupBody("local", local, activeId);
         }
+        refreshSyncView();
     }
 
-    /** 渲染某分组的课程卡片：展开态才渲染卡片，折叠态只留一条空隙（当前设备组与其余分组共用） */
+    /** 渲染某分组的课程卡片：默认渲染（collapsedGroups 为空 = 全部展开，D2），
+     *  折叠态只留一条空隙（当前设备组与其余分组共用）。 */
     private void addGroupBody(String key, List<ScheduleStore.Schedule> g, String activeId) {
-        if (expandedGroups.contains(key)) {
-            for (ScheduleStore.Schedule s : g) {
-                listBox.addView(scheduleCard(s, activeId));
-                listBox.addView(Ui.space(this, 8));
-            }
-        } else {
+        if (collapsedGroups.contains(key)) {
             listBox.addView(Ui.space(this, 6));
+            return;
+        }
+        for (ScheduleStore.Schedule s : g) {
+            listBox.addView(scheduleCard(s, activeId));
+            listBox.addView(Ui.space(this, 8));
         }
     }
 
@@ -342,22 +417,36 @@ public class ScheduleListActivity extends Activity {
         SyncEngine e = SyncEngine.get(this);
         String curDev = e.currentDeviceId();
         // 判据用「连接状态」而非 deviceId：手环端未实现 get_device_id 时 deviceId 恒空，
-        // 但 interconnect 其实已连上（ConnectionBar 显示已连接），不能误报「未连接手环」。
+        // 但 interconnect 其实已连上，不能误报「未连接手环」。
         if (!e.connected()) {
-            deviceBarTitle.setText("未连接手环 · 课表按设备分组显示");
+            deviceBarTitle.setText("未连接手环 · 点此连接");
+            deviceBarTitle.setTextColor(Ui.MUTED);
+            if (deviceCountView != null) {
+                deviceCountView.setVisibility(View.GONE);
+            }
+            if (deviceRefreshBtn != null) {
+                deviceRefreshBtn.setColorFilter(Ui.MUTED);
+            }
             return;
         }
-        String name = e.currentDeviceName();
+        String name = e.currentDeviceName().trim();   // 手环端回的名字带多余空格，展示前裁掉
         String tail = tail4(curDev);
-        String count = curGroupCount >= 0 ? " · " + curGroupCount + " 套" : "";
-        String arrow = curDeviceGroupKey != null
-                ? (expandedGroups.contains(curDeviceGroupKey) ? "   ▾" : "   ▸")
-                : "";
-        String title = "在线 · " + (name.isEmpty() ? "当前手环" : name)
+        if (deviceRefreshBtn != null) {
+            deviceRefreshBtn.setColorFilter(Ui.ACCENT);
+        }
+        String title = (name.isEmpty() ? "当前手环" : name)
                 + (tail.isEmpty() ? "" : " ··" + tail)
-                + count + arrow
                 + (curDev.isEmpty() ? "（设备ID未取到）" : "");
         deviceBarTitle.setText(withGreenDot(title));
+        deviceBarTitle.setTextColor(Ui.TEXT);
+        if (deviceCountView != null) {
+            if (curGroupCount >= 0) {
+                deviceCountView.setText(curGroupCount + " 套");
+                deviceCountView.setVisibility(View.VISIBLE);
+            } else {
+                deviceCountView.setVisibility(View.GONE);
+            }
+        }
     }
 
     /** 标题开头加一个绿色实心圆点（●），仅圆点着色，表示在线（颜色走主题 token，勿写死） */
@@ -375,34 +464,44 @@ public class ScheduleListActivity extends Activity {
         return id.length() <= 4 ? id : id.substring(id.length() - 4);
     }
 
-    /** 分组标题（点击展开/收起）；默认折叠，▸/▾ 表示状态 */
-    private View groupHeader(String title, int n, final String key, boolean isCur) {
+    /** 分组标题（点击展开/收起）。D2：由「厚卡」降为「细行」—— 去掉卡片底色与描边、
+     *  字号降到 SP_CAPTION 且用次要色，把它压到卡片视觉之下，
+     *  让「课表名」成为页内唯一的视觉锚点。 */
+    private View groupHeader(String title, int n, final String key) {
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        head.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
-        head.setBackground(Ui.round(Ui.CARD2, 12, Ui.LINE, this));
+        head.setPadding(0, Ui.dp(this, Ui.GAP_LG), 0, Ui.dp(this, 7));
         head.setClickable(true);
-        final boolean open = expandedGroups.contains(key);
+        final boolean open = !collapsedGroups.contains(key);
         head.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                if (expandedGroups.contains(key)) {
-                    expandedGroups.remove(key);
+                if (collapsedGroups.contains(key)) {
+                    collapsedGroups.remove(key);
                 } else {
-                    expandedGroups.add(key);
+                    collapsedGroups.add(key);
                 }
                 render();
             }
         });
-        TextView t = Ui.text(this, (open ? "▾ " : "▸ ") + title + " · " + n + " 套",
-                12.5f, isCur ? Ui.ACCENT : Ui.TEXT, true);
+        TextView t = Ui.textMediumLh(this, title, Ui.SP_CAPTION, Ui.MUTED, Ui.LH_CAPTION);
         head.addView(t, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView cnt = Ui.text(this, n + " 套", 11f, Ui.MUTED, false);
+        cnt.setPadding(0, 0, Ui.dp(this, 6), 0);
+        head.addView(cnt);
+        // 箭头用 chevron_right 旋转：展开 90°（朝下）/ 折叠 0°（朝右）
+        ImageView arrow = new ImageView(this);
+        arrow.setImageResource(R.drawable.ic_chevron_right);
+        arrow.setColorFilter(Ui.MUTED);
+        arrow.setRotation(open ? 90f : 0f);
+        head.addView(arrow, new LinearLayout.LayoutParams(
+                Ui.dp(this, 13), Ui.dp(this, 13)));
         return head;
     }
 
     /** 非当前设备的分组标题：手环展示名 + 设备 ID 后4位（取组内第一个带设备名的课表） */
     private String devLabel(String devId, List<ScheduleStore.Schedule> g) {
-        String nm = devName(g);
+        String nm = devName(g).trim();
         String tail = tail4(devId);
         return (nm.isEmpty() ? "手环" : nm) + (tail.isEmpty() ? "" : " ··" + tail);
     }
@@ -417,86 +516,326 @@ public class ScheduleListActivity extends Activity {
         return "";
     }
 
-    /** 组间分割线 */
-    private View divider() {
-        View v = new View(this);
-        v.setBackgroundColor(Ui.LINE);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 1)));
-        p.setMargins(0, Ui.dp(this, 6), 0, Ui.dp(this, 10));
-        v.setLayoutParams(p);
-        return v;
-    }
+    // ======================= 课表卡片（D4 / D5 重排） =======================
 
+    /** 课表卡片。当前课表 = 主卡（主色描边 + 4dp 主色左竖条 + 同步徽标 + 「使用中」）；
+     *  其余 = 次卡（⋯ 溢出菜单 + 「设为当前」）。
+     *  破坏性操作不再与「编辑」并排常驻（D5），互斥选择也不再借 CheckBox 表达（D4）。 */
     private View scheduleCard(final ScheduleStore.Schedule s, final String activeId) {
         final boolean active = s.id.equals(activeId);
-        LinearLayout card = Ui.card(this);
 
-        // 第一行：标题 + 右侧图标操作（同步/编辑/删除）
+        // 外层横向容器承载「卡片底色 + 描边」；当前卡描边走主色
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setBackground(active
+                ? Ui.round(Ui.CARD, Ui.R_CARD, Ui.ACCENT, this)
+                : Ui.round(Ui.CARD, Ui.R_CARD, Ui.LINE, this));
+
+        // 当前课表：左缘 4dp 主色竖条（只圆左侧两角，与卡片左缘严丝合缝）
+        if (active) {
+            View strip = new View(this);
+            android.graphics.drawable.GradientDrawable g =
+                    new android.graphics.drawable.GradientDrawable();
+            g.setColor(Ui.ACCENT);
+            float r = Ui.dp(this, Ui.R_CARD);
+            // 顺序：左上 右上 右下 左下
+            g.setCornerRadii(new float[]{r, r, 0, 0, 0, 0, r, r});
+            strip.setBackground(g);
+            card.addView(strip, new LinearLayout.LayoutParams(
+                    Ui.dp(this, 4), LinearLayout.LayoutParams.MATCH_PARENT));
+        }
+
+        LinearLayout inner = new LinearLayout(this);
+        inner.setOrientation(LinearLayout.VERTICAL);
+        // 左内边距扣掉竖条宽度，保证两种卡的「标题左缘」严格对齐
+        inner.setPadding(Ui.dp(this, active ? Ui.GAP_MD - 4 : Ui.GAP_MD), Ui.dp(this, 4),
+                Ui.dp(this, Ui.GAP_MD), Ui.dp(this, 8));
+
+        // ── 行 1：课表名（SP_TITLE 17sp，做页内视觉锚点）+ ⋯ 溢出菜单
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
-        TextView titleView = Ui.text(this, s.name, 14.5f,
-                active ? Ui.ACCENT : Ui.TEXT, true);
+        TextView titleView = Ui.textMediumLh(this, s.name, Ui.SP_TITLE,
+                active ? Ui.ACCENT : Ui.TEXT, Ui.LH_TITLE);
+        titleView.setSingleLine(true);
+        titleView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         head.addView(titleView,
                 new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        head.addView(overflowBtn(s), new LinearLayout.LayoutParams(
+                Ui.dp(this, Ui.TOUCH_MIN), Ui.dp(this, Ui.TOUCH_MIN)));
+        inner.addView(head);
 
-        LinearLayout icons = new LinearLayout(this);
-        icons.setOrientation(LinearLayout.HORIZONTAL);
-        if (!s.isSync()) {
-            icons.addView(iconBtn(R.drawable.ic_refresh_cw, "同步到手环", new View.OnClickListener() {
-                @Override public void onClick(View v) { syncToWatch(s); }
-            }));
+        // ── 行 2：来源 · N 门课（相对时间另起一段，避免一行过长）
+        TextView sub = Ui.textLh(this, subShort(s), Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
+        sub.setPadding(0, Ui.dp(this, 2), 0, 0);
+        inner.addView(sub);
+
+        // ── 行 3：同步徽标（左）+ 「使用中」/「设为当前」（右）。整行固定 TOUCH_MIN 高，
+        //         保证两种卡的卡片总高一致（否则列表会高高低低）。
+        LinearLayout row3 = new LinearLayout(this);
+        row3.setOrientation(LinearLayout.HORIZONTAL);
+        row3.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+        TextView badge = syncBadge();
+        if (active) {
+            // 同步是「当前课表」的属性 → 徽标点即同步（原页顶胶囊的交互原样保留，D3）
+            syncBadgeView = badge;
+            applySyncBadge(badge, s, true);
+            row3.addView(badgeTouch(badge), new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, Ui.TOUCH_MIN)));
+            TextView time = Ui.text(this, syncAgo(s), Ui.SP_MICRO, Ui.MUTED, false);
+            time.setPadding(Ui.dp(this, Ui.GAP_SM), 0, 0, 0);
+            row3.addView(time, new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            row3.addView(usedBadge());
+        } else {
+            applySyncBadge(badge, s, false);
+            row3.addView(badge, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            View grow = new View(this);
+            row3.addView(grow, new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            row3.addView(setCurrentBtn(s), new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, Ui.TOUCH_MIN)));
         }
-        icons.addView(iconBtn(R.drawable.ic_pencil, "编辑", new View.OnClickListener() {
-            @Override public void onClick(View v) { editSchedule(s); }
-        }));
-        icons.addView(iconBtn(R.drawable.ic_trash_2, "删除", new View.OnClickListener() {
-            @Override public void onClick(View v) { deleteSchedule(s); }
-        }));
-        head.addView(icons);
-        card.addView(head);
+        inner.addView(row3, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, Ui.TOUCH_MIN)));
 
-        // 第二行：副信息 + 右侧「当前」勾选框（替代原第三行「切换为此 →」）
-        LinearLayout row2 = new LinearLayout(this);
-        row2.setOrientation(LinearLayout.HORIZONTAL);
-        row2.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        TextView sub = Ui.text(this, s.sub(), 11.5f, Ui.MUTED, false);
-        row2.addView(sub, new LinearLayout.LayoutParams(
+        card.addView(inner, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-        final android.widget.CheckBox cur = new android.widget.CheckBox(this);
-        cur.setText("当前");
-        cur.setTextSize(12f);
-        cur.setTextColor(active ? Ui.ACCENT : Ui.MUTED);
-        cur.setChecked(active);
-        cur.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
-            @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean isChecked) {
-                if (isChecked && !s.id.equals(ScheduleStore.activeId(ScheduleListActivity.this))) {
-                    ScheduleStore.setActive(ScheduleListActivity.this, s.id);
-                    status("已切换到「" + s.name + "」", Ui.OK);
-                    render();
-                } else if (!isChecked && s.id.equals(ScheduleStore.activeId(ScheduleListActivity.this))) {
-                    // 当前课表不能取消勾选（要先勾选别的课表）
-                    b.setChecked(true);
-                }
-            }
-        });
-        row2.addView(cur);
-        card.addView(row2);
         return card;
     }
 
-    /** 紧凑图标按钮（Lucide 矢量 + 小 padding + ACCENT 染色 + 无障碍描述） */
-    private View iconBtn(int iconRes, String desc, View.OnClickListener l) {
-        ImageView v = new ImageView(this);
-        v.setImageResource(iconRes);
-        v.setColorFilter(Ui.ACCENT);
-        v.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 6));
-        v.setContentDescription(desc);
-        v.setOnClickListener(l);
+    /** 副信息：「来源 · N 门课」 */
+    private String subShort(ScheduleStore.Schedule s) {
+        return (s.isSync() ? "来自手环" : "仅本机") + " · " + s.courses.size() + " 门课";
+    }
+
+    /** 最近一次同步的相对时间（无值返回空串，不放占位符） */
+    private String syncAgo(ScheduleStore.Schedule s) {
+        if (!s.isSync() || s.syncedAt <= 0) {
+            return "";
+        }
+        return CourseCache.ago(s.syncedAt);
+    }
+
+    /** ⋯ 溢出菜单按钮：44dp 热区 / 30dp 视觉。破坏性操作全收进这里（D5）。 */
+    private View overflowBtn(final ScheduleStore.Schedule s) {
+        android.widget.FrameLayout box = new android.widget.FrameLayout(this);
+        ImageView ic = new ImageView(this);
+        ic.setImageResource(R.drawable.ic_more_vertical);
+        ic.setColorFilter(Ui.MUTED);
+        ic.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8));
+        ic.setBackground(Ui.round(Ui.CARD2, 9, 0, this));
+        box.addView(ic, new android.widget.FrameLayout.LayoutParams(
+                Ui.dp(this, 30), Ui.dp(this, 30), android.view.Gravity.CENTER));
+        box.setClickable(true);
+        box.setContentDescription("更多操作");
+        box.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { showCardMenu(v, s); }
+        });
+        return box;
+    }
+
+    /** 卡片 ⋯ 菜单：编辑课表 / 同步到手环（仅本机卡）/ 从本机移除（红色警示）。 */
+    private void showCardMenu(View anchor, final ScheduleStore.Schedule s) {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(Ui.round(Ui.CARD, Ui.R_CTRL, Ui.LINE, this));
+        int pad = Ui.dp(this, Ui.GAP_SM);
+        panel.setPadding(pad, pad, pad, pad);
+
+        final android.widget.PopupWindow pw = new android.widget.PopupWindow(panel,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        pw.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0x00000000));
+        pw.setOutsideTouchable(true);
+
+        cardMenuItem(panel, pw, "编辑课表", Ui.TEXT, new Runnable() {
+            @Override public void run() { editSchedule(s); }
+        });
+        if (!s.isSync()) {
+            panel.addView(menuDivider());
+            cardMenuItem(panel, pw, "同步到手环", Ui.TEXT, new Runnable() {
+                @Override public void run() { syncToWatch(s); }
+            });
+        }
+        panel.addView(menuDivider());
+        cardMenuItem(panel, pw, "从本机移除", Ui.ERR, new Runnable() {
+            @Override public void run() { deleteSchedule(s); }
+        });
+
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        int[] loc = new int[2];
+        anchor.getLocationOnScreen(loc);
+        pw.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY,
+                loc[0] + anchor.getWidth() - panel.getMeasuredWidth(),
+                loc[1] + anchor.getHeight() + Ui.dp(this, 4));
+    }
+
+    private void cardMenuItem(LinearLayout panel, final android.widget.PopupWindow pw,
+                              String label, int color, final Runnable action) {
+        TextView tx = Ui.textLh(this, label, Ui.SP_BODY, color, false, Ui.LH_BODY);
+        tx.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        tx.setPadding(Ui.dp(this, Ui.GAP_LG), 0, Ui.dp(this, Ui.GAP_LG), 0);
+        tx.setClickable(true);
+        panel.addView(tx, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, Ui.TOUCH_MIN)));
+        tx.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                pw.dismiss();
+                action.run();
+            }
+        });
+    }
+
+    /** 同步徽标胶囊（紧凑视觉）。 */
+    private TextView syncBadge() {
+        TextView v = Ui.textMedium(this, "", 11f, Ui.ACCENT);
+        v.setGravity(android.view.Gravity.CENTER);
+        v.setPadding(Ui.dp(this, 9), Ui.dp(this, 3), Ui.dp(this, 9), Ui.dp(this, 3));
         return v;
+    }
+
+    /** 给徽标套一个 44dp 热区（视觉仍是紧凑胶囊）：视觉可小，热区不能缩。 */
+    private android.widget.FrameLayout badgeTouch(final TextView pill) {
+        android.widget.FrameLayout box = new android.widget.FrameLayout(this);
+        box.addView(pill, new android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.CENTER_VERTICAL));
+        box.setClickable(true);
+        box.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (syncPendingConnect) {
+                    syncPendingConnect = false;
+                    startActivity(new Intent(ScheduleListActivity.this, BandActivity.class));
+                } else {
+                    syncActive();
+                }
+            }
+        });
+        return box;
+    }
+
+    /** 「使用中」徽标（当前课表，不可点 —— 当前课表不能取消自己）。 */
+    private TextView usedBadge() {
+        TextView v = Ui.textMedium(this, "使用中", 11f, Ui.OK);
+        v.setGravity(android.view.Gravity.CENTER);
+        v.setPadding(Ui.dp(this, 9), Ui.dp(this, 3), Ui.dp(this, 9), Ui.dp(this, 3));
+        v.setBackground(Ui.round(Ui.OK_LIGHT, 14, 0, this));
+        return v;
+    }
+
+    /** 「设为当前」描边按钮（D4：互斥选择改用单选语义，替代原 CheckBox）；44dp 热区。 */
+    private View setCurrentBtn(final ScheduleStore.Schedule s) {
+        android.widget.FrameLayout box = new android.widget.FrameLayout(this);
+        TextView pill = Ui.textMedium(this, "设为当前", Ui.SP_CAPTION, Ui.ACCENT);
+        pill.setGravity(android.view.Gravity.CENTER);
+        pill.setPadding(Ui.dp(this, 13), Ui.dp(this, 5), Ui.dp(this, 13), Ui.dp(this, 5));
+        pill.setBackground(Ui.round(0x00000000, 14, Ui.ACCENT, this));
+        box.addView(pill, new android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.CENTER_VERTICAL));
+        box.setClickable(true);
+        box.setContentDescription("设为当前");
+        box.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (!s.id.equals(ScheduleStore.activeId(ScheduleListActivity.this))) {
+                    ScheduleStore.setActive(ScheduleListActivity.this, s.id);
+                    status("已切换到「" + s.name + "」", Ui.OK);
+                    render();
+                }
+            }
+        });
+        return box;
+    }
+
+    /** 同步徽标三态（D3）。优先级：待连接 > 未连接 > 有未同步 > 从未同步 > 已同步。 */
+    private void applySyncBadge(TextView v, ScheduleStore.Schedule s, boolean live) {
+        if (v == null) {
+            return;
+        }
+        boolean connected = SyncEngine.get(this).connected();
+        if (live && syncPendingConnect && !connected) {
+            v.setText("手环未连接 · 点此去连接");
+            v.setTextColor(Ui.WARN);
+            v.setBackground(Ui.round(Ui.WARN_LIGHT, 14, 0, this));
+            return;
+        }
+        int unsaved = SyncCoordinator.unsavedCount(s);
+        if (!connected) {
+            // 未连接 → 明确「无法同步」，别让用户误以为是自己忘了同步（语义澄清）
+            v.setText("未连接 · 无法同步");
+            v.setTextColor(Ui.WARN);
+            v.setBackground(Ui.round(Ui.WARN_LIGHT, 14, 0, this));
+        } else if (s.isSync() && unsaved == 0) {
+            v.setText("✓ 已同步");
+            v.setTextColor(Ui.OK);
+            v.setBackground(Ui.round(Ui.OK_LIGHT, 14, 0, this));
+        } else if (unsaved > 0) {
+            v.setText(unsaved + " 门课未同步");
+            v.setTextColor(Ui.ACCENT);
+            v.setBackground(Ui.round(Ui.ACCENT_LIGHT, 14, 0, this));
+        } else {
+            v.setText("尚未同步到手环");
+            v.setTextColor(Ui.WARN);
+            v.setBackground(Ui.round(Ui.WARN_LIGHT, 14, 0, this));
+        }
+    }
+
+    // ======================= 空态（D7） =======================
+
+    /** 空态：线稿图 + 标题 + 双 CTA；主 CTA 按连接状态切换语境。 */
+    private View emptyState() {
+        final boolean connected = SyncEngine.get(this).connected();
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        box.setPadding(0, Ui.dp(this, 44), 0, Ui.dp(this, 20));
+
+        ImageView art = new ImageView(this);
+        art.setImageResource(R.drawable.ic_calendar);
+        art.setColorFilter(Ui.LINE);
+        box.addView(art, new LinearLayout.LayoutParams(Ui.dp(this, 64), Ui.dp(this, 64)));
+
+        TextView h = Ui.textMediumLh(this, "还没有课表", Ui.SP_TITLE, Ui.TEXT, Ui.LH_TITLE);
+        h.setPadding(0, Ui.dp(this, Ui.GAP_LG), 0, 0);
+        box.addView(h);
+
+        TextView p = Ui.textLh(this,
+                connected ? "手环上还没有课表，可以新建一套本地课表开始。"
+                          : "连接手环会自动导入手环里的课表，也可以直接新建一套本地课表。",
+                Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
+        p.setGravity(android.view.Gravity.CENTER);
+        p.setPadding(0, Ui.dp(this, 6), 0, 0);
+        box.addView(p);
+
+        View.OnClickListener toConnect = new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(ScheduleListActivity.this, BandActivity.class));
+            }
+        };
+        View.OnClickListener toCreate = new View.OnClickListener() {
+            @Override public void onClick(View v) { createLocal(); }
+        };
+
+        LinearLayout btns = new LinearLayout(this);
+        btns.setOrientation(LinearLayout.VERTICAL);
+        btns.setPadding(0, Ui.dp(this, 22), 0, 0);
+        btns.addView(Ui.button(this, connected ? "＋ 新建本地课表" : "连接手环",
+                true, connected ? toCreate : toConnect),
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
+        btns.addView(Ui.space(this, Ui.GAP_SM));
+        btns.addView(Ui.button(this, connected ? "连接手环" : "＋ 新建本地课表",
+                false, connected ? toConnect : toCreate),
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
+        box.addView(btns);
+        return box;
     }
 
     // ======================= 操作：新建 =======================
@@ -599,38 +938,29 @@ public class ScheduleListActivity extends Activity {
 
     // ======================= 操作：同步到手环 =======================
 
-    /** Refresh top sync status button (active schedule): unsaved count / synced / not synced. */
+    /** 回填「当前课表卡」内的同步徽标（D3：原为页顶全宽胶囊，现贴着它所属的那套课表）。
+     *  当前设备分组被折叠时没有卡片 → 徽标引用为空，此处自然空转（可接受）。 */
     private void refreshSyncView() {
-        if (syncView == null) {
+        if (syncBadgeView == null) {
             return;
         }
         ScheduleStore.Schedule s = ScheduleStore.active(this);
         if (s == null) {
-            syncView.setVisibility(View.GONE);
-            syncView.setText("");
             return;
         }
-        syncView.setVisibility(View.VISIBLE);
-        syncPendingConnect = false;
-        int unsaved = SyncCoordinator.unsavedCount(s);
-        if (unsaved > 0) {
-            syncView.setText(unsaved + " 门课未同步 · 点此同步");
-            syncView.setTextColor(Ui.ACCENT);
-        } else if (s.isSync()) {
-            syncView.setText("已同步 ✓");
-            syncView.setTextColor(Ui.OK);
-        } else {
-            syncView.setText("尚未同步到手环 · 点此同步");
-            syncView.setTextColor(Ui.WARN);
+        // ⚠️ 只在「已连上」时才清「待连接」标记：否则会把自己刚设上的二次确认提示抹掉
+        //（点徽标 → 提示「点此去连接」→ 再点才跳转，这个两步确认不能被刷新冲掉）。
+        if (SyncEngine.get(this).connected()) {
+            syncPendingConnect = false;
         }
+        applySyncBadge(syncBadgeView, s, true);
     }
 
-    /** Force sync active schedule: field-level 3-way merge, write local changes back to watch. */
+    /** 同步当前课表：字段级三向合并，把本机改动写回手环。 */
     private void syncActive() {
         if (!SyncEngine.get(this).connected()) {
             syncPendingConnect = true;
-            syncView.setText("手环未连接 · 点此去连接");
-            syncView.setTextColor(Ui.WARN);
+            refreshSyncView();
             return;
         }
         syncPendingConnect = false;
@@ -700,6 +1030,9 @@ public class ScheduleListActivity extends Activity {
     private void status(String msg, int color) {
         statusView.setText(msg);
         statusView.setTextColor(color);
+        // 无消息时整行收起：空状态行也会占掉约 26dp 竖向空间，首屏因此少露半张卡片
+        statusView.setVisibility(
+                (msg == null || msg.length() == 0) ? View.GONE : View.VISIBLE);
     }
 
     private void open(String mode) {

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lucide "more-vertical"（https://lucide.dev/icons/more-vertical）24×24，运行时染色。
+     ⚠️ 圆点半径取 2（Lucide 原值 1）：本图标按 16dp 左右渲染，
+     viewport 24 → 实际只有 2.7dp，取 1 会小到看不清。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12 3a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"
+        android:fillColor="#FF000000"/>
+    <path
+        android:pathData="M12 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"
+        android:fillColor="#FF000000"/>
+    <path
+        android:pathData="M12 17a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"
+        android:fillColor="#FF000000"/>
+</vector>
