@@ -7,6 +7,7 @@ import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -18,12 +19,14 @@ import android.widget.TextView;
  *   1. validating executors without waiting for watch-side release;
  *   2. direct access when the watch isn't nearby.
  *
- * Watch-side protocol: {"action":"cmd","type":"find_phone|phone_status|mute|countdown","minutes":N}
+ * Watch-side protocol: {"action":"cmd","type":"find_phone|phone_status|mute|countdown|flashlight|weather|nav|word",...}
  */
 public class ToolboxActivity extends Activity {
 
     private int lastThemeVersion = 0;
     private TextView findStatusView, muteStatusView, cdStatusView, cdTimerView, statusView;
+    private TextView torchStatusView, wxStatusView, navSavedView, wordResult;
+    private EditText wordInput, homeInput, workInput;
     private Button cdCancelBtn;
     private LinearLayout cdCard, cdFiredCard;
 
@@ -145,6 +148,116 @@ public class ToolboxActivity extends Activity {
             }
         }));
         root.addView(stCard);
+        root.addView(Ui.space(this, 10));
+
+        // ===== 手电筒 =====
+        LinearLayout torchCard = Ui.card(this);
+        torchCard.addView(Ui.text(this, "手电筒", 13.5f, Ui.TEXT, true));
+        torchStatusView = Ui.text(this, CommandRouter.isTorchOn() ? "当前：开" : "当前：关",
+                11.5f, Ui.MUTED, false);
+        torchStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
+        torchCard.addView(torchStatusView);
+        torchCard.addView(Ui.button(this, "切换手电筒", true, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                String r = CommandRouter.toggleFlashlight(ToolboxActivity.this);
+                torchStatusView.setText(r);
+                torchStatusView.setTextColor(Ui.OK);
+            }
+        }));
+        root.addView(torchCard);
+        root.addView(Ui.space(this, 10));
+
+        // ===== 查单词 =====
+        LinearLayout wordCard = Ui.card(this);
+        wordCard.addView(Ui.text(this, "查单词", 13.5f, Ui.TEXT, true));
+        wordInput = new EditText(this);
+        wordInput.setHint("输入英文单词");
+        wordInput.setTextSize(13.5f);
+        wordInput.setSingleLine(true);
+        wordCard.addView(wordInput);
+        wordResult = Ui.text(this, "", 12f, Ui.TEXT, false);
+        wordResult.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
+        wordCard.addView(wordResult);
+        wordCard.addView(Ui.button(this, "查询", true, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                final String w = wordInput.getText().toString().trim();
+                if (w.length() == 0) {
+                    wordResult.setText("请先输入单词");
+                    return;
+                }
+                wordResult.setText("查询中\u2026");
+                wordResult.setTextColor(Ui.MUTED);
+                new Thread(new Runnable() {
+                    @Override public void run() {
+                        final String r = CommandRouter.lookupWord(w);
+                        mainHandler.post(new Runnable() {
+                            @Override public void run() {
+                                wordResult.setTextColor(Ui.TEXT);
+                                wordResult.setText(r);
+                            }
+                        });
+                    }
+                }).start();
+            }
+        }));
+        root.addView(wordCard);
+        root.addView(Ui.space(this, 10));
+
+        // ===== 查天气 =====
+        LinearLayout wxCard = Ui.card(this);
+        wxCard.addView(Ui.text(this, "查天气", 13.5f, Ui.TEXT, true));
+        wxStatusView = Ui.text(this, "取当前位置天气（授权定位后更准）", 11.5f, Ui.MUTED, false);
+        wxStatusView.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
+        wxCard.addView(wxStatusView);
+        wxCard.addView(Ui.button(this, "查询天气", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                wxStatusView.setText("查询中\u2026");
+                wxStatusView.setTextColor(Ui.MUTED);
+                new Thread(new Runnable() {
+                    @Override public void run() {
+                        final String r = CommandRouter.fetchWeather(ToolboxActivity.this);
+                        mainHandler.post(new Runnable() {
+                            @Override public void run() {
+                                wxStatusView.setTextColor(Ui.OK);
+                                wxStatusView.setText(r);
+                            }
+                        });
+                    }
+                }).start();
+            }
+        }));
+        root.addView(wxCard);
+        root.addView(Ui.space(this, 10));
+
+        // ===== 常用地点（手环导航用）=====
+        LinearLayout navCard = Ui.card(this);
+        navCard.addView(Ui.text(this, "常用地点（手环导航用）", 13.5f, Ui.TEXT, true));
+        homeInput = new EditText(this);
+        homeInput.setHint("家地址（如：XX 小区）");
+        homeInput.setTextSize(13f);
+        homeInput.setSingleLine(true);
+        homeInput.setText(navPrefs().getString("home_addr", ""));
+        navCard.addView(homeInput);
+        workInput = new EditText(this);
+        workInput.setHint("公司地址");
+        workInput.setTextSize(13f);
+        workInput.setSingleLine(true);
+        workInput.setText(navPrefs().getString("work_addr", ""));
+        navCard.addView(workInput);
+        navSavedView = Ui.text(this, "", 11f, Ui.MUTED, false);
+        navCard.addView(navSavedView);
+        navCard.addView(Ui.button(this, "保存", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                navPrefs().edit()
+                        .putString("home_addr", homeInput.getText().toString().trim())
+                        .putString("work_addr", workInput.getText().toString().trim())
+                        .apply();
+                navSavedView.setText("已保存");
+                navSavedView.setTextColor(Ui.OK);
+            }
+        }));
+        root.addView(navCard);
+        root.addView(Ui.space(this, 10));
 
         root.addView(Ui.space(this, 10));
         root.addView(Ui.mono(this, "手环端 EV 工具箱的同名菜单会触发同样的指令"
@@ -152,6 +265,36 @@ public class ToolboxActivity extends Activity {
 
         setContentView(Ui.wrapWithBottomBar(this, root, -1));
         Analytics.pageView(this, "/apk/toolbox");
+
+        // 查天气用到定位（未授权则回退默认城市）；首次进工具箱请求一次
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 23
+                    && checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{
+                        android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                        android.Manifest.permission.ACCESS_FINE_LOCATION}, 1001);
+            }
+        } catch (Throwable ignored) {
+        }
+
+        // 手环点「问单词」会带 focus_word 打开本页 → 聚焦查词框并弹键盘
+        if (getIntent() != null && getIntent().getBooleanExtra("focus_word", false)) {
+            wordInput.requestFocus();
+            wordInput.postDelayed(new Runnable() {
+                @Override public void run() {
+                    try {
+                        android.view.inputmethod.InputMethodManager imm =
+                                (android.view.inputmethod.InputMethodManager)
+                                        getSystemService(INPUT_METHOD_SERVICE);
+                        if (imm != null) {
+                            imm.showSoftInput(wordInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }, 300);
+        }
     }
 
     // ======================= Countdown =======================
@@ -227,6 +370,10 @@ public class ToolboxActivity extends Activity {
     }
 
     // ======================= Lifecycle =======================
+
+    private android.content.SharedPreferences navPrefs() {
+        return getSharedPreferences("ev_nav", MODE_PRIVATE);
+    }
 
     private String currentRinger() {
         return "当前：" + CommandRouter.statusText(this);

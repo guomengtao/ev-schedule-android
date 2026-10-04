@@ -25,7 +25,7 @@ import org.json.JSONObject;
 /**
  * 手环遥控指令路由（工具箱）。
  *
- * 手环 → {"action":"cmd","type":"find_phone|phone_status|mute|countdown","minutes":N}
+ * 手环 → {"action":"cmd","type":"find_phone|phone_status|mute|countdown|flashlight|weather|nav|word",...}
  *      → 本类白名单分发执行 → {"action":"cmd_result","type":...,"ok":...,"text":...} 回传手环
  * 手机端「工具箱」页（ToolboxActivity）直接调执行器，同一套逻辑两处复用。
  *
@@ -75,23 +75,298 @@ public final class CommandRouter {
             } else if ("countdown".equals(type)) {
                 countdown(c, Math.max(1, o.optInt("minutes", 5)));
                 text = "倒计时 " + Math.max(1, o.optInt("minutes", 5)) + " 分钟已设置";
+            } else if ("flashlight".equals(type)) {
+                text = toggleFlashlight(c);
+            } else if ("weather".equals(type)) {
+                weather(c);        // 异步查询，完成后自行回执
+                return true;       // 不发现场回执（避免「正在查询」空回执）
+            } else if ("nav".equals(type)) {
+                text = openNav(c, o.optString("dest", "home"));
+            } else if ("word".equals(type)) {
+                openWord(c);
+                text = "请在手机上输入要查的单词";
             } else {
                 return true; // cmd 动作但未知类型：消费掉，不进留言
             }
             android.util.Log.i("EVToolbox", "cmd: " + type);
-            // 回执手环（尽力而为）
-            try {
-                JSONObject r = new JSONObject();
-                r.put("action", "cmd_result");
-                r.put("type", type);
-                r.put("ok", true);
-                r.put("text", text);
-                SyncEngine.get(c).send(r.toString(), null);
-            } catch (Throwable ignored) {
-            }
+            reply(c, type, true, text);
             return true;
         } catch (Throwable t) {
             return false;
+        }
+    }
+
+    /** 给手环发 cmd_result 回执（尽力而为；同步/异步路径共用） */
+    static void reply(Context c, String type, boolean ok, String text) {
+        try {
+            JSONObject r = new JSONObject();
+            r.put("action", "cmd_result");
+            r.put("type", type);
+            r.put("ok", ok);
+            r.put("text", text);
+            SyncEngine.get(c).send(r.toString(), null);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    // ======================= 手电筒（API 23+ setTorchMode，官方免 CAMERA 权限） =======================
+
+    private static volatile boolean torchOn = false;
+
+    /** 切换手电筒；返回结果描述（同步，供手环回执与工具箱页共用） */
+    public static synchronized String toggleFlashlight(Context c) {
+        Context app = c.getApplicationContext();
+        try {
+            android.hardware.camera2.CameraManager cm = (android.hardware.camera2.CameraManager)
+                    app.getSystemService(Context.CAMERA_SERVICE);
+            if (cm == null) {
+                return "手电筒不可用";
+            }
+            String id = findBackFlashCamera(cm);
+            if (id == null) {
+                return "未找到闪光灯";
+            }
+            torchOn = !torchOn;
+            cm.setTorchMode(id, torchOn);
+            return torchOn ? "手电筒已开" : "手电筒已关";
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "flashlight fail: " + t);
+            return "手电筒不可用（机型限制）";
+        }
+    }
+
+    /** 手电筒是否开着（供工具箱页展示） */
+    public static boolean isTorchOn() {
+        return torchOn;
+    }
+
+    private static String findBackFlashCamera(android.hardware.camera2.CameraManager cm) throws Exception {
+        for (String cid : cm.getCameraIdList()) {
+            android.hardware.camera2.CameraCharacteristics ch = cm.getCameraCharacteristics(cid);
+            Boolean has = ch.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE);
+            Integer facing = ch.get(android.hardware.camera2.CameraCharacteristics.LENS_FACING);
+            if (has != null && has && facing != null
+                    && facing == android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK) {
+                return cid;
+            }
+        }
+        for (String cid : cm.getCameraIdList()) {   // 退一步：任意带闪光灯的
+            android.hardware.camera2.CameraCharacteristics ch = cm.getCameraCharacteristics(cid);
+            Boolean has = ch.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE);
+            if (has != null && has) {
+                return cid;
+            }
+        }
+        return null;
+    }
+
+    // ======================= 查天气（Open-Meteo，免费无 key；异步回执） =======================
+
+    /** 异步查天气：立即返回，结果经 cmd_result 回执手环 */
+    public static void weather(final Context c) {
+        final Context app = c.getApplicationContext();
+        new Thread(new Runnable() {
+            @Override public void run() {
+                reply(app, "weather", true, fetchWeather(app));
+            }
+        }, "ev-weather").start();
+    }
+
+    /** 同步取天气文本（供工具箱页直接调用）；含网络请求，勿在主线程调用 */
+    public static String fetchWeather(Context c) {
+        double lat = 39.9042, lon = 116.4074;   // 默认北京
+        try {
+            android.location.LocationManager lm =
+                    (android.location.LocationManager) c.getSystemService(Context.LOCATION_SERVICE);
+            if (lm != null) {
+                android.location.Location loc = null;
+                try {
+                    if (lm.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)) {
+                        loc = lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER);
+                    }
+                } catch (Throwable ignored) {}
+                if (loc == null) {
+                    try {
+                        if (lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)) {
+                            loc = lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER);
+                        }
+                    } catch (Throwable ignored) {}
+                }
+                if (loc != null) {
+                    lat = loc.getLatitude();
+                    lon = loc.getLongitude();
+                }
+            }
+        } catch (Throwable ignored) {}
+        try {
+            String url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon
+                    + "&current=temperature_2m,weather_code,relative_humidity_2m";
+            String body = httpGet(url);
+            JSONObject j = new JSONObject(body);
+            JSONObject cur = j.optJSONObject("current");
+            if (cur == null) {
+                return "天气数据异常";
+            }
+            double t = cur.optDouble("temperature_2m", Double.NaN);
+            int wc = cur.optInt("weather_code", -1);
+            int hum = cur.optInt("relative_humidity_2m", -1);
+            StringBuilder sb = new StringBuilder();
+            sb.append(wmoText(wc));
+            if (!Double.isNaN(t)) {
+                sb.append(" ").append(Math.round(t)).append("\u00B0C");
+            }
+            if (hum >= 0) {
+                sb.append(" 湿度").append(hum).append("%");
+            }
+            return sb.toString();
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "weather fail: " + t);
+            return "天气查询失败（检查网络）";
+        }
+    }
+
+    /** WMO weather code → 中文简述 */
+    private static String wmoText(int code) {
+        if (code == 0) return "晴";
+        if (code == 1) return "少云";
+        if (code == 2) return "多云";
+        if (code == 3) return "阴";
+        if (code == 45 || code == 48) return "有雾";
+        if (code >= 51 && code <= 57) return "毛毛雨";
+        if (code >= 61 && code <= 67) return "雨";
+        if (code >= 71 && code <= 77) return "雪";
+        if (code >= 80 && code <= 82) return "阵雨";
+        if (code >= 85 && code <= 86) return "阵雪";
+        if (code >= 95 && code <= 99) return "雷阵雨";
+        return "未知";
+    }
+
+    // ======================= 查导航（拉起地图 App，免权限） =======================
+
+    private static final String NAV_PREF = "ev_nav";
+
+    /**
+     * 打开地图导航到「家 / 公司」。地址存 ev_nav prefs（工具箱页可设置），默认「家 / 公司」。
+     * 用 geo: URI（ACTION_VIEW），多地图 App 时弹选择器。
+     */
+    public static String openNav(Context c, String dest) {
+        Context app = c.getApplicationContext();
+        boolean work = "work".equals(dest);
+        String addr = app.getSharedPreferences(NAV_PREF, Context.MODE_PRIVATE)
+                .getString(work ? "work_addr" : "home_addr", work ? "公司" : "家");
+        if (addr == null || addr.trim().length() == 0) {
+            addr = work ? "公司" : "家";
+        }
+        try {
+            android.net.Uri uri = android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(addr));
+            Intent i = new Intent(Intent.ACTION_VIEW, uri);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            Intent chooser = Intent.createChooser(i, "选择地图导航到「" + addr + "」");
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            app.startActivity(chooser);
+            return "已打开地图：" + addr;
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "nav fail: " + t);
+            return "未找到地图应用";
+        }
+    }
+
+    // ======================= 问单词（手机端输入 + 有道词典查询） =======================
+
+    /** 手环点「问单词」：打开手机工具箱页并聚焦查词输入框（手环无法打字，改手机输入）。 */
+    public static void openWord(Context c) {
+        try {
+            Intent i = new Intent(c.getApplicationContext(), ToolboxActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    .putExtra("focus_word", true);
+            c.getApplicationContext().startActivity(i);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 查词（有道 jsonapi 英汉）；含网络请求，勿在主线程调用。 */
+    public static String lookupWord(String word) {
+        if (word == null || word.trim().length() == 0) {
+            return "";
+        }
+        String w = word.trim();
+        try {
+            String url = "https://dict.youdao.com/jsonapi?q=" + android.net.Uri.encode(w);
+            String body = httpGet(url);
+            JSONObject j = new JSONObject(body);
+            StringBuilder sb = new StringBuilder();
+            try {   // 音标
+                JSONObject simple = j.optJSONObject("simple");
+                org.json.JSONArray sw = simple == null ? null : simple.optJSONArray("word");
+                if (sw != null && sw.length() > 0) {
+                    String us = sw.getJSONObject(0).optString("usphone");
+                    if (us != null && us.length() > 0) {
+                        sb.append("/").append(us).append("/\n");
+                    }
+                }
+            } catch (Throwable ignored) {}
+            boolean got = false;
+            try {   // 释义 ec.word[0].trs[].tr[0].l.i[0]
+                JSONObject ec = j.optJSONObject("ec");
+                org.json.JSONArray words = ec == null ? null : ec.optJSONArray("word");
+                if (words != null && words.length() > 0) {
+                    org.json.JSONArray trs = words.getJSONObject(0).optJSONArray("trs");
+                    if (trs != null) {
+                        for (int i = 0; i < trs.length(); i++) {
+                            org.json.JSONArray tr = trs.getJSONObject(i).optJSONArray("tr");
+                            if (tr != null && tr.length() > 0) {
+                                org.json.JSONArray ii = tr.getJSONObject(0)
+                                        .optJSONObject("l").optJSONArray("i");
+                                if (ii != null && ii.length() > 0) {
+                                    String line = ii.optString(0);
+                                    if (line != null && line.length() > 0) {
+                                        sb.append(line).append("\n");
+                                        got = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+            if (!got && sb.length() == 0) {
+                return "未找到「" + w + "」的释义";
+            }
+            return sb.toString().trim();
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "word fail: " + t);
+            return "查词失败（检查网络）";
+        }
+    }
+
+    /** 极简 HTTP GET（UTF-8，10 秒超时） */
+    private static String httpGet(String url) throws Exception {
+        java.net.HttpURLConnection conn = null;
+        try {
+            conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (EV-Sync)");
+            int code = conn.getResponseCode();
+            java.io.InputStream in = (code >= 200 && code < 300)
+                    ? conn.getInputStream() : conn.getErrorStream();
+            if (in == null) {
+                return "";
+            }
+            java.io.BufferedReader br = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(in, "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
+            br.close();
+            return sb.toString();
+        } finally {
+            if (conn != null) {
+                try { conn.disconnect(); } catch (Throwable ignored) {}
+            }
         }
     }
 

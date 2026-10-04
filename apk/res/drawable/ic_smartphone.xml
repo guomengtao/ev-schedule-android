@@ -1,19 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Lucide "smartphone"（https://lucide.dev/icons/smartphone）24×24 描边 2，运行时染色 -->
+<!-- 手机图标（自绘，Lucide 描边风格 24×24 描边 2，运行时染色）。
+     原 Lucide "smartphone" 是四角半径 2 的窄胶囊 + 底部一个点，辨识度低；
+     这里改成：机身更宽 + 顶部听筒横线 + 底部 Home 条，一眼看得出是手机。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- 机身 -->
     <path
-        android:pathData="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"
+        android:pathData="M7 2.5h10a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-15a2 2 0 0 1 2-2z"
         android:strokeColor="#FF000000"
         android:strokeWidth="2"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
         android:fillColor="#00000000"/>
+    <!-- 顶部听筒 -->
     <path
-        android:pathData="M12 18h.01"
+        android:pathData="M10.4 5.6h3.2"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"/>
+    <!-- 底部 Home 条 -->
+    <path
+        android:pathData="M10.4 18.4h3.2"
         android:strokeColor="#FF000000"
         android:strokeWidth="2"
         android:strokeLineCap="round"

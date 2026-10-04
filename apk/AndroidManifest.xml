@@ -39,6 +39,9 @@
     <!-- 快速激活（换 18 位激活码）与埋点上报需要联网 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 查天气：尝试用手机定位自动取当前城市（授权后生效；未授权则回退默认城市） -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- 常驻前台服务：进程活着才能在后台收到手环推来的留言（不轮询） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
