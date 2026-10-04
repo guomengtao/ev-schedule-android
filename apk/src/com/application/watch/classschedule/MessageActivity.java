@@ -96,6 +96,20 @@ public class MessageActivity extends Activity {
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private Runnable peerTypingClear;
 
+    // ======================= 微信基准色板（2026-10-05 真机 1080×1920@3x 截图取样） =======================
+    // 会话背景 #EDEDED / 对方气泡 #FFFFFF / 我方气泡 #95EC69（微信绿，**黑字**）
+    // 正文 #191919 / 输入栏 #F7F7F7 / 时间戳 #B2B2B2 / 发送键 #07C160
+    // ⚠️ 只在本页局部覆盖，绝不改 Ui 全局 token（那会影响首页/课程表/设置）。
+    private int wxChtBg()    { return Ui.isDark() ? 0xFF111111 : 0xFFEDEDED; }
+    private int wxNavBg()    { return Ui.isDark() ? 0xFF1E1E1E : 0xFFEDEDED; }
+    private int wxInBubble() { return Ui.isDark() ? 0xFF2C2C2C : 0xFFFFFFFF; }
+    private int wxOutBubble(){ return Ui.isDark() ? 0xFF3EB575 : 0xFF95EC69; }
+    private int wxBodyText() { return Ui.isDark() ? 0xFFE5E5E5 : 0xFF191919; }
+    private int wxTimeText() { return Ui.isDark() ? 0xFF7F7F7F : 0xFFB2B2B2; }
+    private int wxBarBg()    { return Ui.isDark() ? 0xFF1E1E1E : 0xFFF7F7F7; }
+    private int wxInputBg()  { return Ui.isDark() ? 0xFF2C2C2C : 0xFFFFFFFF; }
+    private int wxSendGreen(){ return Ui.isDark() ? 0xFF3EB575 : 0xFF07C160; }
+
     /** 队列项：{id, dir:"out"|"in", text, ts, status:"pending"|"sent"} —— 按时间顺序 */
     private JSONArray items = new JSONArray();
     private boolean sending = false;
@@ -105,18 +119,23 @@ public class MessageActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.header(this, "留言"));
-        root.addView(Ui.space(this, 4));
-        root.addView(Ui.text(this, "离线留言：不连接也能写，连上手环后自动送达", 11.5f, Ui.MUTED, false));
-        root.addView(Ui.space(this, 8));
+        root.setBackgroundColor(wxChtBg());
+        View nav = Ui.header(this, "留言");
+        nav.setBackgroundColor(wxNavBg());
+        root.addView(nav);
+        root.addView(Ui.space(this, 2));
 
-        stateView = Ui.text(this, "状态：未连接", 12f, Ui.MUTED, false);
+        // 状态行：微信式「干净」——仅未连接 / 有待发送时显示，一切正常则隐藏（不留常驻说明）
+        stateView = Ui.text(this, "", 11f, wxTimeText(), false);
+        stateView.setGravity(android.view.Gravity.CENTER);
+        stateView.setVisibility(View.GONE);
         root.addView(stateView);
-        root.addView(Ui.space(this, 8));
+        root.addView(Ui.space(this, 4));
 
         listBox = new LinearLayout(this);
         listBox.setOrientation(LinearLayout.VERTICAL);
         scrollBox = new ScrollView(this);
+        scrollBox.setBackgroundColor(wxChtBg());
         scrollBox.addView(listBox);
         root.addView(scrollBox, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -139,11 +158,15 @@ public class MessageActivity extends Activity {
 
         LinearLayout sendRow = new LinearLayout(this);
         sendRow.setOrientation(LinearLayout.HORIZONTAL);
+        sendRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         inputView = new EditText(this);
-        inputView.setHint("写一条留言…");
-        inputView.setTextSize(13f);
-        inputView.setTextColor(Ui.TEXT);
-        inputView.setHintTextColor(Ui.MUTED);
+        inputView.setHint("发消息…");
+        inputView.setTextSize(15f);
+        inputView.setTextColor(wxBodyText());
+        inputView.setHintTextColor(wxTimeText());
+        inputView.setBackground(Ui.round(wxInputBg(), 6, 0, this));
+        inputView.setPadding(Ui.dp(this, 12), Ui.dp(this, 9), Ui.dp(this, 12), Ui.dp(this, 9));
+        inputView.setMaxLines(4);
         // P3：输入变化 → 节流上报输入态（草稿实时同步给手环）
         inputView.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
@@ -157,6 +180,9 @@ public class MessageActivity extends Activity {
         Button send = Ui.button(this, "发送", true, new View.OnClickListener() {
             @Override public void onClick(View v) { sendMessage(); }
         });
+        send.setTextColor(0xFFFFFFFF);
+        send.setBackground(Ui.round(wxSendGreen(), 6, 0, this));   // 微信发送键绿
+        send.setPadding(Ui.dp(this, 15), Ui.dp(this, 9), Ui.dp(this, 15), Ui.dp(this, 9));
         sendRow.addView(send);
         root.addView(sendRow);
         root.addView(Ui.space(this, 6));
@@ -233,14 +259,17 @@ public class MessageActivity extends Activity {
     private void refreshState() {
         SyncEngine e = SyncEngine.get(this);
         int pending = countPending();
+        boolean show = true;
         if (!e.hasNode()) {
-            stateView.setText("状态：未连接手环" + (pending > 0 ? ("　·　待发送 " + pending + " 条") : ""));
-            stateView.setTextColor(Ui.MUTED);
+            stateView.setText(pending > 0 ? ("未连接手环　·　待发送 " + pending + " 条") : "未连接手环");
+            stateView.setTextColor(wxTimeText());
+        } else if (pending > 0) {
+            stateView.setText("待发送 " + pending + " 条");
+            stateView.setTextColor(Ui.WARN);
         } else {
-            stateView.setText("状态：已连 " + e.deviceName
-                    + (pending > 0 ? ("　·　待发送 " + pending + " 条") : "　·　全部已送达"));
-            stateView.setTextColor(pending > 0 ? Ui.WARN : Ui.OK);
+            show = false;   // 一切正常：微信式干净界面，不显示常驻状态行
         }
+        stateView.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private int countPending() {
@@ -288,16 +317,16 @@ public class MessageActivity extends Activity {
             // P2：三态 —— pending(待发送) / sent(已送达) / read(已读，手环已回执)
             String status = o.optString("status", "pending");
             listBox.addView(bubbleRow(out, status, o.optString("text"), maxW));
-            listBox.addView(Ui.space(this, 6));
+            listBox.addView(Ui.space(this, 10));
         }
         scrollToBottom();
     }
 
     /** 居中时间分割（10.5sp 灰字，上下留白） */
     private View timeDivider(long ts) {
-        TextView t = Ui.text(this, fmt(ts), 10.5f, Ui.MUTED, false);
+        TextView t = Ui.text(this, wxFmt(ts), 12f, wxTimeText(), false);
         t.setGravity(android.view.Gravity.CENTER);
-        t.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 8));
+        t.setPadding(0, Ui.dp(this, 12), 0, Ui.dp(this, 8));
         t.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         return t;
@@ -309,21 +338,22 @@ public class MessageActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(android.view.Gravity.BOTTOM);
 
-        int av = Ui.dp(this, 34);
+        int av = Ui.dp(this, 40);                     // 微信头像 40dp
         ImageView avatar = new ImageView(this);
         avatar.setImageResource(out ? R.drawable.ic_smartphone : R.drawable.ic_tab_watch);
-        avatar.setColorFilter(out ? Ui.ACCENT : Ui.MUTED);
-        avatar.setPadding(Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7));
-        avatar.setBackground(Ui.round(out ? Ui.ACCENT_LIGHT : Ui.CARD2, 17, 0, this));
+        avatar.setColorFilter(out ? wxSendGreen() : Ui.MUTED);
+        avatar.setPadding(Ui.dp(this, 9), Ui.dp(this, 9), Ui.dp(this, 9), Ui.dp(this, 9));
+        avatar.setBackground(Ui.round(out ? 0xFFDCF3E3 : Ui.CARD2, 4, 0, this));  // 微信=圆角方块
         LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(av, av);
-        alp.gravity = android.view.Gravity.BOTTOM;
+        alp.gravity = android.view.Gravity.TOP;
 
         LinearLayout bubble = new LinearLayout(this);
         bubble.setOrientation(LinearLayout.VERTICAL);
-        bubble.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 8));
-        bubble.setBackground(Ui.round(out ? Ui.ACCENT : Ui.CARD, 14, out ? 0 : Ui.LINE, this));
+        bubble.setPadding(Ui.dp(this, 12), Ui.dp(this, 9), Ui.dp(this, 12), Ui.dp(this, 9));  // 微信 12×9
+        bubble.setBackground(Ui.round(out ? wxOutBubble() : wxInBubble(), 5, 0, this));       // 微信圆角≈5dp、无描边
 
-        TextView body = Ui.textLh(this, text, 14f, out ? Ui.ON_ACCENT : Ui.TEXT, false, Ui.LH_BODY);
+        // 微信正文：我方绿底 / 对方白底**都用深色字**（#191919），绝非白字
+        TextView body = Ui.textLh(this, text, 16f, wxBodyText(), false, Ui.LH_BODY);
         body.setMaxWidth(maxW);
         bubble.addView(body);
 
@@ -335,13 +365,13 @@ public class MessageActivity extends Activity {
             int stColor;
             if ("read".equals(status)) {
                 stLabel = "已读";
-                stColor = 0xFF9BE3B0;      // 淡绿：已读
+                stColor = 0xAA0B6B33;      // 深绿：已读（绿底上可读）
             } else if ("sent".equals(status)) {
                 stLabel = "已送达";
-                stColor = 0xB3FFFFFF;      // 半透明白：已送达
+                stColor = 0x99000000;      // 半透明黑：已送达
             } else {
                 stLabel = "待发送";
-                stColor = 0xFFFFE08A;      // 淡黄：待发送
+                stColor = 0xAAA03000;      // 暗棕红：待发送
             }
             TextView st = Ui.text(this, stLabel, 10f, stColor, false);
             st.setPadding(0, Ui.dp(this, 3), 0, 0);
@@ -351,7 +381,7 @@ public class MessageActivity extends Activity {
 
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.setMargins(Ui.dp(this, 6), 0, Ui.dp(this, 6), 0);
+        blp.setMargins(Ui.dp(this, 10), 0, Ui.dp(this, 10), 0);   // 微信头像-气泡间距≈10dp
 
         View spacer = new View(this);
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(0, 1, 1f);
@@ -382,6 +412,32 @@ public class MessageActivity extends Activity {
 
     private String fmt(long ts) {
         return ts > 0 ? TS.format(new Date(ts)) : "";
+    }
+
+    /** 微信式时间分割：今天 → HH:mm；昨天 → 昨天 HH:mm；今年 → M月d日 HH:mm；跨年 → yyyy年M月d日 HH:mm */
+    private String wxFmt(long ts) {
+        if (ts <= 0) return "";
+        java.util.Calendar now = java.util.Calendar.getInstance();
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        c.setTimeInMillis(ts);
+        String hm = String.format(Locale.US, "%02d:%02d",
+                c.get(java.util.Calendar.HOUR_OF_DAY), c.get(java.util.Calendar.MINUTE));
+        if (now.get(java.util.Calendar.YEAR) == c.get(java.util.Calendar.YEAR)
+                && now.get(java.util.Calendar.DAY_OF_YEAR) == c.get(java.util.Calendar.DAY_OF_YEAR)) {
+            return hm;
+        }
+        java.util.Calendar y = java.util.Calendar.getInstance();
+        y.add(java.util.Calendar.DAY_OF_YEAR, -1);
+        if (y.get(java.util.Calendar.YEAR) == c.get(java.util.Calendar.YEAR)
+                && y.get(java.util.Calendar.DAY_OF_YEAR) == c.get(java.util.Calendar.DAY_OF_YEAR)) {
+            return "昨天 " + hm;
+        }
+        if (now.get(java.util.Calendar.YEAR) == c.get(java.util.Calendar.YEAR)) {
+            return (c.get(java.util.Calendar.MONTH) + 1) + "月"
+                    + c.get(java.util.Calendar.DAY_OF_MONTH) + "日 " + hm;
+        }
+        return c.get(java.util.Calendar.YEAR) + "年" + (c.get(java.util.Calendar.MONTH) + 1) + "月"
+                + c.get(java.util.Calendar.DAY_OF_MONTH) + "日 " + hm;
     }
 
     // ======================= 发送 =======================
