@@ -36,9 +36,20 @@ public final class CommandRouter {
     private static final String TAG = "EVToolbox";
     private static final int FIND_NOTIFY_ID = 9101;
 
+    /**
+     * 「找手机」单次响铃 / 震动的**硬上限**（毫秒）。
+     * 到点一律强制停止 —— 由「Handler 快路径 + AlarmManager 硬兜底 + 震动的有限波形」三重保证，
+     * 绝不允许一直响下去（见 findPhone 注释）。
+     */
+    private static final long FIND_MAX_MS = 30_000L;
+    private static final int FIND_STOP_ALARM_CODE = 7005;   // AlarmManager 兜底停止
+    private static final int FIND_OPEN_CODE = 7010;         // 点通知/全屏意图打开关闭页
+
     private static MediaPlayer player;          // 找手机响铃
     private static PowerManager.WakeLock wakeLock;
     private static Runnable autoStop;
+    /** 当前是否正在「找手机」响铃（FindPhoneActivity 据此自动关闭） */
+    private static volatile boolean findingActive = false;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
     private CommandRouter() {
@@ -86,10 +97,28 @@ public final class CommandRouter {
 
     // ======================= 找手机 =======================
 
-    /** 响铃（ALARM 音轨穿透静音）+ 震动 + 亮屏，30 秒后自动停止，通知栏可手动停 */
+    /**
+     * 找手机：响铃（ALARM 音轨，穿透静音/勿扰）+ 震动 + 亮屏。
+     *
+     * 停止保障（三重，杜绝「一直响」）：
+     *   ① Handler 快路径：FIND_MAX_MS 后停（进程活着时最快生效）；
+     *   ② AlarmManager 硬兜底：即使 Doze 让 Handler 延后，闹钟也会到点强制停；
+     *   ③ 震动用**有限时长波形**：即便进程被杀，系统的震动器也会自己播完就停
+     *      （这是最容易被忽略的一条 —— 无限循环的震动会脱离 App 进程继续抖）。
+     *
+     * 可关闭：响铃同时弹出一个**全屏提示页**（FindPhoneActivity），点「停止响铃」立即关闭；
+     * 通知也可划掉 / 点「停止响铃」立即停。
+     */
     public static synchronized void findPhone(Context c) {
         final Context app = c.getApplicationContext();
-        stopFindPhone(app);
+        try {
+            stopFindPhone(app);
+        } catch (Throwable ignored) {
+        }
+
+        boolean started = false;
+
+        // ---- ① 响铃：ALARM 音轨 + 循环 ----
         try {
             MediaPlayer p = new MediaPlayer();
             Uri uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
@@ -103,42 +132,185 @@ public final class CommandRouter {
             p.prepare();
             p.start();
             player = p;
+            started = true;
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "findPhone: ring fail", t);
+        }
 
-            Vibrator v = (Vibrator) app.getSystemService(Context.VIBRATOR_SERVICE);
-            if (v != null && Build.VERSION.SDK_INT >= 26) {
-                v.vibrate(VibrationEffect.createWaveform(new long[]{600, 400}, 0));
-            } else if (v != null) {
-                v.vibrate(new long[]{600, 400}, 0);
-            }
+        // ---- ② 震动：有限时长波形（自带上限，与 FIND_MAX_MS 等长）----
+        try {
+            startBoundedVibration(app);
+            started = true;
+        } catch (Throwable t) {
+            android.util.Log.e(TAG, "findPhone: vibrate fail", t);
+        }
 
+        // ---- ③ 亮屏（锁屏也能看到找手机页）----
+        // ⚠️ 独立守卫：acquire 需要 android.permission.WAKE_LOCK。
+        //    历史事故（2026-10-04 真机）：清单漏声明该权限 → acquire 抛 SecurityException →
+        //    把整段 findPhone 打断在「响铃已开始、通知/弹窗/兜底停都还没做」的中间态 →
+        //    手机一直响下去且无法从通知栏停止。故这里必须单独 try，绝不允许它拖垮后面的步骤。
+        try {
             PowerManager pm = (PowerManager) app.getSystemService(Context.POWER_SERVICE);
             if (pm != null) {
                 wakeLock = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK
                         | PowerManager.ACQUIRE_CAUSES_WAKEUP, "ev:findphone");
-                wakeLock.acquire(30_000L);
+                wakeLock.acquire(FIND_MAX_MS);
             }
+        } catch (Throwable t) {
+            android.util.Log.w(TAG, "findPhone: wakelock fail（检查 WAKE_LOCK 权限）: " + t);
+            wakeLock = null;
+        }
 
-            Notification n = new Notification.Builder(app, Notifications.CH_REMIND)
-                    .setSmallIcon(R.drawable.ic_bell_ring)
-                    .setContentTitle("正在响铃找手机")
-                    .setContentText("找到后点此停止")
-                    .setOngoing(true)
-                    .addAction(0, "停止", stopPi(app))
-                    .build();
-            nm(app).notify(FIND_NOTIFY_ID, n);
+        findingActive = started;
 
+        // ---- ④ 通知：高优先级 + 全屏意图 + 可划掉（划掉即停）----
+        if (started) {
+            try {
+                nm(app).notify(FIND_NOTIFY_ID, buildFindNotification(app));
+            } catch (Throwable t) {
+                android.util.Log.w(TAG, "findPhone: notify fail: " + t);
+            }
+            // ---- ⑤ 立即弹出可一键关闭的提示页 ----
+            try {
+                showFindPopup(app);
+            } catch (Throwable t) {
+                android.util.Log.w(TAG, "findPhone: popup fail: " + t);
+            }
+        }
+
+        // ---- ⑥ 兜底停：Handler 快路径 + AlarmManager 硬兜底（必须执行）----
+        try {
             autoStop = new Runnable() {
                 @Override public void run() {
                     stopFindPhone(app);
                 }
             };
-            MAIN.postDelayed(autoStop, 30_000L);
+            MAIN.postDelayed(autoStop, FIND_MAX_MS);
+            scheduleStopAlarm(app);
         } catch (Throwable t) {
-            android.util.Log.e(TAG, "findPhone fail", t);
+            android.util.Log.e(TAG, "findPhone: schedule auto-stop fail", t);
+        }
+    }
+
+    /** 当前是否正在「找手机」响铃 */
+    public static boolean isFinding() {
+        return findingActive;
+    }
+
+    /** 单次找手机响铃/震动的最大秒数（供 UI 展示） */
+    public static long findMaxSeconds() {
+        return FIND_MAX_MS / 1000L;
+    }
+
+    /** 有限时长震动波形：{600,400} 循环铺满 FIND_MAX_MS，repeat=-1 → 播完即止 */
+    private static void startBoundedVibration(Context app) {
+        Vibrator v = (Vibrator) app.getSystemService(Context.VIBRATOR_SERVICE);
+        if (v == null) {
+            return;
+        }
+        final long on = 600, off = 400;
+        java.util.ArrayList<Long> pat = new java.util.ArrayList<Long>();
+        long total = 0;
+        while (total < FIND_MAX_MS) {
+            long turnOn = Math.min(on, FIND_MAX_MS - total);
+            if (turnOn <= 0) {
+                break;
+            }
+            pat.add(turnOn);
+            total += turnOn;
+            if (total >= FIND_MAX_MS) {
+                break;
+            }
+            long turnOff = Math.min(off, FIND_MAX_MS - total);
+            if (turnOff <= 0) {
+                break;
+            }
+            pat.add(turnOff);
+            total += turnOff;
+        }
+        long[] arr = new long[pat.size()];
+        for (int i = 0; i < arr.length; i++) {
+            arr[i] = pat.get(i);
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                v.vibrate(VibrationEffect.createWaveform(arr, -1));   // -1 = 不重复
+            } else {
+                v.vibrate(arr, -1);
+            }
+        } catch (Throwable t) {
+            // 极端情况下退化为一次性短震动
+            try { v.vibrate(600); } catch (Throwable ignored) {}
+        }
+    }
+
+    private static Notification buildFindNotification(Context app) {
+        Notification.Builder b = newBuilder(app, Notifications.CH_REMIND);
+        b.setSmallIcon(R.drawable.ic_bell_ring)
+                .setContentTitle("正在响铃找手机")
+                .setContentText("点「停止响铃」立即关闭，最多 " + (FIND_MAX_MS / 1000) + " 秒自动停止")
+                .setOngoing(false)
+                .setAutoCancel(true)
+                .setCategory(Notification.CATEGORY_ALARM)
+                .setContentIntent(openFindPi(app))
+                .setDeleteIntent(stopPi(app))                 // 划掉通知也停止
+                .addAction(0, "停止响铃", stopPi(app));
+        if (Build.VERSION.SDK_INT >= 21) {
+            b.setPriority(Notification.PRIORITY_HIGH);
+        }
+        try {
+            b.setFullScreenIntent(openFindPi(app), true);      // 锁屏时全屏弹出（Android 14+ 可能降级为横幅）
+        } catch (Throwable ignored) {
+        }
+        return b.build();
+    }
+
+    /** 弹出可一键关闭的找手机提示页（尽力而为；被后台启动限制拦截时静默失败） */
+    private static void showFindPopup(Context app) {
+        try {
+            Intent i = new Intent(app, FindPhoneActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+            app.startActivity(i);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** AlarmManager 硬兜底：到点强制 stopFindPhone（Doze 下也能触发） */
+    private static void scheduleStopAlarm(Context app) {
+        try {
+            AlarmManager am = (AlarmManager) app.getSystemService(Context.ALARM_SERVICE);
+            if (am == null) {
+                return;
+            }
+            long at = System.currentTimeMillis() + FIND_MAX_MS;
+            if (Build.VERSION.SDK_INT >= 23) {
+                try {
+                    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, findStopAlarmPi(app));
+                } catch (Throwable t) {
+                    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, findStopAlarmPi(app));
+                }
+            } else {
+                am.set(AlarmManager.RTC_WAKEUP, at, findStopAlarmPi(app));
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void cancelStopAlarm(Context app) {
+        try {
+            AlarmManager am = (AlarmManager) app.getSystemService(Context.ALARM_SERVICE);
+            if (am != null) {
+                am.cancel(findStopAlarmPi(app));
+            }
+        } catch (Throwable ignored) {
         }
     }
 
     public static synchronized void stopFindPhone(Context c) {
+        findingActive = false;
         try {
             if (player != null) {
                 player.stop();
@@ -158,14 +330,42 @@ public final class CommandRouter {
                 MAIN.removeCallbacks(autoStop);
                 autoStop = null;
             }
+            cancelStopAlarm(c);
         } catch (Throwable ignored) {
         }
     }
 
+    /** 通知「停止响铃」动作 / 划掉通知 → 停止 */
     private static PendingIntent stopPi(Context c) {
         Intent it = new Intent(c, ToolboxReceiver.class).setAction(ToolboxReceiver.ACTION_FIND_STOP);
-        return PendingIntent.getBroadcast(c, 7002, it,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        return PendingIntent.getBroadcast(c, 7002, it, piFlags());
+    }
+
+    /** 点通知/全屏意图 → 打开找手机提示页 */
+    private static PendingIntent openFindPi(Context c) {
+        Intent it = new Intent(c, FindPhoneActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        return PendingIntent.getActivity(c, FIND_OPEN_CODE, it, piFlags());
+    }
+
+    /** AlarmManager 兜底停止的 PendingIntent（与通知动作分开，便于单独 cancel） */
+    private static PendingIntent findStopAlarmPi(Context c) {
+        Intent it = new Intent(c, ToolboxReceiver.class).setAction(ToolboxReceiver.ACTION_FIND_STOP);
+        return PendingIntent.getBroadcast(c, FIND_STOP_ALARM_CODE, it, piFlags());
+    }
+
+    private static int piFlags() {
+        int f = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 23) {
+            f |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        return f;
+    }
+
+    private static Notification.Builder newBuilder(Context c, String channel) {
+        return (Build.VERSION.SDK_INT >= 26)
+                ? new Notification.Builder(c, channel)
+                : new Notification.Builder(c);
     }
 
     // ======================= 静音切换 =======================

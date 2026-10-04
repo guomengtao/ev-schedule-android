@@ -48,7 +48,7 @@ public class ToolboxActivity extends Activity {
                 Ui.button(this, "Start Ringing", true, new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         CommandRouter.findPhone(ToolboxActivity.this);
-                        findStatusView.setText("Ringing... tap Stop or wait 30s");
+                        findStatusView.setText("Ringing... a full-screen popup lets you stop instantly");
                         findStatusView.setTextColor(Ui.OK);
                     }
                 }),

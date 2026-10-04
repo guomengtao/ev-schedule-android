@@ -32,6 +32,10 @@
     <!-- 留言提醒：震动；Android 13+ 通知（后续做后台提醒时需要） -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 找手机：响铃时保持屏幕常亮（CommandRouter.findPhone 的 WakeLock）。
+         2026-10-04 真机事故：漏声明该权限 → acquire 抛 SecurityException → findPhone 中断在中途
+         （响铃已开始但通知/弹窗/30 秒兜底停都没建立）→ 手机一直响且无法从通知栏停止。 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- 快速激活（换 18 位激活码）与埋点上报需要联网 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -100,6 +104,11 @@
         <activity android:name="com.application.watch.classschedule.ToolboxActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden" />
+        <!-- 找手机：响铃时的全屏提示页（可一键立即关闭）。锁屏之上显示；不进最近任务。 -->
+        <activity android:name="com.application.watch.classschedule.FindPhoneActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
         <activity android:name="com.application.watch.classschedule.BandActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
