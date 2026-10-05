@@ -1449,7 +1449,7 @@ public class HomeActivity extends Activity {
         Dialog dlg = new Dialog(this);
         dlg.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
         dlg.setContentView(box);
-        dlg.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dlg.getWindow().setBackgroundDrawable(new ColorDrawable(0x00000000));
         dlg.getWindow().setDimAmount(0.55f);
         dlg.getWindow().setLayout(Ui.dp(this, 330), WindowManager.LayoutParams.WRAP_CONTENT);
         dlg.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
