@@ -6,7 +6,11 @@ import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.graphics.Color;
+import android.graphics.drawable.ClipDrawable;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
+import android.widget.ProgressBar;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -281,31 +285,86 @@ public final class UpdateChecker {
         }
         final String sha = j.optString("sha256", "");
         final boolean force = j.optBoolean("isForce", false) || j.optBoolean("force", false);
-        final ProgressDialog pd = new ProgressDialog(a);
-        pd.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-        pd.setTitle("正在下载 v" + j.optString("versionName", ""));
-        pd.setMax(100);
-        pd.setCancelable(false);
+        final Dialog[] holder = new Dialog[1];
+
+        // ---- 自绘下载卡（与升级弹窗同一视觉语言）----
+        LinearLayout box = new LinearLayout(a);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = Ui.dp(a, 22);
+        box.setBackground(Ui.round(Ui.CARD, 22, 0, a));
+        box.setPadding(pad, pad, pad, pad);
+
+        box.addView(Ui.text(a, "正在下载 v" + j.optString("versionName", ""), 16.5f, Ui.TEXT, true));
+        box.addView(Ui.space(a, 4));
+        box.addView(Ui.text(a, "镜像优先 · 完成后自动弹出安装", 11f, Ui.MUTED, false));
+        box.addView(Ui.space(a, 16));
+
+        // 圆角进度条（底轨=LINE，进度=ACCENT）
+        GradientDrawable track = new GradientDrawable();
+        track.setColor(Ui.LINE);
+        track.setCornerRadius(Ui.dp(a, 5));
+        GradientDrawable fillD = new GradientDrawable();
+        fillD.setColor(Ui.ACCENT);
+        fillD.setCornerRadius(Ui.dp(a, 5));
+        ClipDrawable clip = new ClipDrawable(fillD, Gravity.LEFT, ClipDrawable.HORIZONTAL);
+        LayerDrawable layer = new LayerDrawable(new android.graphics.drawable.Drawable[]{track, clip});
+        layer.setId(0, android.R.id.background);
+        layer.setId(1, android.R.id.progress);
+        ProgressBar bar = new ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal);
+        bar.setMax(100);
+        bar.setProgressDrawable(layer);
+        box.addView(bar, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(a, 10)));
+        box.addView(Ui.space(a, 10));
+
+        final TextView pct = Ui.text(a, "0%", 15f, Ui.ACCENT, true);
+        box.addView(pct);
+        final TextView size = Ui.text(a, "准备中…", 11f, Ui.MUTED, false);
+        box.addView(size);
+        box.addView(Ui.space(a, 14));
+
         if (!force) {
-            pd.setButton(ProgressDialog.BUTTON_NEGATIVE, "取消",
-                    new DialogInterface.OnClickListener() {
-                        @Override public void onClick(DialogInterface d, int w) {
-                            d.dismiss();
-                        }
-                    });
+            // 仅收起窗口；下载在后台继续（与旧 ProgressDialog 行为一致）
+            Button cancel = Ui.button(a, "取消", false, new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (holder[0] != null) {
+                        holder[0].dismiss();
+                    }
+                }
+            });
+            cancel.setBackground(Ui.round(0x00000000, 12, Ui.LINE, a));
+            cancel.setTextColor(Ui.MUTED);
+            box.addView(cancel, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(a, 42)));
         }
-        pd.show();
-        tryUrl(a, j, urls, 0, sha, pd);
+
+        Dialog dlg = new Dialog(a);
+        dlg.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        dlg.setContentView(box);
+        dlg.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dlg.getWindow().setDimAmount(0.55f);
+        dlg.getWindow().setLayout(Ui.dp(a, 330), WindowManager.LayoutParams.WRAP_CONTENT);
+        dlg.setCancelable(!force);
+        dlg.setCanceledOnTouchOutside(!force);
+        holder[0] = dlg;
+        dlg.show();
+
+        final DlUi ui = new DlUi();
+        ui.dlg = dlg;
+        ui.bar = bar;
+        ui.pct = pct;
+        ui.size = size;
+        tryUrl(a, j, urls, 0, sha, ui);
     }
 
     /** 镜像优先、直连兜底：每个 URL 重新覆盖下载到本地文件，失败后换下一个。 */
     private static void tryUrl(final Activity a, final JSONObject j, final String[] urls,
-                               final int i, final String sha, final ProgressDialog pd) {
+                               final int i, final String sha, final DlUi ui) {
         if (a.isFinishing() || a.isDestroyed()) {
             return;
         }
         if (i >= urls.length) {
-            hide(a, pd);
+            hide(a, ui);
             showRetry(a, j);
             return;
         }
@@ -319,10 +378,14 @@ public final class UpdateChecker {
                         return;
                     }
                     final int pct = (int) (received * 100 / total);
+                    final long rx = received;
+                    final long tt = total;
                     a.runOnUiThread(new Runnable() {
                         @Override public void run() {
-                            if (pd.isShowing()) {
-                                pd.setProgress(pct);
+                            if (ui.dlg.isShowing()) {
+                                ui.bar.setProgress(pct);
+                                ui.pct.setText(pct + "%");
+                                ui.size.setText(mb(rx) + " / " + mb(tt));
                             }
                         }
                     });
@@ -339,10 +402,10 @@ public final class UpdateChecker {
                         apk.delete(); // 校验不过的包不能留在盘上
                         toast(a, (i == 0 && urls.length > 1)
                                 ? "镜像下载失败，切换直连重试…" : "下载失败，正在重试…");
-                        tryUrl(a, j, urls, i + 1, sha, pd);
+                        tryUrl(a, j, urls, i + 1, sha, ui);
                         return;
                     }
-                    hide(a, pd);
+                    hide(a, ui);
                     // 更新漏斗：升级包校验通过、即将唤起安装
                     Analytics.pageView(a, "/apk/update-installed?to="
                             + j.optInt("versionCode", 0) + "&c=inapp");
@@ -357,7 +420,7 @@ public final class UpdateChecker {
             });
         } catch (Throwable t) {
             android.util.Log.e(TAG, "download prepare fail", t);
-            tryUrl(a, j, urls, i + 1, sha, pd);
+            tryUrl(a, j, urls, i + 1, sha, ui);
         }
     }
 
@@ -368,17 +431,13 @@ public final class UpdateChecker {
                 if (a.isFinishing() || a.isDestroyed()) {
                     return;
                 }
-                new AlertDialog.Builder(a)
-                        .setTitle("下载失败")
-                        .setMessage("镜像与直连均未成功（或文件校验不过），请检查网络后重试。")
-                        .setCancelable(true)
-                        .setPositiveButton("重试", new DialogInterface.OnClickListener() {
-                            @Override public void onClick(DialogInterface d, int w) {
+                Dialogs.confirm(a, 0, Ui.ERR, "下载失败",
+                        "镜像与直连均未成功（或文件校验不过），请检查网络后重试。",
+                        null, "重试", false, new Dialogs.Action() {
+                            @Override public void run() {
                                 downloadAndInstall(a, j);
                             }
-                        })
-                        .setNegativeButton("取消", null)
-                        .show();
+                        });
             }
         });
     }
@@ -422,17 +481,29 @@ public final class UpdateChecker {
         }
     }
 
-    private static void hide(final Activity a, final ProgressDialog pd) {
+    private static void hide(final Activity a, final DlUi ui) {
         a.runOnUiThread(new Runnable() {
             @Override public void run() {
                 try {
-                    if (pd.isShowing()) {
-                        pd.dismiss();
+                    if (ui.dlg != null && ui.dlg.isShowing()) {
+                        ui.dlg.dismiss();
                     }
                 } catch (Throwable ignored) {
                 }
             }
         });
+    }
+
+    /** 下载中窗口的控件集合（代替旧的 ProgressDialog） */
+    private static class DlUi {
+        Dialog dlg;
+        ProgressBar bar;
+        TextView pct;
+        TextView size;
+    }
+
+    private static String mb(long bytes) {
+        return String.format(java.util.Locale.US, "%.1f MB", bytes / 1048576.0);
     }
 
     private static void toast(final Activity a, final String msg) {
