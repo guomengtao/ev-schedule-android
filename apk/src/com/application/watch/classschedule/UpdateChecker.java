@@ -2,8 +2,18 @@ package com.application.watch.classschedule;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.view.Gravity;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -26,9 +36,10 @@ import java.util.ArrayList;
  *   → versionCode 对比 → 弹窗 → 下载（镜像优先、直连兜底，边下边算 sha256）
  *   → 写入 getExternalFilesDir → MiniFileProvider + ACTION_INSTALL_PACKAGE 触发系统安装。
  *
- * 安装走传统 ACTION_VIEW 路径而非 PackageInstaller：实测 EMUI 8 会静默丢弃
- * 第三方 App 的 PackageInstaller.commit（shell 特权正常），而 ACTION_VIEW
- * 在各 ROM（含华为）都会弹安装确认，兼容性最好。见 docs/自动升级实现方案.md §7。
+ * 安装触发：ACTION_INSTALL_PACKAGE（2026-10-05 由 ACTION_VIEW 迁移——泛化 VIEW 在
+ * 部分机型会被 WPS 等文件 App 抢注处理器，出现"用 WPS 打开"装不上；
+ * ACTION_INSTALL_PACKAGE 只有系统安装器响应）。注意它与 PackageInstaller.commit
+ * 会话 API 不同（后者 EMUI 8 会静默丢弃）。见 docs/自动升级实现方案.md §7。
  *
  * 服务端 JSON 字段：versionCode / versionName / sha256 /
  *   downloadUrlMirror（国内镜像，优先尝试）/ downloadUrlOrigin（GitHub 直链，兜底）/
@@ -133,29 +144,106 @@ public final class UpdateChecker {
                 if (log.length() == 0) {
                     log = j.optString("log", "无详细更新说明");
                 }
-                AlertDialog.Builder b = new AlertDialog.Builder(a)
-                        .setTitle("发现新版本 v" + j.optString("versionName", ""))
-                        .setMessage(log)
-                        .setCancelable(!force)
-                        .setPositiveButton("立即更新", new DialogInterface.OnClickListener() {
-                            @Override public void onClick(DialogInterface d, int w) {
-                                if (!canInstall(a)) {
-                                    requestInstallPermission(a);
-                                    return;
-                                }
-                                downloadAndInstall(a, j);
-                            }
-                        });
+                final String ver = j.optString("versionName", "");
+                final int code = j.optInt("versionCode", -1);
+                final Dialog[] holder = new Dialog[1];
+
+                // ---- 自绘升级卡（与 Dialogs 同一视觉语言）：版本章 + 标题 + 可滚动更新说明 + 主/次按钮 ----
+                LinearLayout box = new LinearLayout(a);
+                box.setOrientation(LinearLayout.VERTICAL);
+                int pad = Ui.dp(a, 22);
+                box.setBackground(Ui.round(Ui.CARD, 22, 0, a));
+                box.setPadding(pad, pad, pad, pad);
+
+                LinearLayout head = new LinearLayout(a);
+                head.setOrientation(LinearLayout.HORIZONTAL);
+                head.setGravity(Gravity.CENTER_VERTICAL);
+                TextView chip = Ui.text(a, "v" + ver, 11.5f, 0xFFFFFFFF, true);
+                chip.setBackground(Ui.round(Ui.ACCENT, 20, 0, a));
+                chip.setPadding(Ui.dp(a, 10), Ui.dp(a, 3), Ui.dp(a, 10), Ui.dp(a, 3));
+                LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                chipLp.rightMargin = Ui.dp(a, 9);
+                head.addView(chip, chipLp);
+                head.addView(Ui.text(a, "发现新版本", 16.5f, Ui.TEXT, true));
+                box.addView(head);
+                box.addView(Ui.space(a, 12));
+
+                // 更新说明（长文案限高滚动，短文案自适应；左对齐易读）
+                ScrollView sv = new ScrollView(a);
+                sv.setVerticalScrollBarEnabled(false);
+                TextView body = Ui.text(a, log, 13.5f, Ui.TEXT, false);
+                body.setLineSpacing(Ui.dp(a, 3), 1f);
+                sv.addView(body, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                int svH = (log.length() > 90)
+                        ? Ui.dp(a, 170)
+                        : LinearLayout.LayoutParams.WRAP_CONTENT;
+                box.addView(sv, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, svH));
+                box.addView(Ui.space(a, 6));
+                box.addView(Ui.text(a, "覆盖安装保留课表与手环配对数据", 11f, Ui.MUTED, false));
+                box.addView(Ui.space(a, 14));
+
+                LinearLayout btns = new LinearLayout(a);
+                btns.setOrientation(LinearLayout.HORIZONTAL);
+                Button later = Ui.button(a, "稍后再说", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        if (holder[0] != null) {
+                            holder[0].dismiss();
+                        }
+                    }
+                });
+                later.setBackground(Ui.round(0x00000000, 12, Ui.LINE, a));
+                later.setTextColor(Ui.TEXT);
+                btns.addView(later, new LinearLayout.LayoutParams(0, Ui.dp(a, 42), 1f));
+                LinearLayout.LayoutParams lp0 = (LinearLayout.LayoutParams) btns.getChildAt(0).getLayoutParams();
+                lp0.rightMargin = Ui.dp(a, 10);
+                Button go = Ui.button(a, "立即更新", false, new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        if (holder[0] != null) {
+                            holder[0].dismiss();
+                        }
+                        if (!canInstall(a)) {
+                            requestInstallPermission(a);
+                            return;
+                        }
+                        downloadAndInstall(a, j);
+                    }
+                });
+                go.setBackground(Ui.round(Ui.ACCENT, 12, 0, a));
+                go.setTextColor(0xFFFFFFFF);
+                btns.addView(go, new LinearLayout.LayoutParams(0, Ui.dp(a, 42), 1f));
+                box.addView(btns);
+
                 if (!force) {
-                    b.setNegativeButton("稍后再说", null);
-                    b.setNeutralButton("忽略此版本", new DialogInterface.OnClickListener() {
-                        @Override public void onClick(DialogInterface d, int w) {
-                            ignoreVersion(a, j.optInt("versionCode", -1));
+                    box.addView(Ui.space(a, 8));
+                    TextView ig = Ui.text(a, "忽略此版本", 12f, Ui.MUTED, false);
+                    ig.setGravity(Gravity.CENTER);
+                    ig.setClickable(true);
+                    ig.setPadding(0, Ui.dp(a, 6), 0, 0);
+                    ig.setOnClickListener(new View.OnClickListener() {
+                        @Override public void onClick(View v) {
+                            ignoreVersion(a, code);
                             toast(a, "已忽略此版本，不再提醒");
+                            if (holder[0] != null) {
+                                holder[0].dismiss();
+                            }
                         }
                     });
+                    box.addView(ig);
                 }
-                b.show();
+
+                Dialog dlg = new Dialog(a);
+                dlg.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+                dlg.setContentView(box);
+                dlg.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                dlg.getWindow().setDimAmount(0.55f);
+                dlg.getWindow().setLayout(Ui.dp(a, 330), WindowManager.LayoutParams.WRAP_CONTENT);
+                dlg.setCancelable(!force);
+                dlg.setCanceledOnTouchOutside(!force);
+                holder[0] = dlg;
+                dlg.show();
             }
         });
     }
