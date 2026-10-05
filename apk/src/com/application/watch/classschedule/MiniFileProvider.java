@@ -13,7 +13,7 @@ import java.io.FileNotFoundException;
  * 升级包只读 Provider（无 androidx，FileProvider 的极简替代，~40 行）。
  *
  * 用途：下载到 getExternalFilesDir 的 APK 通过 content:// URI 交给系统安装器
- * （ACTION_VIEW + application/vnd.android.package-archive）。
+ * （ACTION_INSTALL_PACKAGE + application/vnd.android.package-archive）。
  * Android 7+ 禁 file:// URI，必须走 ContentProvider；
  * authorities = 包名 + ".updatefiles"（build.sh 按变体注入，双变体各自唯一）。
  * 仅映射 getExternalFilesDir 下的单层文件名，外部无法穿越目录。

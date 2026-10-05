@@ -24,7 +24,7 @@ import java.util.ArrayList;
  *
  * 流程：启动静默 GET 服务端 update-&lt;variant&gt;.json（Vercel/静态托管）
  *   → versionCode 对比 → 弹窗 → 下载（镜像优先、直连兜底，边下边算 sha256）
- *   → 写入 getExternalFilesDir → MiniFileProvider + ACTION_VIEW 触发系统安装。
+ *   → 写入 getExternalFilesDir → MiniFileProvider + ACTION_INSTALL_PACKAGE 触发系统安装。
  *
  * 安装走传统 ACTION_VIEW 路径而非 PackageInstaller：实测 EMUI 8 会静默丢弃
  * 第三方 App 的 PackageInstaller.commit（shell 特权正常），而 ACTION_VIEW
@@ -301,22 +301,36 @@ public final class UpdateChecker {
     }
 
     /**
-     * 触发系统安装：MiniFileProvider content:// URI + ACTION_VIEW。
+     * 触发系统安装：MiniFileProvider content:// URI + ACTION_INSTALL_PACKAGE。
+     * 2026-10-05 修复「下载完被 WPS 打开」：原 ACTION_VIEW + setDataAndType(package-archive)
+     * 是"用某 App 打开文件"的泛化意图，EMUI 上会被文件类 App（WPS 等）抢注处理器；
+     * ACTION_INSTALL_PACKAGE 只匹配系统安装器，机制上杜绝被抢。
      * EMUI 8 实测：PackageInstaller.commit 被静默拦截（shell 正常），此传统路径
      * 各 ROM 均会弹安装确认。权限（canRequestPackageInstalls）已在弹窗点击时检查。
      */
     private static void install(final Activity a, final File apk) {
         try {
             Uri uri = Uri.parse("content://" + a.getPackageName() + ".updatefiles/" + apk.getName());
-            Intent i = new Intent(Intent.ACTION_VIEW);
-            i.setDataAndType(uri, "application/vnd.android.package-archive");
+            Intent i = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+            i.setData(uri);
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             a.startActivity(i);
-            android.util.Log.i(TAG, "install: 已唤起系统安装器 size=" + apk.length());
+            android.util.Log.i(TAG, "install: 已唤起系统安装器(ACTION_INSTALL_PACKAGE) size=" + apk.length());
         } catch (Throwable t) {
-            android.util.Log.e(TAG, "install: 唤起失败", t);
-            toast(a, "触发安装失败：" + t.getMessage());
+            // 兜底：极少数 ROM 没有 ACTION_INSTALL_PACKAGE 处理器时退回老写法
+            android.util.Log.e(TAG, "install: ACTION_INSTALL_PACKAGE 失败，回退 ACTION_VIEW", t);
+            try {
+                Uri uri = Uri.parse("content://" + a.getPackageName() + ".updatefiles/" + apk.getName());
+                Intent i = new Intent(Intent.ACTION_VIEW);
+                i.setDataAndType(uri, "application/vnd.android.package-archive");
+                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                a.startActivity(i);
+            } catch (Throwable t2) {
+                android.util.Log.e(TAG, "install: 唤起失败", t2);
+                toast(a, "触发安装失败：" + t2.getMessage());
+            }
         }
     }
 
