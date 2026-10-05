@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
+import android.text.InputFilter;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
@@ -1373,12 +1374,13 @@ public class HomeActivity extends Activity {
         input.setMinLines(2);
         input.setMaxLines(4);
         input.setGravity(Gravity.TOP | Gravity.START);
+        input.setFilters(new InputFilter[]{ new InputFilter.LengthFilter(60) });
         box.addView(input, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         box.addView(Ui.space(this, 6));
 
         // 字数计数（右对齐）
-        final TextView counter = Ui.text(this, "0 字", 11f, Ui.MUTED, false);
+        final TextView counter = Ui.text(this, "0 / 60 字", 11f, Ui.MUTED, false);
         counter.setGravity(Gravity.END);
         box.addView(counter, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
@@ -1387,7 +1389,9 @@ public class HomeActivity extends Activity {
             }
 
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
-                counter.setText(s.length() + " 字");
+                int n = s.length();
+                counter.setText(n + " / 60 字");
+                counter.setTextColor(n >= 50 ? Ui.WARN : Ui.MUTED);
             }
 
             @Override public void afterTextChanged(Editable s) {
