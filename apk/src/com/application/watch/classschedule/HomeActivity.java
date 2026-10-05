@@ -2,13 +2,20 @@ package com.application.watch.classschedule;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.View;
+import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -1324,32 +1331,131 @@ public class HomeActivity extends Activity {
         });
     }
 
-    /** 快速留言：弹输入框，写队列并尝试立即送达（与留言页同一份存储） */
+    /** 快速留言：自绘弹窗（与全站弹窗同视觉语言），写队列并尝试立即送达（与留言页同一份存储） */
     private void quickMessage() {
+        final Dialog[] holder = new Dialog[1];
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = Ui.dp(this, 22);
+        box.setBackground(Ui.round(Ui.CARD, 22, 0, this));
+        box.setPadding(pad, pad, pad, pad);
+
+        // 头部：图标章 + 标题 + 副标题
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView iv = new ImageView(this);
+        iv.setImageResource(R.drawable.ic_tab_message);
+        iv.setColorFilter(0xFFFFFFFF);
+        iv.setBackground(Ui.round(Ui.ACCENT, 24, 0, this));
+        iv.setPadding(Ui.dp(this, 11), Ui.dp(this, 11), Ui.dp(this, 11), Ui.dp(this, 11));
+        head.addView(iv, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
+        LinearLayout.LayoutParams ivLp = (LinearLayout.LayoutParams) head.getChildAt(0).getLayoutParams();
+        ivLp.rightMargin = Ui.dp(this, 12);
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.addView(Ui.text(this, "快速留言", 16.5f, Ui.TEXT, true));
+        titles.addView(Ui.text(this, "送达手环首页 · 未连接时连上自动补发", 11f, Ui.MUTED, false));
+        head.addView(titles, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        box.addView(head);
+        box.addView(Ui.space(this, 14));
+
+        // 输入框（圆角内嵌，多行）
         final EditText input = new EditText(this);
         input.setHint("写一条留言给手环…");
         input.setTextColor(Ui.TEXT);
         input.setHintTextColor(Ui.MUTED);
-        new AlertDialog.Builder(this)
-                .setTitle("快速留言")
-                .setView(input)
-                .setPositiveButton("发送", new DialogInterface.OnClickListener() {
-                    @Override public void onClick(DialogInterface d, int w) {
-                        String text = input.getText().toString().trim();
-                        if (text.length() == 0) {
-                            return;
-                        }
-                        MessageActivity.enqueueOutgoing(HomeActivity.this, text);
-                        miniStatus("留言已发送（未连接时会在连上后自动补发）", Ui.OK);
-                    }
-                })
-                .setNeutralButton("打开留言页", new DialogInterface.OnClickListener() {
-                    @Override public void onClick(DialogInterface d, int w) {
-                        startActivity(new Intent(HomeActivity.this, MessageActivity.class));
-                    }
-                })
-                .setNegativeButton("取消", null)
-                .show();
+        input.setTextSize(13.5f);
+        input.setBackground(Ui.round(Ui.CARD2, 12, Ui.LINE, this));
+        input.setPadding(Ui.dp(this, 14), Ui.dp(this, 12), Ui.dp(this, 14), Ui.dp(this, 12));
+        input.setMinLines(2);
+        input.setMaxLines(4);
+        input.setGravity(Gravity.TOP | Gravity.START);
+        box.addView(input, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        box.addView(Ui.space(this, 6));
+
+        // 字数计数（右对齐）
+        final TextView counter = Ui.text(this, "0 字", 11f, Ui.MUTED, false);
+        counter.setGravity(Gravity.END);
+        box.addView(counter, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        input.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                counter.setText(s.length() + " 字");
+            }
+
+            @Override public void afterTextChanged(Editable s) {
+            }
+        });
+        box.addView(Ui.space(this, 12));
+
+        // 按钮：打开留言页（幽灵） + 发送（主色，空输入置灰）
+        LinearLayout btns = new LinearLayout(this);
+        btns.setOrientation(LinearLayout.HORIZONTAL);
+        Button page = Ui.button(this, "打开留言页", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (holder[0] != null) {
+                    holder[0].dismiss();
+                }
+                startActivity(new Intent(HomeActivity.this, MessageActivity.class));
+            }
+        });
+        page.setBackground(Ui.round(0x00000000, 12, Ui.LINE, this));
+        page.setTextColor(Ui.TEXT);
+        btns.addView(page, new LinearLayout.LayoutParams(0, Ui.dp(this, 42), 1f));
+        LinearLayout.LayoutParams lp0 = (LinearLayout.LayoutParams) btns.getChildAt(0).getLayoutParams();
+        lp0.rightMargin = Ui.dp(this, 10);
+        final Button send = Ui.button(this, "发送", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                String text = input.getText().toString().trim();
+                if (text.length() == 0) {
+                    return;
+                }
+                if (holder[0] != null) {
+                    holder[0].dismiss();
+                }
+                MessageActivity.enqueueOutgoing(HomeActivity.this, text);
+                miniStatus("留言已发送（未连接时会在连上后自动补发）", Ui.OK);
+            }
+        });
+        send.setBackground(Ui.round(Ui.ACCENT, 12, 0, this));
+        send.setTextColor(0xFFFFFFFF);
+        btns.addView(send, new LinearLayout.LayoutParams(0, Ui.dp(this, 42), 1f));
+        box.addView(btns);
+
+        // 空输入 → 发送置灰
+        input.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                boolean ok = s.toString().trim().length() > 0;
+                send.setEnabled(ok);
+                send.setAlpha(ok ? 1f : 0.45f);
+            }
+
+            @Override public void afterTextChanged(Editable s) {
+            }
+        });
+        send.setEnabled(false);
+        send.setAlpha(0.45f);
+
+        Dialog dlg = new Dialog(this);
+        dlg.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        dlg.setContentView(box);
+        dlg.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dlg.getWindow().setDimAmount(0.55f);
+        dlg.getWindow().setLayout(Ui.dp(this, 330), WindowManager.LayoutParams.WRAP_CONTENT);
+        dlg.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+        dlg.setCancelable(true);
+        holder[0] = dlg;
+        dlg.show();
     }
 
     /** 手动同步：已连接 → 重新拉课表；未连接 → 走完整连接流程 */
