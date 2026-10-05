@@ -170,7 +170,7 @@ public class SettingsActivity extends Activity {
                 }));
         // 「高级版一键激活」依赖 EV 的 activate 动作（EvBox 工具箱暂无此动作）
         if (Variant.isEv(this)) {
-            addRow(helpCard, settingRow("高级版", subLabel("4 位兑换码一键激活"),
+            addRow(helpCard, settingRow("高级版", subLabel(AuthState.displayText(this)),
                     chevronOnly(), new View.OnClickListener() {
                         @Override public void onClick(View v) {
                             startActivity(new Intent(SettingsActivity.this, FastActivateActivity.class));

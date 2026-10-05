@@ -101,7 +101,11 @@ public class HomeActivity extends Activity {
         // 真实套数读到后 / 连接状态变化时，迷你条自动刷新
         if (!legacy) {
             SyncEngine.get(this).addStatusCallback(new Runnable() {
-                @Override public void run() { refreshMiniFromEngine(); }
+                @Override public void run() {
+                    refreshMiniFromEngine();
+                    // 顺带刷新版本身份（5 分钟节流；手环 ≥1.7.96 才回 auth 域）
+                    AuthState.maybeRefreshFromWatch(HomeActivity.this);
+                }
             });
         }
         // 常驻前台服务：进程活着才能在后台收到手环推来的留言（可在设置页关闭）
@@ -520,6 +524,12 @@ public class HomeActivity extends Activity {
         tx.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 pw.dismiss();
+                // 标准版门禁：导入课程属于高级版功能（导出不限制）
+                if (TransferActivity.MODE_IMPORT.equals(transferMode)
+                        && AuthState.isStandardLocked(HomeActivity.this)) {
+                    AuthState.showUpgradeDialog(HomeActivity.this);
+                    return;
+                }
                 if (transferMode != null) {
                     Intent it = new Intent(HomeActivity.this, TransferActivity.class);
                     it.putExtra(TransferActivity.EXTRA_MODE, transferMode);

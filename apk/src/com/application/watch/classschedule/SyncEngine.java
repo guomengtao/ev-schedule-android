@@ -433,6 +433,15 @@ public final class SyncEngine {
         send("{\"action\":\"export\"}", cb);
     }
 
+    /**
+     * 导出授权状态（只读）：手环端 SYNC_ACCESS.auth = explicit（≥1.7.96），须显式传 scopes。
+     * 回包 data.auth = {status, displayStatus, isActivated, isPermanent, isExpired, isTrial,
+     * remainingDays, expireAt, expireText, text}；旧版手环无此字段（消费方按 UNKNOWN 处理）。
+     */
+    public void exportAuth(Reply cb) {
+        send("{\"action\":\"export\",\"scopes\":[\"auth\"]}", cb);
+    }
+
     /** 请求课程表清单（多课程表导出前置）：回包 {ok,action:"list_schedules",names:[...],current:N}
      *  ⭐ 任何调用方拿到结果都会顺手缓存「手环真实清单」，供课程表管理页按真实套数渲染。 */
     public void listSchedules(final Reply cb) {

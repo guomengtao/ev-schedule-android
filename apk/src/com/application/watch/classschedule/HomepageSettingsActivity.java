@@ -74,6 +74,17 @@ public class HomepageSettingsActivity extends Activity {
         root.addView(Ui.header(this, "首页设置"));
         root.addView(Ui.space(this, 4));
         root.addView(Ui.text(this, "与手环上的首页显示保持一致", 11.5f, Ui.MUTED, false));
+        if (AuthState.isStandardLocked(this)) {
+            // 标准版：整页只读（可看不可改），点这里弹升级
+            TextView notice = Ui.text(this, "标准版不支持修改首页设置 · 点此升级", 12f, Ui.WARN, true);
+            notice.setClickable(true);
+            notice.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    AuthState.showUpgradeDialog(HomepageSettingsActivity.this);
+                }
+            });
+            root.addView(notice);
+        }
         root.addView(Ui.space(this, 10));
 
         LinearLayout toggleCard = Ui.card(this);
@@ -209,7 +220,8 @@ public class HomepageSettingsActivity extends Activity {
                     }
                     fontView.setText(baseFontSize + "px");
                     loaded = true;
-                    setEnabled(true);
+                    // 标准版：保持只读（可看不可改）
+                    setEnabled(!AuthState.isStandardLocked(HomepageSettingsActivity.this));
                     resultView.setText("已读取当前设置");
                     resultView.setTextColor(Ui.OK);
                     // 更新手环外观镜像（跟随手环模式的数据源；主题页展示也用它）
@@ -263,6 +275,11 @@ public class HomepageSettingsActivity extends Activity {
     // ======================= 写 =======================
 
     private void save() {
+        // 标准版门禁（兜底：控件已置灰，防绕过）
+        if (AuthState.isStandardLocked(this)) {
+            AuthState.showUpgradeDialog(this);
+            return;
+        }
         if (!loaded) {
             resultView.setText("还没有读到设置，先点「重新读取」");
             return;

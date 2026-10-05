@@ -984,6 +984,8 @@ public class FastActivateActivity extends Activity {
                         fillBoxes("");
                         resetBtn();
                         showActivated(disp.length() > 0 ? disp : status);
+                        // 授权状态落库（版本身份显示与功能门禁的数据源）
+                        AuthState.applyActivateReply(FastActivateActivity.this, o);
                         // P3/A6：App 端激活闭环确认（服务端发码 ✓ + 手环落盘 ✓ 两个节点）。
                         //   dedupeKey 按激活码幂等：同一码的重试成功只记一次。
                         Analytics.event(FastActivateActivity.this, "app_activate_ok",

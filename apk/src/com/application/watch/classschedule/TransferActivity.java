@@ -1085,6 +1085,11 @@ public class TransferActivity extends Activity {
     }
 
     private void confirmImportSelected() {
+        // 标准版门禁（兜底层：防深链/其它入口直接进传输页；主拦截在首页 ⊕ 菜单）
+        if (AuthState.isStandardLocked(this)) {
+            AuthState.showUpgradeDialog(this);
+            return;
+        }
         if (parsedCourses == null || parsedCourses.length() == 0) {
             setRes(pasteRes, "还没有可导入的课程，先点「解析并预览」", Ui.WARN);
             return;
