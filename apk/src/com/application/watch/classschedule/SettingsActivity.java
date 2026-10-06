@@ -4,6 +4,9 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -13,21 +16,33 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.Switch;
 import android.widget.TextView;
 
 /**
- * 设置页（App 级）—— 2026-10-05 按《设置页全新设计方案 v1》重做视图层。
+ * 设置页（App 级）—— 2026-10-07 按 **Linear 设计系统** 重做视觉层（信息架构与业务逻辑不变）。
  *
- * <p>结构：3 个分组（提醒 / 外观 / 支持与关于），每组一张白卡；行 = 左标题(+副文案) + 右控件
- * (Switch / 值 + chevron)。**不再使用 {@code Ui.row} 灰砖**（灰砖底色 CARD2 与页面画布 CANVAS
- * 逐通道只差 (1,6,9)，卡片边界事实上消失）。
+ * <p>设计语言（摘自 Linear DESIGN.md）：
+ * <ul>
+ *   <li>暗色原生画布 {@code #08090A}；表面 {@code #101113} / {@code #191A1B}；半透明白描边落到实色即 {@code #23252A}</li>
+ *   <li>唯一彩色是「靛紫」强调：{@code #5E6AD2}（品牌）/ {@code #7170FF}（交互）——只用于开关、chevron 选中、可点强调</li>
+ *   <li>文字四阶：{@code #F7F8F8} 主 / {@code #D0D6E0} 次 / {@code #8A8F98} 弱 / {@code #62666D} 最弱</li>
+ *   <li>圆角收紧：卡片 12 / 控件 6；行高 54，发丝分隔线（比旧版「灰砖」更接近 Linear 的 whisper-thin 结构）</li>
+ * </ul>
  *
- * <p>反馈就地化：删掉原来钉在页面顶端的 {@code resultView}——瞬时动作（测试/重排提醒）由
- * **按钮自身变成「已完成 ✓」**，持续问题（缺权限 / 缺省电白名单）用**琥珀副文案贴在该行**。
+ * <p>浅色模式对应 Linear 的 light neutrals（{@code #F7F8F8} 画布 / 白卡 / {@code #E6E6E6} 描边），
+ * 因此本页跟随 App 的深/浅色切换，底栏也一并重着色，保证整屏语境一致。
  *
- * <p>零新增 token：色 / 字号 / 圆角 / 间距全部取自 {@link Ui} 既有档位。
+ * <p>反馈就地化沿用旧版：瞬时动作按钮变「已发送 ✓」；持续问题（缺权限 / 缺省电白名单）用琥珀副文案贴在该行。
  */
 public class SettingsActivity extends Activity {
+
+    // ===================== Linear 设计令牌（依 App 浅/深色取档） =====================
+    private int BG, CARD, CARD2, LINE, SEP;
+    private int TEXT, TEXT2, MUTED, FAINT;
+    private int ACCENT, ACCENT_BG, OK, WARN;
+    private static final int R_CARD = 12;   // 卡片（Linear panel）
+    private static final int R_CTRL = 6;    // 控件 / 按钮（Linear comfortable）
 
     /** 程序化 setChecked 时置 true，避免触发 onCheckedChanged 造成循环 */
     private boolean switching;
@@ -37,22 +52,25 @@ public class SettingsActivity extends Activity {
     // ===== 提醒组 =====
     private TextView remindSub, bgSub, holidaySub, leadValue;
     private LinearLayout remindSubArea;
-    private android.widget.Switch remindSwitch, pushSwitch, bgSwitch, holidaySwitch;
+    private Switch remindSwitch, pushSwitch, bgSwitch, holidaySwitch;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        LinearLayout root = Ui.screen(this);
-        root.addView(Ui.topBar(this, "设置"));
+        LinearLayout root = Ui.screen(this);      // 套用主题（含系统控件主题化，须在 setContentView 前）
+        applyLinearTokens();                      // 依当前 light/dark 计算 Linear 色板
+        root.setBackgroundColor(BG);
+        root.setPadding(Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 12));
+        root.addView(header());
 
         // ==================== 分组 1 · 提醒 ====================
-        root.addView(Ui.space(this, 12));
-        root.addView(groupTitle("提醒"));
-        LinearLayout remindCard = settingCard();
+        root.addView(Ui.space(this, 22));
+        root.addView(groupLabel("提醒"));
+        LinearLayout remindCard = card();
 
         // —— 上课提醒：开关行 + 展开子区 ——
-        remindSwitch = new android.widget.Switch(this);
+        remindSwitch = linearSwitch();
         remindSwitch.setOnCheckedChangeListener(
                 new android.widget.CompoundButton.OnCheckedChangeListener() {
                     @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
@@ -64,15 +82,14 @@ public class SettingsActivity extends Activity {
                     }
                 });
         remindSub = subLabel("");
-        remindCard.addView(settingRow("上课提醒", remindSub, remindSwitch, null));
+        remindCard.addView(row("上课提醒", remindSub, remindSwitch, null));
 
         // 子区（开关打开才有意义）：提前时间 / 推送到手环 / 测试·重排
         remindSubArea = new LinearLayout(this);
         remindSubArea.setOrientation(LinearLayout.VERTICAL);
-        remindSubArea.setBackgroundColor(Ui.CARD2);
 
         leadValue = valueLabel("");
-        addTopLine(remindSubArea, 26);
+        remindSubArea.addView(sep(16));
         remindSubArea.addView(subRow("提前时间", valueWithChevron(leadValue),
                 new View.OnClickListener() {
                     @Override public void onClick(View v) {
@@ -80,7 +97,8 @@ public class SettingsActivity extends Activity {
                     }
                 }));
 
-        pushSwitch = new android.widget.Switch(this);
+        remindSubArea.addView(sep(30));
+        pushSwitch = linearSwitch();
         pushSwitch.setOnCheckedChangeListener(
                 new android.widget.CompoundButton.OnCheckedChangeListener() {
                     @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
@@ -91,16 +109,15 @@ public class SettingsActivity extends Activity {
                         refreshRemind();
                     }
                 });
-        addTopLine(remindSubArea, 26);
         remindSubArea.addView(subRow("推送到手环", pushSwitch, null));
 
-        addTopLine(remindSubArea, 26);
-        remindSubArea.addView(linkRow());
+        remindSubArea.addView(sep(30));
+        remindSubArea.addView(actionRow());
         remindCard.addView(remindSubArea);
 
         // —— 后台常驻提醒 ——
-        addTopLine(remindCard, 14);
-        bgSwitch = new android.widget.Switch(this);
+        addSep(remindCard, 16);
+        bgSwitch = linearSwitch();
         bgSwitch.setOnCheckedChangeListener(
                 new android.widget.CompoundButton.OnCheckedChangeListener() {
                     @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
@@ -111,11 +128,11 @@ public class SettingsActivity extends Activity {
                     }
                 });
         bgSub = subLabel("");
-        remindCard.addView(settingRow("后台常驻提醒", bgSub, bgSwitch, null));
+        remindCard.addView(row("后台常驻提醒", bgSub, bgSwitch, null));
 
         // —— 假期 / 调休 ——
-        addTopLine(remindCard, 14);
-        holidaySwitch = new android.widget.Switch(this);
+        addSep(remindCard, 16);
+        holidaySwitch = linearSwitch();
         holidaySwitch.setOnCheckedChangeListener(
                 new android.widget.CompoundButton.OnCheckedChangeListener() {
                     @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
@@ -131,15 +148,15 @@ public class SettingsActivity extends Activity {
                     }
                 });
         holidaySub = subLabel("");
-        remindCard.addView(settingRow("假期 / 调休", holidaySub, holidaySwitch, null));
+        remindCard.addView(row("假期 / 调休", holidaySub, holidaySwitch, null));
 
         root.addView(remindCard);
 
         // ==================== 分组 2 · 外观 ====================
-        root.addView(Ui.space(this, 16));
-        root.addView(groupTitle("外观"));
-        LinearLayout lookCard = settingCard();
-        lookCard.addView(settingRow("主题外观", null, valueWithChevron(valueLabel(themeLabel())),
+        root.addView(Ui.space(this, 24));
+        root.addView(groupLabel("外观"));
+        LinearLayout lookCard = card();
+        lookCard.addView(row("主题外观", null, valueWithChevron(valueLabel(themeLabel())),
                 new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         startActivity(new Intent(SettingsActivity.this, ThemePickerActivity.class));
@@ -148,21 +165,21 @@ public class SettingsActivity extends Activity {
         root.addView(lookCard);
 
         // ==================== 分组 3 · 支持与关于 ====================
-        root.addView(Ui.space(this, 16));
-        root.addView(groupTitle("支持与关于"));
-        LinearLayout helpCard = settingCard();
-        addRow(helpCard, settingRow("帮助与反馈", subLabel("常见问题 · QQ 群 · 提交截图反馈"),
+        root.addView(Ui.space(this, 24));
+        root.addView(groupLabel("支持与关于"));
+        LinearLayout helpCard = card();
+        addRow(helpCard, row("帮助与反馈", subLabel("常见问题 · QQ 群 · 提交截图反馈"),
                 chevronOnly(), new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         openFeedbackPage();
                     }
                 }));
-        addRow(helpCard, settingRow("检查更新", null, chevronOnly(), new View.OnClickListener() {
+        addRow(helpCard, row("检查更新", null, chevronOnly(), new View.OnClickListener() {
             @Override public void onClick(View v) {
                 UpdateChecker.checkManual(SettingsActivity.this);
             }
         }));
-        addRow(helpCard, settingRow("打赏支持", subLabel("爱发电 / 微信 / 支付宝"),
+        addRow(helpCard, row("打赏支持", subLabel("爱发电 / 微信 / 支付宝"),
                 chevronOnly(), new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         startActivity(new Intent(SettingsActivity.this, DonateActivity.class));
@@ -170,20 +187,20 @@ public class SettingsActivity extends Activity {
                 }));
         // 「高级版一键激活」依赖 EV 的 activate 动作（EvBox 工具箱暂无此动作）
         if (Variant.isEv(this)) {
-            addRow(helpCard, settingRow("高级版", subLabel(AuthState.displayText(this)),
+            addRow(helpCard, row("高级版", subLabel(AuthState.displayText(this)),
                     chevronOnly(), new View.OnClickListener() {
                         @Override public void onClick(View v) {
                             startActivity(new Intent(SettingsActivity.this, FastActivateActivity.class));
                         }
                     }));
         }
-        addRow(helpCard, settingRow("调试", subLabel("连不上手环时分步排查"),
+        addRow(helpCard, row("调试", subLabel("连不上手环时分步排查"),
                 chevronOnly(), new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         startActivity(new Intent(SettingsActivity.this, DebugActivity.class));
                     }
                 }));
-        addRow(helpCard, settingRow("Ev 课程表", null, valueLabel("v" + version()), null));
+        addRow(helpCard, row("Ev 课程表", null, valueLabel("v" + version()), null));
         root.addView(helpCard);
 
         root.addView(Ui.space(this, 12));
@@ -191,7 +208,9 @@ public class SettingsActivity extends Activity {
         refreshBg();
         refreshRemind();
         refreshHoliday();
-        setContentView(Ui.wrapWithBottomBar(this, root, 3));
+        ViewGroup rootView = Ui.wrapWithBottomBar(this, root, 3);
+        styleBottomBar(rootView, 3);              // 底栏一并重着色为 Linear
+        setContentView(rootView);
         Analytics.pageView(this, "/apk/settings");
     }
 
@@ -203,6 +222,24 @@ public class SettingsActivity extends Activity {
             return;
         }
         lastThemeVersion = Ui.themeVersion;
+    }
+
+    // ==================================================================
+    // Linear 色板
+    // ==================================================================
+
+    private void applyLinearTokens() {
+        if (Ui.isDark()) {
+            BG = 0xFF08090A; CARD = 0xFF101113; CARD2 = 0xFF191A1B;
+            LINE = 0xFF23252A; SEP = 0xFF1B1C1E;
+            TEXT = 0xFFF7F8F8; TEXT2 = 0xFFD0D6E0; MUTED = 0xFF8A8F98; FAINT = 0xFF62666D;
+            ACCENT = 0xFF7170FF; ACCENT_BG = 0xFF5E6AD2; OK = 0xFF27A644; WARN = 0xFFFFB020;
+        } else {
+            BG = 0xFFF7F8F8; CARD = 0xFFFFFFFF; CARD2 = 0xFFF3F4F5;
+            LINE = 0xFFE6E6E6; SEP = 0xFFEDEEF0;
+            TEXT = 0xFF0B0C0E; TEXT2 = 0xFF3C4048; MUTED = 0xFF6B7078; FAINT = 0xFF8A8F98;
+            ACCENT = 0xFF5E6AD2; ACCENT_BG = 0xFF5E6AD2; OK = 0xFF14934E; WARN = 0xFFB45309;
+        }
     }
 
     private String version() {
@@ -236,65 +273,89 @@ public class SettingsActivity extends Activity {
     }
 
     // ==================================================================
-    // 视图构件（全部复用 Ui 既有 token，不新增字号/色/圆角/间距档）
+    // 视图构件（全部走 Linear 令牌）
     // ==================================================================
 
-    /** 分组标题：11.5sp / 600 MUTED（复用 SP_CAPTION） */
-    private TextView groupTitle(String s) {
-        TextView t = Ui.textMedium(this, s, Ui.SP_CAPTION, Ui.MUTED);
+    /** 页头：左对齐大标题 + 副文案 + 发丝底线（Linear 版式），替换旧的居中 topBar */
+    private View header() {
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+
+        TextView t = Ui.textMedium(this, "设置", 20f, TEXT);
+        t.setLetterSpacing(-0.02f);
+        col.addView(t);
+
+        TextView sub = Ui.text(this, "提醒 · 外观 · 关于", 13f, MUTED, false);
+        sub.setPadding(0, Ui.dp(this, 5), 0, 0);
+        col.addView(sub);
+
+        View hr = sep(0);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 1)));
+        lp.topMargin = Ui.dp(this, 14);
+        col.addView(hr, lp);
+        return col;
+    }
+
+    /** 分组标题：12sp / 510 字重（Linear caption）/ MUTED，微正字距 */
+    private TextView groupLabel(String s) {
+        TextView t = Ui.textMedium(this, s, 12f, MUTED);
+        t.setLetterSpacing(0.03f);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = Ui.dp(this, 7);
+        lp.leftMargin = Ui.dp(this, 2);
+        lp.bottomMargin = Ui.dp(this, 8);
         t.setLayoutParams(lp);
         return t;
     }
 
-    /** 分区卡：CARD 白底 + 1dp LINE 描边 + 圆角 R_CARD（不含内边距，行自己带） */
-    private LinearLayout settingCard() {
+    /** 分组卡：CARD 实色 + 6~12 圆角 + 1dp LINE 描边（Linear surface，行自带内边距） */
+    private LinearLayout card() {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
-        l.setBackground(Ui.round(Ui.CARD, Ui.R_CARD, Ui.LINE, this));
+        l.setBackground(Ui.round(CARD, R_CARD, LINE, this));
         return l;
     }
 
-    /** 1dp 分隔线，左侧缩进 leftDp（14=行内缩进 / 26=子行缩进） */
-    private void addTopLine(LinearLayout parent, int leftDp) {
+    /** 发丝分隔线（Linear whisper-thin），左侧缩进 insetDp 以对齐文字 */
+    private View sep(int insetDp) {
         View v = new View(this);
-        v.setBackgroundColor(Ui.LINE);
+        v.setBackgroundColor(SEP);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 1)));
-        lp.leftMargin = Ui.dp(this, leftDp);
+        lp.leftMargin = Ui.dp(this, insetDp);
         v.setLayoutParams(lp);
-        parent.addView(v);
+        return v;
     }
 
-    /** 往卡里加一行：非首行自动补一条分隔线 */
+    private void addSep(LinearLayout parent, int insetDp) {
+        parent.addView(sep(insetDp));
+    }
+
+    /** 往卡里加一行：非首行自动补一条发丝线 */
     private void addRow(LinearLayout card, View row) {
         if (card.getChildCount() > 0) {
-            addTopLine(card, 14);
+            addSep(card, 16);
         }
         card.addView(row);
     }
 
-    /**
-     * 通用设置行：左标题(+副文案，副文案需外部持有引用以便刷新) + 右控件。
-     * click 为 null 表示不可点。
-     */
-    private LinearLayout settingRow(String title, TextView subView, View right,
-                                    View.OnClickListener click) {
+    /** 通用设置行：左标题(+副文案，副文案需外部持有引用以便刷新) + 右控件。click 为 null 表示不可点。 */
+    private LinearLayout row(String title, TextView subView, View right,
+                             View.OnClickListener click) {
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.HORIZONTAL);
         r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setMinimumHeight(Ui.dp(this, 52));
-        r.setPadding(Ui.dp(this, 14), Ui.dp(this, 8), Ui.dp(this, 14), Ui.dp(this, 8));
+        r.setMinimumHeight(Ui.dp(this, 54));
+        r.setPadding(Ui.dp(this, 16), Ui.dp(this, 13), Ui.dp(this, 16), Ui.dp(this, 13));
 
         LinearLayout left = new LinearLayout(this);
         left.setOrientation(LinearLayout.VERTICAL);
         left.setLayoutParams(new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        left.addView(Ui.textMedium(this, title, Ui.SP_BODY, Ui.TEXT));
+        left.addView(Ui.textMedium(this, title, 14f, TEXT));
         if (subView != null) {
-            subView.setPadding(0, Ui.dp(this, 1), 0, 0);
+            subView.setPadding(0, Ui.dp(this, 3), 0, 0);
             left.addView(subView);
         }
         r.addView(left);
@@ -307,14 +368,14 @@ public class SettingsActivity extends Activity {
         return r;
     }
 
-    /** 展开子区的子行（46dp，左缩进 26dp） */
-    private LinearLayout subRow(String key, View right, View.OnClickListener click) {
+    /** 展开子区的子行（46dp，左缩进 30dp，次级文字色 TEXT2） */
+    private LinearLayout subRow(String label, View right, View.OnClickListener click) {
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.HORIZONTAL);
         r.setGravity(Gravity.CENTER_VERTICAL);
         r.setMinimumHeight(Ui.dp(this, 46));
-        r.setPadding(Ui.dp(this, 26), Ui.dp(this, 6), Ui.dp(this, 14), Ui.dp(this, 6));
-        TextView t = Ui.text(this, key, 12.5f, Ui.TEXT, false);
+        r.setPadding(Ui.dp(this, 30), Ui.dp(this, 6), Ui.dp(this, 16), Ui.dp(this, 6));
+        TextView t = Ui.text(this, label, 13f, TEXT2, false);
         t.setLayoutParams(new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         r.addView(t);
@@ -327,70 +388,72 @@ public class SettingsActivity extends Activity {
         return r;
     }
 
-    /** 低频动作文字链行（测试提醒 · 重排提醒），高 44dp 满足热区 */
-    private LinearLayout linkRow() {
+    /** 低频动作行（测试提醒 · 重排提醒）——Linear ghost 小按钮 */
+    private LinearLayout actionRow() {
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.HORIZONTAL);
         r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setMinimumHeight(Ui.dp(this, 44));
-        r.setPadding(Ui.dp(this, 26), 0, Ui.dp(this, 14), 0);
+        r.setPadding(Ui.dp(this, 30), Ui.dp(this, 10), Ui.dp(this, 16), Ui.dp(this, 14));
 
-        TextView test = linkText("测试提醒");
+        TextView test = ghost("测试提醒");
         test.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 Reminders.test(SettingsActivity.this);
-                flashLink((TextView) v, "已发测试提醒 ✓");
+                flash(v, "已发送 ✓");
             }
         });
-        TextView resched = linkText("重排提醒");
+        r.addView(test);
+
+        TextView resched = ghost("重排提醒");
         resched.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 Reminders.reschedule(SettingsActivity.this);
-                flashLink((TextView) v, "已重排 ✓");
+                flash(v, "已重排 ✓");
             }
         });
-
-        r.addView(test);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.leftMargin = Ui.dp(this, 20);
+        lp.leftMargin = Ui.dp(this, 10);
         r.addView(resched, lp);
         return r;
     }
 
-    private TextView linkText(String s) {
-        TextView t = Ui.textMedium(this, s, 12.5f, Ui.ACCENT);
-        // 撑到 ≥44dp 热区（文字本身只占 ~17dp）
-        t.setPadding(0, Ui.dp(this, 12), 0, Ui.dp(this, 12));
+    /** Linear ghost 按钮：CARD2 底 + 1dp LINE 描边 + 6dp 圆角，文字 TEXT2 */
+    private TextView ghost(String s) {
+        TextView t = Ui.textMedium(this, s, 12.5f, TEXT2);
+        t.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 8));
+        t.setBackground(Ui.round(CARD2, R_CTRL, LINE, this));
         return t;
     }
 
     /** 按钮自反馈：2.5s 内变「已完成 ✓」（OK 色），之后复原 */
-    private void flashLink(final TextView t, final CharSequence done) {
-        if (!t.isEnabled()) {
+    private void flash(final View v, final CharSequence done) {
+        if (!(v instanceof TextView) || !v.isEnabled()) {
             return;
         }
+        final TextView t = (TextView) v;
         final CharSequence orig = t.getText();
+        final int origColor = t.getCurrentTextColor();
         t.setText(done);
-        t.setTextColor(Ui.OK);
+        t.setTextColor(OK);
         t.setEnabled(false);
         ui.postDelayed(new Runnable() {
             @Override public void run() {
                 t.setText(orig);
-                t.setTextColor(Ui.ACCENT);
+                t.setTextColor(origColor);
                 t.setEnabled(true);
             }
         }, 2500);
     }
 
-    /** 副文案（11.5sp MUTED），文本由 refresh* 更新 */
+    /** 副文案（12.5sp MUTED），文本由 refresh* 更新 */
     private TextView subLabel(String s) {
-        return Ui.text(this, s, Ui.SP_CAPTION, Ui.MUTED, false);
+        return Ui.text(this, s, 12.5f, MUTED, false);
     }
 
-    /** 右值文案（12.5sp MUTED） */
+    /** 右值文案（13sp FAINT） */
     private TextView valueLabel(String s) {
-        return Ui.text(this, s, 12.5f, Ui.MUTED, false);
+        return Ui.text(this, s, 13f, FAINT, false);
     }
 
     /** 「右值 + chevron」组合 */
@@ -401,7 +464,7 @@ public class SettingsActivity extends Activity {
         if (value != null) {
             h.addView(value);
         }
-        h.addView(chevron(), chevronParams(5));
+        h.addView(chevron(), chevronLp());
         return h;
     }
 
@@ -417,15 +480,104 @@ public class SettingsActivity extends Activity {
     private ImageView chevron() {
         ImageView ic = new ImageView(this);
         ic.setImageResource(R.drawable.ic_chevron_right);
-        ic.setColorFilter(Ui.MUTED);
+        ic.setColorFilter(FAINT);
         return ic;
     }
 
-    private LinearLayout.LayoutParams chevronParams(int leftDp) {
+    private LinearLayout.LayoutParams chevronLp() {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                Ui.dp(this, 14), Ui.dp(this, 14));
-        lp.leftMargin = Ui.dp(this, leftDp);
+                Ui.dp(this, 15), Ui.dp(this, 15));
+        lp.leftMargin = Ui.dp(this, 6);
         return lp;
+    }
+
+    /**
+     * Linear 风格 Switch：开 = 靛紫轨道(#5E6AD2) + 白滑块；关 = 中性灰轨道 + 白/灰滑块。
+     *
+     * <p>⚠️ 不用 {@code setTrackTintList}：平台默认 track 的 9-patch 自带 ~40% alpha，
+     * 着色后会被冲淡（实测「开」态轨道只剩 {@code #282C4D}/{@code #BFC4ED}，不是纯靛紫）。
+     * 这里直接自绘 track / thumb（纯色 GradientDrawable），颜色 100% 还原设计稿。
+     */
+    private Switch linearSwitch() {
+        Switch s = new Switch(this);
+        int offTrack = Ui.isDark() ? 0xFF2A2C31 : 0xFFD5D7DB;
+        int offThumb = Ui.isDark() ? 0xFF8A8F98 : 0xFFFFFFFF;
+
+        StateListDrawable track = new StateListDrawable();
+        track.addState(new int[]{android.R.attr.state_checked}, pill(ACCENT_BG));
+        track.addState(new int[]{}, pill(offTrack));
+
+        StateListDrawable thumb = new StateListDrawable();
+        thumb.addState(new int[]{android.R.attr.state_checked}, circle(0xFFFFFFFF));
+        thumb.addState(new int[]{}, circle(offThumb));
+
+        s.setTrackDrawable(track);
+        s.setThumbDrawable(thumb);
+        s.setSwitchMinWidth(Ui.dp(this, 44));
+        s.setSwitchPadding(Ui.dp(this, 8));
+        return s;
+    }
+
+    /** 开关轨道：38×22 圆角矩形（圆角=半高，两端胶囊） */
+    private Drawable pill(int color) {
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.RECTANGLE);
+        g.setColor(color);
+        g.setCornerRadius(Ui.dp(this, 11));
+        g.setSize(Ui.dp(this, 38), Ui.dp(this, 22));
+        return g;
+    }
+
+    /** 开关滑块：22dp 圆 */
+    private Drawable circle(int color) {
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(color);
+        g.setSize(Ui.dp(this, 22), Ui.dp(this, 22));
+        return g;
+    }
+
+    /**
+     * 把 {@link Ui#wrapWithBottomBar} 生成的底栏重着色为 Linear：
+     * 底 = CARD（中性），选中 = ACCENT，未选中 = FAINT，并把选中 tab 的文字设 medium。
+     * 仅作用于本页，不影响其它页面共享的 Ui 底栏。
+     */
+    private void styleBottomBar(ViewGroup rootView, int current) {
+        for (int i = 0; i < rootView.getChildCount(); i++) {
+            View ch = rootView.getChildAt(i);
+            if (!(ch instanceof LinearLayout)) {
+                continue;
+            }
+            LinearLayout bar = (LinearLayout) ch;
+            if (bar.getChildCount() != 4) {          // 底栏恒为 4 个 tab
+                continue;
+            }
+            bar.setBackgroundColor(CARD);
+            for (int j = 0; j < bar.getChildCount(); j++) {
+                View tabV = bar.getChildAt(j);
+                if (!(tabV instanceof LinearLayout)) {
+                    continue;
+                }
+                LinearLayout tab = (LinearLayout) tabV;
+                boolean active = (j == current);
+                int color = active ? ACCENT : FAINT;
+                if (tab.getChildCount() >= 2) {
+                    View ic = tab.getChildAt(0);
+                    if (ic instanceof ImageView) {
+                        ((ImageView) ic).setColorFilter(color);
+                    }
+                    View lb = tab.getChildAt(1);
+                    if (lb instanceof TextView) {
+                        TextView t = (TextView) lb;
+                        t.setTextColor(color);
+                        t.setTypeface(active
+                                ? android.graphics.Typeface.create("sans-serif-medium",
+                                        android.graphics.Typeface.NORMAL)
+                                : android.graphics.Typeface.DEFAULT);
+                    }
+                }
+            }
+        }
     }
 
     /** 当前主题名（跟随手环 / 本地主题名 / 跟随系统） */
@@ -482,13 +634,13 @@ public class SettingsActivity extends Activity {
         remindSubArea.setVisibility(on ? View.VISIBLE : View.GONE);
         if (!on) {
             remindSub.setText("到点用系统闹钟提醒你");
-            remindSub.setTextColor(Ui.MUTED);
+            remindSub.setTextColor(MUTED);
         } else if (!Reminders.exactAllowed(this)) {
             remindSub.setText("未授予「闹钟和提醒」权限，可能有 ±1 分钟误差");
-            remindSub.setTextColor(Ui.WARN);
+            remindSub.setTextColor(WARN);
         } else {
             remindSub.setText("提前 " + lead + " 分钟 · 手机通知" + (push ? " + 手环" : ""));
-            remindSub.setTextColor(Ui.MUTED);
+            remindSub.setTextColor(MUTED);
         }
         leadValue.setText(lead + " 分钟");
 
@@ -502,13 +654,13 @@ public class SettingsActivity extends Activity {
         boolean on = SyncService.enabled(this);
         if (!on) {
             bgSub.setText("仅 App 打开时提醒新留言");
-            bgSub.setTextColor(Ui.MUTED);
+            bgSub.setTextColor(MUTED);
         } else if (!isIgnoringBattery(this)) {
             bgSub.setText("未加省电白名单，后台可能被清理");
-            bgSub.setTextColor(Ui.WARN);
+            bgSub.setTextColor(WARN);
         } else {
             bgSub.setText("退到后台也能收新留言");
-            bgSub.setTextColor(Ui.MUTED);
+            bgSub.setTextColor(MUTED);
         }
         switching = true;
         bgSwitch.setChecked(on);
@@ -527,7 +679,7 @@ public class SettingsActivity extends Activity {
             when = "按系统日期上课";
         }
         holidaySub.setText(when);
-        holidaySub.setTextColor(Ui.MUTED);
+        holidaySub.setTextColor(MUTED);
 
         switching = true;
         holidaySwitch.setChecked(on);
