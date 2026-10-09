@@ -128,16 +128,35 @@ public final class SyncCoordinator {
         SyncEngine.get(ctx).send(payload, new SyncEngine.Reply() {
             @Override public void onReply(String json) {
                 boolean ok = false;
+                boolean parsed = false;
+                boolean hasOk = false;
+                String reason = "";
                 try {
-                    ok = new JSONObject(json).optBoolean("ok", false);
+                    JSONObject resp = new JSONObject(json);
+                    parsed = true;
+                    hasOk = resp.has("ok");
+                    ok = resp.optBoolean("ok", false);
+                    if (!ok) {
+                        reason = resp.optString("reason", "").trim();
+                    }
                 } catch (Throwable ignored) {
                 }
                 if (ok) {
                     ScheduleStore.commitSync(ctx, s.id, r.merged, serializeBase(r.merged));
                     finish(cb, true, r.conflicts > 0
                             ? "已同步（" + r.conflicts + " 处冲突按手机版保留）" : "已同步 ✓");
+                } else if (!parsed) {
+                    // 回包连 JSON 都不是：这不是「手环拒绝」，别把排障方向带偏
+                    finish(cb, false, "手环回包无法解析，本地已保留");
+                } else if (!hasOk) {
+                    // 合法 JSON 但无 ok 字段：回包格式不对，同样不是手环明确拒绝
+                    finish(cb, false, "手环回包缺 ok 字段，本地已保留");
                 } else {
-                    finish(cb, false, "手环拒绝了写入，本地已保留");
+                    // 真拒绝：把手环端给的 reason 透出来（no courses / convert empty /
+                    // read failed / backup failed / write failed，见手环 app.ux syncHandleImport）
+                    finish(cb, false, reason.isEmpty()
+                            ? "手环拒绝了写入（未返回原因），本地已保留"
+                            : "手环拒绝了写入：" + reason + "，本地已保留");
                 }
             }
             @Override public void onTimeout(String hint) {
