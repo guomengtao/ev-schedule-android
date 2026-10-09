@@ -708,9 +708,19 @@ public class HomeActivity extends Activity {
         }
 
         ScheduleStore.Schedule s = ScheduleStore.active(this);
+
+        // ⚠️ 调休重定向：必须与下方提示条（renderOverrideBar，resolveToday >= 0 判「今天调休，按X课表」）
+        // 及课表网格取课口径一致。否则调休日（如周日补周三课）按「今天真实星期几」取课为空，
+        // 焦点卡会误报「今天没有课」，与同屏「今天调休」提示自相矛盾。
+        // resolveToday 返回 0..6 = 按该下标星期几的课表（0=周一）；NORMAL / HOLIDAY 为负值，走原逻辑。
+        int dayIdx = CourseCache.todayIndex();
+        int overrideToday = Holiday.resolveToday(this);
+        if (overrideToday >= 0) {
+            dayIdx = overrideToday;
+        }
         java.util.List<CourseCache.Course> today = (s == null)
                 ? new java.util.ArrayList<CourseCache.Course>()
-                : CourseCache.coursesOfDay(s.courses, CourseCache.todayIndex());
+                : CourseCache.coursesOfDay(s.courses, dayIdx);
 
         // 按开始时间排序（第 N 节 = 排序后序号）
         java.util.Collections.sort(today, new java.util.Comparator<CourseCache.Course>() {
