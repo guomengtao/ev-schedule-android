@@ -61,6 +61,20 @@ fi
 # shellcheck disable=SC1090
 . "$VFILE"
 
+# ---- 版本号自动 +1（铁律 §3.2，2026-10-14 版本纠察员🚨 补）----
+# 原文件头注释声称"构建后自动 bump"实则只读（ auditor 实测无写回逻辑）；现补上：
+# VERSION_CODE+1、VERSION_NAME 末位+1，写回当前变体的 VFILE（ev/evbox 各自独立版本线）
+# --no-bump 跳过
+if [ "${1:-}" != "--no-bump" ]; then
+  VERSION_CODE=$((VERSION_CODE + 1))
+  VN_MAJ="${VERSION_NAME%%.*}"; VN_REST="${VERSION_NAME#*.}"
+  VN_MIN="${VN_REST%%.*}"; VN_PATCH="${VN_REST#*.}"
+  VN_PATCH=$((VN_PATCH + 1))
+  VERSION_NAME="$VN_MAJ.$VN_MIN.$VN_PATCH"
+  printf 'VERSION_CODE=%s\nVERSION_NAME=%s\n' "$VERSION_CODE" "$VERSION_NAME" > "$VFILE"
+  echo "  version → v$VERSION_NAME (versionCode=$VERSION_CODE)"
+fi
+
 # --- 工具链探测 ---
 JAVA8_HOME="$(/usr/libexec/java_home -v 1.8 2>/dev/null || true)"
 JRE_HOME="$(/usr/libexec/java_home -v 22 2>/dev/null || /usr/libexec/java_home -v 21 2>/dev/null \
