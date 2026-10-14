@@ -61,19 +61,9 @@ fi
 # shellcheck disable=SC1090
 . "$VFILE"
 
-# ---- 版本号自动 +1（铁律 §3.2，2026-10-14 版本纠察员🚨 补）----
-# 原文件头注释声称"构建后自动 bump"实则只读（ auditor 实测无写回逻辑）；现补上：
-# VERSION_CODE+1、VERSION_NAME 末位+1，写回当前变体的 VFILE（ev/evbox 各自独立版本线）
-# --no-bump 跳过
-if [ "${1:-}" != "--no-bump" ]; then
-  VERSION_CODE=$((VERSION_CODE + 1))
-  VN_MAJ="${VERSION_NAME%%.*}"; VN_REST="${VERSION_NAME#*.}"
-  VN_MIN="${VN_REST%%.*}"; VN_PATCH="${VN_REST#*.}"
-  VN_PATCH=$((VN_PATCH + 1))
-  VERSION_NAME="$VN_MAJ.$VN_MIN.$VN_PATCH"
-  printf 'VERSION_CODE=%s\nVERSION_NAME=%s\n' "$VERSION_CODE" "$VERSION_NAME" > "$VFILE"
-  echo "  version → v$VERSION_NAME (versionCode=$VERSION_CODE)"
-fi
+# （2026-10-14 版本纠察员🚨：此处曾误加一块 bump，与脚本原有的
+#  「--- 版本号自动 +1（写回 version.env，供下次构建使用）---」块叠加导致一次构建 +2，已删。
+#  原有块用 NO_BUMP=1 环境变量开关，本次已兼容 --no-bump 参数；勿在此处重复添加。）
 
 # --- 工具链探测 ---
 JAVA8_HOME="$(/usr/libexec/java_home -v 1.8 2>/dev/null || true)"
@@ -261,7 +251,8 @@ echo "历史包:"
 ls -1t dist/*.apk 2>/dev/null | head -10
 
 # --- 版本号自动 +1（写回 version.env，供下次构建使用）---
-if [ "${NO_BUMP:-0}" != "1" ]; then
+# 2026-10-14 版本纠察员🚨：兼容 --no-bump 参数（原仅支持 NO_BUMP=1 环境变量，与其它仓对齐）
+if [ "${NO_BUMP:-0}" != "1" ] && [ "${1:-}" != "--no-bump" ]; then
   IFS=. read -r MA MI PA <<< "$VERSION_NAME"
   NEXT_CODE=$((VERSION_CODE + 1))
   NEXT_NAME="${MA:-0}.${MI:-0}.$(( ${PA:-0} + 1 ))"
