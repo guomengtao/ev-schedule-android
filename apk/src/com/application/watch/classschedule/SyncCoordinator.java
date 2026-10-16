@@ -130,12 +130,14 @@ public final class SyncCoordinator {
                 boolean ok = false;
                 boolean parsed = false;
                 boolean hasOk = false;
+                boolean cleared = false;   // 手环端清空课表标志
                 String reason = "";
                 try {
                     JSONObject resp = new JSONObject(json);
                     parsed = true;
                     hasOk = resp.has("ok");
                     ok = resp.optBoolean("ok", false);
+                    cleared = resp.optBoolean("cleared", false);
                     if (!ok) {
                         reason = resp.optString("reason", "").trim();
                     }
@@ -143,8 +145,12 @@ public final class SyncCoordinator {
                 }
                 if (ok) {
                     ScheduleStore.commitSync(ctx, s.id, r.merged, serializeBase(r.merged));
-                    finish(cb, true, r.conflicts > 0
-                            ? "已同步（" + r.conflicts + " 处冲突按手机版保留）" : "已同步 ✓");
+                    if (cleared) {
+                        finish(cb, true, "已同步空课表（手环端已清空）");
+                    } else {
+                        finish(cb, true, r.conflicts > 0
+                                ? "已同步（" + r.conflicts + " 处冲突按手机版保留）" : "已同步 ✓");
+                    }
                 } else if (!parsed) {
                     // 回包连 JSON 都不是：这不是「手环拒绝」，别把排障方向带偏
                     finish(cb, false, "手环回包无法解析，本地已保留");
@@ -152,11 +158,9 @@ public final class SyncCoordinator {
                     // 合法 JSON 但无 ok 字段：回包格式不对，同样不是手环明确拒绝
                     finish(cb, false, "手环回包缺 ok 字段，本地已保留");
                 } else {
-                    // 真拒绝：把手环端给的 reason 透出来（no courses / convert empty /
-                    // read failed / backup failed / write failed，见手环 app.ux syncHandleImport）
-                    finish(cb, false, reason.isEmpty()
-                            ? "手环拒绝了写入（未返回原因），本地已保留"
-                            : "手环拒绝了写入：" + reason + "，本地已保留");
+                    // 真拒绝：按 reason 分派文案。旧实现把所有失败一律叫「拒绝了写入」，
+                    // 会把「手环没收到数据」和「手环存不下」混为一谈，排障方向被带偏。
+                    finish(cb, false, reasonToUserText(reason));
                 }
             }
             @Override public void onTimeout(String hint) {
@@ -166,6 +170,30 @@ public final class SyncCoordinator {
                 finish(cb, false, "同步失败：" + msg + "（本地已保存）");
             }
         });
+    }
+
+    // 手环端回包 reason → 用户可见文案（见手环 app.ux syncHandleImport 的各分支）
+    // 原则：说清「手环那边到底怎么了」，别把所有失败都叫「拒绝写入」
+    private static String reasonToUserText(String reason) {
+        String r = reason == null ? "" : reason.trim();
+        if ("no courses".equals(r)) {
+            return "手环未收到课程数据（课程为空或格式不匹配），本地已保留";
+        }
+        if ("convert empty".equals(r)) {
+            return "手环端转换课程数据为空，请检查课程字段是否完整，本地已保留";
+        }
+        if ("read failed".equals(r)) {
+            return "手环端读取课表失败，请重启手环 App 后重试，本地已保留";
+        }
+        if ("backup failed".equals(r)) {
+            return "手环端备份失败（存储空间可能不足），本地已保留";
+        }
+        if ("write failed".equals(r)) {
+            return "手环端写入课表失败（存储空间可能不足），本地已保留";
+        }
+        return r.isEmpty()
+                ? "手环拒绝了写入（未返回原因），本地已保留"
+                : "手环拒绝了写入：" + r + "，本地已保留";
     }
 
     // ======================= 三方合并 =======================
