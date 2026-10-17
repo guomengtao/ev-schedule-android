@@ -524,7 +524,7 @@ public class BandActivity extends Activity {
         sd.setPadding(0, Ui.dp(this, 3), 0, Ui.dp(this, Ui.GAP_MD));
         panel.addView(sd);
 
-        final EditText input = new EditText(this);
+        final EditText input = Ui.editText(this);
         input.setTextSize(14f);
         input.setTextColor(Ui.TEXT);
         input.setHintTextColor(Ui.MUTED);
@@ -706,7 +706,7 @@ public class BandActivity extends Activity {
 
     /** 快速留言：入队，连上后自动补发（与留言页同一份存储）。 */
     private void quickMessage() {
-        final EditText input = new EditText(this);
+        final EditText input = Ui.editText(this);
         input.setHint("写一条留言给手环…");
         input.setTextSize(14f);
         new android.app.AlertDialog.Builder(this)

@@ -125,7 +125,7 @@ public class DebugActivity extends Activity {
         root.addView(grpTitle("报文 · 日志"));
         root.addView(microLabel("自定义 JSON"));
 
-        inputView = new EditText(this);
+        inputView = Ui.editText(this);
         inputView.setText("{\"action\":\"ping\"}");
         inputView.setTextSize(TypedValue.COMPLEX_UNIT_SP, Ui.SP_CAPTION);
         inputView.setTypeface(Typeface.MONOSPACE);

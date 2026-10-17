@@ -291,7 +291,7 @@ public class JsonEditorView extends FrameLayout {
         row.addView(lineNumberView, new LinearLayout.LayoutParams(
                 lineW, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        editText = new EditText(c);
+        editText = Ui.editText(c);
         editText.setBackground(null);
         editText.setTextSize(13);
         editText.setTypeface(android.graphics.Typeface.MONOSPACE);

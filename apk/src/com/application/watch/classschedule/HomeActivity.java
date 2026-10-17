@@ -1374,7 +1374,7 @@ public class HomeActivity extends Activity {
         box.addView(Ui.space(this, 14));
 
         // 输入框（圆角内嵌，多行）
-        final EditText input = new EditText(this);
+        final EditText input = Ui.editText(this);
         input.setHint("写一条留言给手环…");
         input.setTextColor(Ui.TEXT);
         input.setHintTextColor(Ui.MUTED);

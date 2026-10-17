@@ -519,7 +519,7 @@ public class CourseEditActivity extends Activity implements WeekEditGrid.Callbac
     // ======================= 课表名改名 =======================
 
     private void showRename() {
-        final EditText input = new EditText(this);
+        final EditText input = Ui.editText(this);
         input.setText(draftName);
         input.setTextSize(14f);
         input.setTextColor(Ui.TEXT);

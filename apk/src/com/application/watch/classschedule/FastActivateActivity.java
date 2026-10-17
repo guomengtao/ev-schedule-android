@@ -648,7 +648,7 @@ public class FastActivateActivity extends Activity {
             cell.setLayoutParams(lp);
 
             final int idx = i;
-            EditText b = new EditText(this);
+            EditText b = Ui.editText(this);
             b.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, Ui.SP_DISPLAY);
             b.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
             b.setTextColor(Ui.TEXT);

@@ -317,7 +317,7 @@ public class CourseSheetDialog {
     }
 
     private EditText input(Context c, String text) {
-        EditText e = new EditText(c);
+        EditText e = Ui.editText(c);
         e.setText(text);
         e.setTextSize(13.5f);
         e.setTextColor(Ui.TEXT);

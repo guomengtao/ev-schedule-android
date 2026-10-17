@@ -170,7 +170,7 @@ public class ToolboxActivity extends Activity {
         // ===== 查单词 =====
         LinearLayout wordCard = Ui.card(this);
         wordCard.addView(Ui.text(this, "查单词", 13.5f, Ui.TEXT, true));
-        wordInput = new EditText(this);
+        wordInput = Ui.editText(this);
         wordInput.setHint("输入英文单词");
         wordInput.setTextSize(13.5f);
         wordInput.setSingleLine(true);
@@ -232,13 +232,13 @@ public class ToolboxActivity extends Activity {
         // ===== 常用地点（手环导航用）=====
         LinearLayout navCard = Ui.card(this);
         navCard.addView(Ui.text(this, "常用地点（手环导航用）", 13.5f, Ui.TEXT, true));
-        homeInput = new EditText(this);
+        homeInput = Ui.editText(this);
         homeInput.setHint("家地址（如：XX 小区）");
         homeInput.setTextSize(13f);
         homeInput.setSingleLine(true);
         homeInput.setText(navPrefs().getString("home_addr", ""));
         navCard.addView(homeInput);
-        workInput = new EditText(this);
+        workInput = Ui.editText(this);
         workInput.setHint("公司地址");
         workInput.setTextSize(13f);
         workInput.setSingleLine(true);

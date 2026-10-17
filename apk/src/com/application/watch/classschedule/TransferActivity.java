@@ -414,7 +414,7 @@ public class TransferActivity extends Activity {
         exportCard.addView(exportSub);
         exportCard.addView(Ui.space(this, Ui.GAP_SM));
 
-        exportBox = new EditText(this);
+        exportBox = Ui.editText(this);
         exportBox.setTextSize(TypedValue.COMPLEX_UNIT_SP, Ui.SP_MICRO);
         exportBox.setTextColor(Ui.TEXT);
         exportBox.setMinLines(6);
@@ -508,7 +508,7 @@ public class TransferActivity extends Activity {
         previewCard.addView(Ui.text(this, "课程表名称（必填）",
                 Ui.SP_CAPTION, Ui.TEXT, true));
         previewCard.addView(Ui.space(this, Ui.GAP_XS));
-        nameBox = new EditText(this);
+        nameBox = Ui.editText(this);
         nameBox.setTextSize(TypedValue.COMPLEX_UNIT_SP, Ui.SP_BODY);
         nameBox.setTextColor(Ui.TEXT);
         nameBox.setHintTextColor(Ui.MUTED);

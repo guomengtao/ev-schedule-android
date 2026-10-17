@@ -9,7 +9,9 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -48,6 +50,8 @@ public final class Ui {
     public static int OK_LIGHT;      // 假期/成功语义淡背景
     public static int WARN_LIGHT;    // 调休/警告语义淡背景
     public static int themeVersion = 0;
+    /** 上次生效色板的指纹：只有颜色真的变了才递增 themeVersion（见 applyTheme） */
+    private static int lastPaletteFp = 0;
     private static boolean dark = true;
 
     // ============ 浅色「晴空蓝」 ============
@@ -216,7 +220,54 @@ public final class Ui {
                     ? android.R.style.Theme_Material_NoActionBar
                     : android.R.style.Theme_Material_Light_NoActionBar);
         }
-        themeVersion++;
+        // ★ 关键：只有色板真的变了才递增版本号。
+        // 桌面 widget 的后台刷新（WeekWidget/NextWidget/TodayWidget）每分钟都会调到这里，
+        // 旧实现在这里无条件 ++ 会让「主题没变」的页面在 onResume 时误判 → recreate()
+        // → 输入法一弹/一收就整窗销毁重建（黑屏 + 完成键闪烁）的元凶之一。
+        int fp = paletteFingerprint();
+        if (fp != lastPaletteFp) {
+            lastPaletteFp = fp;
+            themeVersion++;
+        }
+    }
+
+    /** 当前生效色板（含深浅模式）的指纹，用于判断主题是否真的发生变化 */
+    private static int paletteFingerprint() {
+        int h = dark ? 1 : 0;
+        h = h * 31 + BG;
+        h = h * 31 + CANVAS;
+        h = h * 31 + CARD;
+        h = h * 31 + CARD2;
+        h = h * 31 + LINE;
+        h = h * 31 + TEXT;
+        h = h * 31 + MUTED;
+        h = h * 31 + ACCENT;
+        h = h * 31 + ACCENT_LIGHT;
+        h = h * 31 + OK;
+        h = h * 31 + WARN;
+        h = h * 31 + ERR;
+        h = h * 31 + ON_ACCENT;
+        h = h * 31 + OK_LIGHT;
+        h = h * 31 + WARN_LIGHT;
+        return h;
+    }
+
+    /**
+     * 统一 EditText 工厂 —— 全仓输入框必须走这里创建。
+     *
+     * 中文输入法在「全屏提取（extract）」模式下会用自己的窗口整屏接管，
+     * 页面上会盖出一块输入面板并带「完成」键；一旦窗口再被重建，
+     * 视觉上就是「点一下键盘 → 黑屏 + 完成键闪烁」。
+     * IME_FLAG_NO_EXTRACT_UI 禁掉整屏提取，IME_FLAG_NO_FULLSCREEN 禁掉全屏 IME。
+     */
+    public static EditText editText(Context c) {
+        EditText e = new EditText(c);
+        try {
+            int flags = EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+            e.setImeOptions(flags);
+        } catch (Throwable ignored) {
+        }
+        return e;
     }
 
     /** 课程 → 区分色（稳定：同一门课在任何页面/任何手机上都是同一个颜色） */

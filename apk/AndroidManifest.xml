@@ -60,7 +60,7 @@
         android:allowBackup="false"
         android:roundIcon="@drawable/ic_launcher"
         android:theme="@android:style/Theme.Material.NoActionBar"
-        android:windowSoftInputMode="stateAlwaysHidden">
+        android:windowSoftInputMode="stateAlwaysHidden|adjustResize">
 
         <!-- 构建变体：由 build.sh 在打包时替换占位符（一套源码 → 两个包名的 APK） -->
         <meta-data android:name="ev.variant" android:value="__VARIANT__" />
@@ -77,7 +77,7 @@
         <activity
             android:name="com.application.watch.classschedule.HomeActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateAlwaysHidden">
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -91,7 +91,7 @@
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.ScheduleListActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateAlwaysHidden" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.JsonEditorActivity"
             android:exported="false"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
@@ -100,13 +100,13 @@
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.DebugActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateAlwaysHidden" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.ConnLogActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateAlwaysHidden" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.ToolboxActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateAlwaysHidden" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <!-- 找手机：响铃时的全屏提示页（可一键立即关闭）。锁屏之上显示；不进最近任务。 -->
         <activity android:name="com.application.watch.classschedule.FindPhoneActivity"
             android:exported="true"
@@ -117,7 +117,7 @@
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.SettingsActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateAlwaysHidden" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.TransferActivity"
             android:exported="false"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
@@ -135,16 +135,16 @@
         </activity>
         <activity android:name="com.application.watch.classschedule.HomepageSettingsActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateAlwaysHidden" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.DonateActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateAlwaysHidden" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.BatteryGuideActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateAlwaysHidden" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.ThemePickerActivity"
             android:exported="true"
-            android:windowSoftInputMode="stateAlwaysHidden" />
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
 
         <service
             android:name="com.application.watch.classschedule.SyncService"

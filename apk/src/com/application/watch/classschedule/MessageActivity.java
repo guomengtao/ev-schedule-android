@@ -183,7 +183,7 @@ public class MessageActivity extends Activity {
         sendRow.setBackgroundColor(wxBarBg());
         sendRow.setPadding(Ui.dp(this, 6), Ui.dp(this, 7), Ui.dp(this, 6), Ui.dp(this, 7));
 
-        inputView = new EditText(this);
+        inputView = Ui.editText(this);
         inputView.setHint("发消息…");
         inputView.setTextSize(15f);
         inputView.setTextColor(wxBodyText());
@@ -997,7 +997,7 @@ public class MessageActivity extends Activity {
 
     /** 新增（oldText=null）或编辑短语；编辑时对话框内直接给「删除」入口（不必去猜长按） */
     private void editPhrase(final String oldText) {
-        final EditText et = new EditText(this);
+        final EditText et = Ui.editText(this);
         et.setText(oldText == null ? "" : oldText);
         et.setHint("最多 " + PHRASE_MAX_LEN + " 字");
         et.setTextColor(Ui.TEXT);
