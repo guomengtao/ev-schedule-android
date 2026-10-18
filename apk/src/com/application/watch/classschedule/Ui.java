@@ -270,6 +270,44 @@ public final class Ui {
         return e;
     }
 
+    /** 上次因主题变化重建窗口的时刻（elapsedRealtime，防抖用） */
+    private static long lastRecreateAt = 0;
+
+    /**
+     * onResume 主题重建守卫 —— 全仓 Activity 统一走这里，禁止直接 recreate()。
+     *
+     * 2026-10-18 复发复盘：v0.5.178 只把 applyTheme 的 themeVersion++ 改成「色板指纹变了才自增」，
+     * 挡住了「桌面 widget 每分钟刷新制造假变化」，但挡不住**色板真的变化**
+     * （「跟随手环」同步主题、系统深浅色切换、本地主题切换）——
+     * 一旦真的变了，themeVersion 暴涨，此时中文输入法弹出/切换面板/点键引起的
+     * onPause→onResume 抖动仍会触发 recreate()：窗口销毁重建 = 黑屏一瞬，
+     * 输入法随新窗口重新附着 = 「完成」键闪烁。表现就是「昨天好了，今天又坏」。
+     *
+     * 两道闸：
+     *   1. 键盘可见（正在打字）→ 不重建，主题等下次空闲或下次进页面再应用；
+     *   2. 30 秒内已经重建过 → 不再重建，避免生命周期抖动窗口内连环重建。
+     */
+    public static boolean needRecreate(android.app.Activity a, int lastVersion) {
+        if (lastVersion == 0 || lastVersion == themeVersion) return false;
+        if (imeVisible(a)) return false;
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (lastRecreateAt != 0 && now - lastRecreateAt < 30000L) return false;
+        lastRecreateAt = now;
+        return true;
+    }
+
+    /** 输入法是否正在接收输入（键盘可见且页面有可编辑焦点） */
+    public static boolean imeVisible(android.app.Activity a) {
+        try {
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager)
+                            a.getSystemService(Context.INPUT_METHOD_SERVICE);
+            return imm != null && imm.isAcceptingText();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     /** 课程 → 区分色（稳定：同一门课在任何页面/任何手机上都是同一个颜色） */
     public static int courseColor(String courseName) {
         int h = (courseName == null) ? 0 : courseName.hashCode();

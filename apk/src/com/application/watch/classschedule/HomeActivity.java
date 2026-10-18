@@ -1968,7 +1968,7 @@ public class HomeActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (lastThemeVersion != 0 && lastThemeVersion != Ui.themeVersion) {
+        if (Ui.needRecreate(this, lastThemeVersion)) {
             recreate();
             return;
         }
