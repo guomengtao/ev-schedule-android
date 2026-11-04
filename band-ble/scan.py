@@ -16,11 +16,21 @@ async def main():
         print("Check: is Bluetooth on? Is the band nearby and disconnected from phone?")
         return
 
-    for d in sorted(devices, key=lambda x: x.rssi or -999, reverse=True):
+    def _rssi(d):
+        # bleak 1.x: BLEDevice 无 rssi 属性，改从 advertisement_data 取
+        v = getattr(d, "rssi", None)
+        if v is None:
+            adv = getattr(d, "advertisement_data", None)
+            v = getattr(adv, "rssi", None) if adv is not None else None
+        return v if v is not None else -999
+
+    for d in sorted(devices, key=_rssi, reverse=True):
         name = d.name or "(no name)"
-        rssi = d.rssi if d.rssi is not None else "?"
+        rssi = _rssi(d)
+        rssi = rssi if rssi != -999 else "?"
         addr = d.address
-        uuids = [str(u) for u in d.metadata.get("uuids", [])] if d.metadata else []
+        meta = getattr(d, "metadata", None) or {}
+        uuids = [str(u) for u in meta.get("uuids", [])]
         flag = ""
         if "band" in name.lower() or "xiaomi" in name.lower() or "mi " in name.lower():
             flag = "  <<<< BAND!"
