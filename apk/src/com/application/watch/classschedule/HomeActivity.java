@@ -45,6 +45,8 @@ public class HomeActivity extends Activity {
 
     private static final int PHASE_CONNECT = 1, PHASE_PROFILE = 2, PHASE_DONE = 3, PHASE_ERR = 4;
     private static final int TIME_COL_W = 36; // 周课表时间列宽（dp）
+    /** 节次归一容差（分钟）：跨天同一节课开始时间差 ≤ 该值视为同一节，归到同一行。 */
+    private static final int SLOT_TOLERANCE_MIN = 5;
 
     // ---- EV 新首页视图 ----
     private TextView scheduleNameView, miniStatusView;
@@ -1063,6 +1065,28 @@ public class HomeActivity extends Activity {
                 return (va < vb) ? -1 : (va > vb ? 1 : 0);
             }
         });
+        // 2026-11-05 修复（evtask-D-evev-schedul-261105-seba8h）：跨天同一节课的开始时间
+        // 可能差几分钟（截图里左列 18:45 / 右列 18:50 都是「晚一」），按字符串精确去重会
+        // 把一节课拆成两行、彼此留空格。按 ±SLOT_TOLERANCE_MIN 分钟把相邻槽位聚成一簇，
+        // 簇内所有原始 key 映射到簇首；时间列显示簇首，课程块按映射归到同一行。
+        // 以簇首为锚（不是链式相邻比较），避免 18:45 / 18:50 / 18:55 被无限串成一簇。
+        java.util.Map<String, String> slotAlias = new java.util.HashMap<String, String>();
+        java.util.List<String> mergedSlots = new java.util.ArrayList<String>();
+        int clusterAnchor = -1;
+        for (String raw : timeSlots) {
+            int[] m = CourseCache.minutes(raw);
+            int v = m == null ? Integer.MAX_VALUE : m[0];
+            boolean newCluster = mergedSlots.isEmpty()
+                    || clusterAnchor == Integer.MAX_VALUE
+                    || v == Integer.MAX_VALUE
+                    || v - clusterAnchor > SLOT_TOLERANCE_MIN;
+            if (newCluster) {
+                mergedSlots.add(raw);
+                clusterAnchor = v;
+            }
+            slotAlias.put(raw, mergedSlots.get(mergedSlots.size() - 1));
+        }
+        timeSlots = mergedSlots;
         if (timeSlots.isEmpty()) {
             timeSlots.add("全");
         }
@@ -1145,7 +1169,9 @@ public class HomeActivity extends Activity {
             java.util.Map<String, java.util.List<CourseCache.Course>> map =
                     new java.util.LinkedHashMap<String, java.util.List<CourseCache.Course>>();
             for (CourseCache.Course c : dayList) {
-                String key = CourseCache.shortTime(c.time);
+                String raw = CourseCache.shortTime(c.time);
+                // 2026-11-05：归一到所属节次簇的代表 key，18:50 的课与 18:45 的课同槽显示
+                String key = slotAlias.containsKey(raw) ? slotAlias.get(raw) : raw;
                 java.util.List<CourseCache.Course> bucket = map.get(key);
                 if (bucket == null) {
                     bucket = new java.util.ArrayList<CourseCache.Course>();
@@ -1218,6 +1244,10 @@ public class HomeActivity extends Activity {
                 disp.length() <= 1 ? Ui.SP_SUBTITLE : Ui.SP_CAPTION, fg, Ui.LH_TIGHT);
         tv.setGravity(android.view.Gravity.CENTER);
         tv.setSingleLine(true);
+        // 2026-11-05（evtask-D-evev-schedul-261105-seba8h）：列宽约屏宽 1/7，四字课名放不下；
+        // 加尾省略号 + 无障碍全名，完整课名仍可点块进 showCourseDetail 查看（点击逻辑不变）。
+        tv.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        tv.setContentDescription(disp);
         b.addView(tv);
         if (!shortModeHere() && c.location != null && c.location.length() > 0) {
             // 9f → 10.5sp：9sp 低于中文可读下限
@@ -1225,6 +1255,7 @@ public class HomeActivity extends Activity {
                     (fg & 0x00FFFFFF) | 0xC8000000, false, Ui.LH_TIGHT);
             loc.setGravity(android.view.Gravity.CENTER);
             loc.setSingleLine(true);
+            loc.setEllipsize(android.text.TextUtils.TruncateAt.END);
             b.addView(loc);
         }
         b.setClickable(true);
@@ -1258,11 +1289,14 @@ public class HomeActivity extends Activity {
                 Ui.SP_CAPTION, fg, Ui.LH_TIGHT);
         tv.setGravity(android.view.Gravity.CENTER);
         tv.setSingleLine(true);
+        tv.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        tv.setContentDescription(tv.getText());
         b.addView(tv);
         TextView hint = Ui.textLh(this, "共 " + cs.size() + " 门 · 点开查看", Ui.SP_MICRO,
                 (fg & 0x00FFFFFF) | 0xC8000000, false, Ui.LH_TIGHT);
         hint.setGravity(android.view.Gravity.CENTER);
         hint.setSingleLine(true);
+        hint.setEllipsize(android.text.TextUtils.TruncateAt.END);
         b.addView(hint);
         b.setClickable(true);
         b.setOnClickListener(new View.OnClickListener() {
