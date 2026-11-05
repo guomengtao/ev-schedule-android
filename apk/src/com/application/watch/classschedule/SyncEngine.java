@@ -1301,7 +1301,7 @@ public final class SyncEngine {
         }
         String low = (String.valueOf(t) + " " + String.valueOf(t.getMessage())).toLowerCase();
         if (low.contains("not bond") || low.contains("not bonded")) {
-            return "这台手机还没和手环配对。请打开「小米运动健康」完成手环配对、保持连接后重试。";
+            return "这台手机还没和手环配对。请在手环上点「连接到新手机」，再在「小米运动健康」里配对好、保持连接后重试。";
         }
         if (low.contains("not installed") || low.contains("packagenotinstalled") || low.contains("appnotinstalled")) {
             return "手环上还没装「EV 课程表」呀 —— 用电脑上的 EV 安装器（或 AstroBox）把课程表装进手环，装好后在手环上点开一次，再回来重试。这一步和小米运动健康的授权没有关系哦。";
@@ -1363,7 +1363,7 @@ public final class SyncEngine {
                                 states[1] = FAIL;
                                 details[1] = "还没看到你的手环";
                                 emit(s, labels, states, details);
-                                finish(s, false, "请在「小米运动健康」里确认手环已连接，并保持连接");
+                                finish(s, false, "在手环上点「连接到新手机」，再到「小米运动健康」里配对好、保持连接");
                                 return;
                             }
                             java.util.List<DeviceInfo> list = new java.util.ArrayList<>();
@@ -1551,7 +1551,7 @@ public final class SyncEngine {
             @Override public void run() {
                 if (!done[0]) {
                     done[0] = true;
-                    cb.on(false, "小米运动健康与手环的连接已断开（长时间后台常见）。打开「小米运动健康」等它重新连上手环，再回来重试");
+                    cb.on(false, "手环和手机好像断开了。打开「小米运动健康」等它重新连上；连不上的话，在手环上点「连接到新手机」重新配对一次，再回来重试");
                 }
             }
         };
