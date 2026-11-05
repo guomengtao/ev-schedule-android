@@ -552,7 +552,7 @@ public class ZeroActivateActivity extends Activity {
             guideCard.setVisibility(View.GONE);
             detectSection.setVisibility(View.VISIBLE);
             setDeviceState(ST_WARN, "调试探针（未连手环）",
-                    "蓝牙 " + probe.macRaw + " · 设备号 " + probe.nodeId);
+                    "蓝牙 " + probe.macRaw + " · 手环编号 " + probe.nodeId);
             if (!TextUtils.isEmpty(debugSid)) {
                 startPay();
                 return;
@@ -623,20 +623,20 @@ public class ZeroActivateActivity extends Activity {
             if (subText.length() > 0) {
                 subText.append(" · ");
             }
-            subText.append("设备号 ").append(probe.nodeId);
+            subText.append("手环编号 ").append(probe.nodeId);
         } else if (did4.length() > 0) {
             if (subText.length() > 0) {
                 subText.append(" · ");
             }
-            subText.append("设备ID …").append(did4);
+            subText.append("手环编号 …").append(did4);
         }
         setDeviceState(ST_OK, name.length() > 0 ? "已连接 · " + name : "已连接", subText.toString());
 
         if (!probe.hasStableKey()) {
             // 两个稳定标识都没拿到：不猜，直接给确定能用的那条路
             setDeviceState(ST_WARN, name.length() > 0 ? "已连接 · " + name : "已连接",
-                    "没有取到可用于识别的设备标识");
-            showNotOwned("设备标识读取受限，请用 4 位兑换码激活");
+                    "没认出这台手环");
+            showNotOwned("没认出这台手环，请用 4 位兑换码");
             return;
         }
         queryOwned("auto");
@@ -685,7 +685,7 @@ public class ZeroActivateActivity extends Activity {
             code18 = o.optString("activationCode", "");
             reason = o.optString("reason", "");
         } catch (Throwable t) {
-            setFeedback(R_WARN, "服务器回包无法解析，请用 4 位兑换码激活");
+            setFeedback(R_WARN, "没拿到激活码，请用 4 位兑换码");
             showNotOwned(null);
             return;
         }
@@ -698,7 +698,7 @@ public class ZeroActivateActivity extends Activity {
         }
         if (owned && "need_device_id".equals(reason)) {
             // 有过购买记录但手环没报设备 ID（老版本 EV）：提示升级手环应用
-            setFeedback(R_WARN, "这台手环买过高级版，但手环没有上报设备 ID。请先在首页完成一次同步再回来");
+            setFeedback(R_WARN, "这台手环买过高级版，但还没认出它。先回首页同步一次，再回来");
             showNotOwned("也可以先用 4 位兑换码激活");
             return;
         }
@@ -811,11 +811,11 @@ public class ZeroActivateActivity extends Activity {
     private void submitCode() {
         String code = codeInput == null ? "" : codeInput.getText().toString().trim().toUpperCase();
         if (!REDEEM.matcher(code).matches()) {
-            setFeedback(R_ERR, "兑换码是 4 位大写字母或数字（A-Z、0-9）");
+            setFeedback(R_ERR, "兑换码是 4 位字母或数字，再检查一下");
             return;
         }
         if (probe == null || TextUtils.isEmpty(probe.deviceId)) {
-            setFeedback(R_ERR, "还没有取到手环设备 ID，请回首页连接手环后再试");
+            setFeedback(R_ERR, "还没认出这台手环。先回首页连上，再回来");
             return;
         }
         setFeedback(R_ACC, "正在向服务器换取激活码…");
@@ -873,16 +873,17 @@ public class ZeroActivateActivity extends Activity {
             JSONObject o = new JSONObject(resp);
             if (!o.optBoolean("success", false)) {
                 String err = o.optString("error", "服务器返回失败");
-                setFeedback(R_ERR, "激活失败：" + err);
+                android.util.Log.w("EVActivate", "backend error: " + err);
+                setFeedback(R_ERR, "没激活成功，再点一次");
                 return;
             }
             code18 = o.optString("activationCode", "");
         } catch (Throwable t) {
-            setFeedback(R_ERR, "服务器回包无法解析");
+            setFeedback(R_ERR, "没拿到激活码，再点一次");
             return;
         }
         if (code18.length() != 18) {
-            setFeedback(R_ERR, "服务器没有返回有效的 18 位激活码");
+            setFeedback(R_ERR, "没拿到激活码，再点一次");
             return;
         }
         setFeedback(R_ACC, "已获得激活码，正在写入手环…");
@@ -907,11 +908,11 @@ public class ZeroActivateActivity extends Activity {
                             bindDevice(redeemForBind);
                         }
                     } else {
-                        setFeedback(R_ERR, "手环拒绝激活：" + o.optString("reason", "未知原因")
-                                + (code18.length() == 18 ? "\n可以切到「快速激活」页重试" : ""));
+                        android.util.Log.w("EVActivate", "band refused: " + o.optString("reason", "未知原因"));
+                        setFeedback(R_ERR, "手环没接受。换「快速激活」页再试一次");
                     }
                 } catch (Throwable t) {
-                    setFeedback(R_ERR, "手环回包无法解析");
+                    setFeedback(R_ERR, "手环没回答，再点一次");
                 }
             }
 

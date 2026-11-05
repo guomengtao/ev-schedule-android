@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EV-UI·Android 附录 C · 激活页文案人话化设计对照</title>
+<style>
+  :root{
+    --page:#0E1117; --panel:#161B24; --panel2:#1C2330; --line:#2A3342;
+    --ink:#E8EDF5; --muted:#9BA7B8; --accent:#8FA6FF; --accent-bg:#26314C;
+    --warn:#E9B96B; --ok:#7ED3A5; --err:#FF9B9B;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:34px 20px 70px;background:var(--page);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.65}
+  .wrap{max-width:1120px;margin:0 auto}
+  .eyebrow{font-size:11.5px;letter-spacing:.16em;color:var(--accent);font-weight:700}
+  h1{font-size:27px;margin:8px 0 8px;letter-spacing:-.02em}
+  .lede{color:var(--muted);font-size:14px;margin:0 0 6px}
+  .meta{font-size:12px;color:var(--muted);margin:0 0 22px}
+  .meta code{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 6px;font-size:11px}
+
+  .controls{display:flex;flex-wrap:wrap;align-items:center;gap:9px;background:var(--panel);
+    border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:22px}
+  .controls .lab{font-size:11px;color:var(--muted);letter-spacing:.08em;margin-right:4px}
+  button{font-family:inherit;cursor:pointer;transition:background 150ms ease,border-color 150ms ease,color 150ms ease}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .chip{min-height:44px;padding:0 15px;border-radius:999px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--muted);font-size:12.5px}
+  .chip:hover{border-color:var(--accent);color:var(--ink)}
+  .chip[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);color:var(--ink);font-weight:700}
+  .spacer{flex:1}
+  @media (prefers-reduced-motion: reduce){button{transition:none}}
+
+  .stage{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:20px}
+  @media(max-width:860px){.stage{grid-template-columns:1fr}}
+  .col{min-width:0}
+  .col-head{display:flex;align-items:center;gap:10px;margin:0 0 10px;flex-wrap:wrap}
+  .tag{font-size:11.5px;font-weight:700;border-radius:999px;padding:4px 12px}
+  .tag.before{background:#2A2F39;color:#B9C2CF}
+  .tag.after{background:var(--accent-bg);color:var(--accent)}
+  .col-head span.note{font-size:11.5px;color:var(--muted)}
+
+  .phone{
+    --app-bg:#F4F6FA; --app-card:#FFFFFF; --app-ink:#1B2430; --app-muted:#6B7684;
+    --app-line:#E3E8EF; --app-err:#B24545; --app-err-bg:#FDECEC; --app-primary:#3A55C8;
+    background:var(--app-bg);border:8px solid #2C3442;border-radius:30px;padding:14px 14px 18px;
+    box-shadow:0 10px 30px rgba(0,0,0,.35);max-width:338px;margin:0 auto;color:var(--app-ink)}
+  .phone[data-app-theme="dark"]{
+    --app-bg:#12161F; --app-card:#1B2430; --app-ink:#E8EDF5; --app-muted:#A7B2C2;
+    --app-line:#303A4A; --app-err:#FF9B9B; --app-err-bg:#3A2424; --app-primary:#3A55C8}
+  .statusline{display:flex;justify-content:space-between;font-size:10px;color:var(--app-muted);padding:0 4px 8px}
+  .app-head{display:flex;align-items:center;justify-content:space-between;font-size:18px;font-weight:700;margin:2px 2px 12px}
+  .app-more{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--app-muted);position:relative}
+  .app-more::after{content:"";position:absolute;left:9px;top:5px;width:3px;height:3px;border-radius:50%;background:var(--app-muted);
+    box-shadow:0 5px 0 var(--app-muted),0 10px 0 var(--app-muted)}
+  .card{background:var(--app-card);border:1px solid var(--app-line);border-radius:12px;padding:13px;
+    box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .devrow{display:flex;gap:10px;align-items:flex-start}
+  .devdot{flex:0 0 9px;height:9px;border-radius:50%;background:var(--app-err);margin-top:6px}
+  .devrow .t{font-size:12.5px;font-weight:700}
+  .devrow .d{font-size:10.5px;color:var(--app-muted);margin-top:2px;word-break:break-all}
+  .divider{height:1px;background:var(--app-line);margin:13px 0}
+  .sec-title{font-size:15px;font-weight:700}
+  .sec-sub{font-size:10.5px;color:var(--app-muted);margin:2px 0 10px}
+  .boxes{display:flex;gap:7px;margin-bottom:10px}
+  .box{flex:1;height:44px;border:1px solid var(--app-line);border-radius:8px;background:var(--app-bg);
+    display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;letter-spacing:.04em}
+  .result{border-left:4px solid var(--app-err);background:var(--app-err-bg);border-radius:8px;
+    padding:9px 11px;font-size:11.5px;color:var(--app-err);font-weight:600;
+    min-height:52px;white-space:pre-wrap;word-break:break-word;margin-bottom:11px}
+  .primary{display:block;width:100%;min-height:48px;text-align:center;background:var(--app-primary);color:#fff;
+    font-size:13px;font-weight:700;border-radius:10px;padding:12px;border:0}
+  .buyline{text-align:center;font-size:10.5px;color:var(--app-muted);margin-top:12px}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:19px 21px;margin-bottom:18px}
+  h2{font-size:15.5px;margin:0 0 13px;display:flex;align-items:center;gap:9px}
+  h2::before{content:"";width:4px;height:15px;background:var(--accent);border-radius:2px}
+  .scene-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;font-size:12.5px}
+  @media(max-width:760px){.scene-grid{grid-template-columns:1fr}}
+  .scene-grid .k{color:var(--muted);font-size:11px;letter-spacing:.06em;margin-bottom:4px}
+  .scene-grid .v{color:var(--ink)}
+  .scene-grid .v.bad{color:var(--err)}
+  .scene-grid .v.good{color:var(--ok)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.04em;
+    border-bottom:1px solid var(--line);padding:8px 10px}
+  td{border-bottom:1px solid #222A36;padding:9px 10px;vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  td.bad{color:#D89A9A}
+  td.good{color:var(--accent);font-weight:600}
+  td.hit{font-size:11px;color:var(--warn);white-space:nowrap}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip2{font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--panel2);color:var(--muted)}
+  .chip2.ok{border-color:#2F5E4A;color:var(--ok)}
+  .chip2.warn{border-color:#5A4728;color:var(--warn)}
+  ul{margin:8px 0 0;padding-left:20px;font-size:12.5px;color:#C3CCDA}
+  li{margin-bottom:6px}
+  code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:11px}
+  .note{font-size:12px;color:var(--muted);margin-top:12px}
+  .foot{text-align:center;font-size:11px;color:#6F7C8E;margin-top:26px}
+  .ratio-ok{color:var(--ok);font-weight:700}
+  .ratio-fix{color:var(--warn);font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">EV-UI·Android · 附录 C · ev-ui-android v1.2 试点二</div>
+  <h1>激活页 · 文案人话化设计对照</h1>
+  <p class="lede">「高级版」页的四个失败现场。点上面的场景切换看不同错误提示；右上角可切 App 浅色 / 深色主题。</p>
+  <p class="meta">2026-11-05 19:10 +0800 · 单号 <code>evtask-D-evev-schedul-261105-m46vrv</code> · 依据：设计宪法 B（黑话词表 / 句式）、C（简单大方 P0 · 动画 ≤200ms）、D（WCAG AA · 48dp 热区）、§7 朗读测试</p>
+
+  <div class="controls" role="group" aria-label="错误场景与主题切换">
+    <span class="lab">失败场景</span>
+    <button class="chip" type="button" data-scene="0" aria-pressed="true">没找到手环</button>
+    <button class="chip" type="button" data-scene="1" aria-pressed="false">服务器没回应</button>
+    <button class="chip" type="button" data-scene="2" aria-pressed="false">手环没回答</button>
+    <button class="chip" type="button" data-scene="3" aria-pressed="false">兑换码填错</button>
+    <span class="spacer"></span>
+    <span class="lab">App 主题</span>
+    <button class="chip" type="button" id="themeBtn" aria-pressed="false">切到深色</button>
+  </div>
+
+  <div class="stage">
+    <div class="col">
+      <div class="col-head"><span class="tag before">改造前</span><span class="note" id="beforeNote">工程黑话 · 还把原始报文糊给孩子</span></div>
+      <div class="phone" id="phoneBefore" data-app-theme="light" aria-label="改造前的激活页">
+        <div class="statusline"><span>9:41</span><span>EV 同步器</span></div>
+        <div class="app-head"><span>高级版</span><span class="app-more" aria-hidden="true"></span></div>
+        <div class="card">
+          <div class="devrow"><div class="devdot"></div><div><div class="t" id="bDevT">正在读取设备ID…</div><div class="d" id="bDevD">设备ID …</div></div></div>
+          <div class="divider"></div>
+          <div class="sec-title">输入 4 位兑换码</div>
+          <div class="sec-sub">在爱发电订单里查看</div>
+          <div class="boxes"><div class="box">A</div><div class="box">7</div><div class="box">K</div><div class="box">2</div></div>
+          <div class="result" id="bRes">设备ID回包无法解析</div>
+          <button class="primary" type="button">一键激活</button>
+        </div>
+        <div class="buyline">还没有兑换码？去爱发电看看</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="col-head"><span class="tag after">改造后</span><span class="note">一句话说清 + 只给一个下一步动作</span></div>
+      <div class="phone" id="phoneAfter" data-app-theme="light" aria-label="改造后的激活页">
+        <div class="statusline"><span>9:41</span><span>EV 同步器</span></div>
+        <div class="app-head"><span>高级版</span><span class="app-more" aria-hidden="true"></span></div>
+        <div class="card">
+          <div class="devrow"><div class="devdot"></div><div><div class="t" id="aDevT">正在找手环…</div><div class="d" id="aDevD">手环编号 …8F3C21</div></div></div>
+          <div class="divider"></div>
+          <div class="sec-title">输入 4 位兑换码</div>
+          <div class="sec-sub">在爱发电订单里查看</div>
+          <div class="boxes"><div class="box">A</div><div class="box">7</div><div class="box">K</div><div class="box">2</div></div>
+          <div class="result" id="aRes">手环没回答，再点一次</div>
+          <button class="primary" type="button">一键激活</button>
+        </div>
+        <div class="buyline">还没有兑换码？去爱发电看看</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>当前场景 · 规范判定</h2>
+    <div class="scene-grid">
+      <div><div class="k">命中的黑话</div><div class="v bad" id="sHit">设备ID / 回包 / 解析</div></div>
+      <div><div class="k">改造前的问题</div><div class="v bad" id="sWhy">小学四年级看不懂「回包」，也不知道下一步点哪</div></div>
+      <div><div class="k">改造后的动作句</div><div class="v good" id="sFix">发生了什么 + 现在能做什么，一屏一个动作</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>设计系统标注（实测对比度 · WCAG AA）</h2>
+    <table>
+      <thead><tr><th>用途</th><th>前景 / 背景</th><th>对比度</th><th>判定与处置</th></tr></thead>
+      <tbody>
+        <tr><td>正文 / 白卡</td><td><code>#1B2430</code> / <code>#FFFFFF</code></td><td class="ratio-ok">15.65:1</td><td>AA 通过</td></tr>
+        <tr><td>次要文字 / 白卡</td><td><code>#6B7684</code> / <code>#FFFFFF</code></td><td class="ratio-ok">4.62:1</td><td>AA 通过（贴线，别再调浅）</td></tr>
+        <tr><td>错误文字 / 错误浅底</td><td><code>#B24545</code> / <code>#FDECEC</code></td><td class="ratio-ok">4.80:1</td><td>AA 通过 · 本页结果条用这组</td></tr>
+        <tr><td>提示文字 / 警告浅底</td><td><code>#B2650F</code> / <code>#FFF1E2</code></td><td class="ratio-fix">3.98:1</td><td>正文不达标 → 建议调深到 <code>#8A4A08</code>（6.18:1），待回写 <code>Ui.java</code></td></tr>
+        <tr><td>成功文字 / 成功浅底</td><td><code>#1E8A55</code> / <code>#E7F7EE</code></td><td class="ratio-fix">3.93:1</td><td>正文不达标 → 建议调深到 <code>#146B41</code>（5.90:1），待回写 <code>Ui.java</code></td></tr>
+        <tr><td>主按钮白字 / 主色</td><td><code>#FFFFFF</code> / <code>#3A55C8</code></td><td class="ratio-ok">6.34:1</td><td>AA 通过 · 48dp 热区</td></tr>
+        <tr><td>深色主题正文 / 深卡</td><td><code>#E8EDF5</code> / <code>#1B2430</code></td><td class="ratio-ok">13.31:1</td><td>AA 通过</td></tr>
+        <tr><td>深色主题错误字 / 深错误底</td><td><code>#FF9B9B</code> / <code>#3A2424</code></td><td class="ratio-ok">7.14:1</td><td>AA 通过</td></tr>
+      </tbody>
+    </table>
+    <ul>
+      <li><strong>字号层级</strong>：页标题 20sp / 区块标题 16sp(medium) / 正文 14sp / 说明 12sp；行高 1.5 倍，系统字体放大 200% 不截断。</li>
+      <li><strong>间距栅格</strong>：4dp 基准，卡片内 12dp、卡片间 8dp、分组间 16dp；圆角 3 档（卡片 12 / 控件 8 / 色条 4）。</li>
+      <li><strong>热区</strong>：主按钮 48dp、场景切换 chip 44dp；状态不靠颜色单独表达 —— 结果条同时有左侧色条 + 文字。</li>
+      <li><strong>动效</strong>：本页只有 chip 切换的 150ms 过渡（≤200ms 红线），不自动循环、不阻塞操作；系统开启「减少动态效果」时降级为静态。</li>
+      <li><strong>状态四态</strong>：默认「输入 4 位兑换码」→ 加载「正在找手环…」→ 错误「手环没回答，再点一次」→ 成功「激活成功 / 回首页」，每态一句人话、不出现技术词。</li>
+    </ul>
+    <p class="note">对比度数值按 WCAG 2.1 相对亮度公式实算；两处不达标的建议色只写在设计图里，<strong>本次未改 App 颜色</strong>（本轮是文案试点）。</p>
+  </div>
+
+  <div class="panel">
+    <h2>文案对照（均来自改造前真实源码）</h2>
+    <table>
+      <thead><tr><th style="width:40%">改造前</th><th style="width:40%">改造后</th><th>命中</th></tr></thead>
+      <tbody>
+        <tr><td class="bad">设备ID回包无法解析 / 设备ID读取超时</td><td class="good">手环没回答，再点一次</td><td class="hit">设备ID / 回包</td></tr>
+        <tr><td class="bad">正在读取设备ID…</td><td class="good">正在找手环…</td><td class="hit">设备ID</td></tr>
+        <tr><td class="bad">手环回包无法解析：{"ok":false,"reason":"..."}</td><td class="good">手环没回答。再点一次</td><td class="hit">回包 + 原始报文</td></tr>
+        <tr><td class="bad">服务器回包无法解析 / 没有返回有效的 18 位激活码</td><td class="good">没拿到激活码，再点一次</td><td class="hit">回包 / 解析</td></tr>
+        <tr><td class="bad">激活失败：{服务端 error 原文}</td><td class="good">没激活成功，再点一次（原文转日志）</td><td class="hit">错误原文外露</td></tr>
+        <tr><td class="bad">手环拒绝激活：{reason} + 两行说明</td><td class="good">手环没接受。兑换码先存着，回来自动再试。</td><td class="hit">长句 / 技术原因</td></tr>
+        <tr><td class="bad">兑换码必须是 4 位大写字母或数字（A-Z, 0-9）</td><td class="good">兑换码是 4 位字母或数字，再检查一下</td><td class="hit">技术符号</td></tr>
+        <tr><td class="bad">18 位数字，由服务端按你的设备 ID 生成…</td><td class="good">18 位数字，会自动填好，不用手输。</td><td class="hit">服务端 / 设备 ID</td></tr>
+        <tr><td class="bad">设备标识为临时值，激活后重装应用可能失效</td><td class="good">手环编号是临时的。卸载重装后要再激活一次</td><td class="hit">设备标识</td></tr>
+        <tr><td class="bad">检测到未完成的激活，但它属于另一台手环（…8F3C21）…</td><td class="good">上次那个兑换码是别的手环的。请重新输入</td><td class="hit">编号外露 / 长句</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>验收与边界</h2>
+    <div class="chips">
+      <span class="chip2 ok">两页学生可见硬禁词 0 处（FastActivate / ZeroActivate）</span>
+      <span class="chip2 ok">check-ui-spec.py 新增行 0 硬违规</span>
+      <span class="chip2 warn">11 处软提醒：「兑换码 / 激活码」为功能名，按 B 例外保留</span>
+      <span class="chip2 ok">原始 json / reason / 设备号不再显示，转入日志</span>
+      <span class="chip2 ok">朗读测试：小学四年级能说出「手环没答话，再点一次」</span>
+      <span class="chip2">动画 0 处新增（P2 不主动加）</span>
+    </div>
+    <ul>
+      <li><strong>本次范围</strong>：<code>FastActivateActivity.java</code> 22 条 + <code>ZeroActivateActivity.java</code> 14 条替换，只改面向学生的字符串与两处「原文转日志」；内部变量名、日志、成功卡与购买流程未动。</li>
+      <li><strong>第 4 条硬规则已复核</strong>：这两页没有任何中文错误文案的 <code>contains(...)</code> 判断，人话化不会改坏恢复动作（与附录 B 的坑不同）。</li>
+      <li><strong>边界</strong>：<code>ZeroActivate</code> 的「调试探针」态仍显示 MAC / 手环编号给排障用，属开发者态；其它页面（同步协调器、传输页、主题选择页）的存量黑话按 §6「改到才收敛」留给后续。</li>
+      <li><strong>真机</strong>：Android 真机 / AVD 不在线，效果以本设计图呈现；未构建发布、未动线上升级清单。</li>
+    </ul>
+  </div>
+
+  <div class="foot">EV-UI·Android 附录 C · 规范正文见 docs/EV-UI-Android-v1.md · 本页是规范的试点验证，不是新一份「XX 页全新设计方案」</div>
+</div>
+
+<script>
+  var SCENES = [
+    {
+      hit: '设备ID / 回包 / 解析',
+      why: '小学四年级看不懂「回包」，也不知道下一步点哪',
+      fix: '发生了什么 + 现在能做什么，一屏一个动作',
+      note: '工程黑话 · 设备行也在反复报同一件事',
+      bT: '正在读取设备ID…', bD: '设备ID …', bR: '设备ID回包无法解析',
+      aT: '正在找手环…', aD: '手环编号 …8F3C21', aR: '手环没回答，再点一次'
+    },
+    {
+      hit: '回包 / 解析 / 18 位激活码',
+      why: '把服务器返回格式当成给孩子看的说明',
+      fix: '只说没拿到什么 + 再点一次',
+      note: '工程黑话 · 服务端报文格式外露',
+      bT: '已连接 · 小米手环 9', bD: '设备ID …8F3C21', bR: '服务器回包无法解析',
+      aT: '已连接 · 小米手环 9', aD: '手环编号 …8F3C21', aR: '没拿到激活码，再点一次'
+    },
+    {
+      hit: '回包 / 解析 + 原始 JSON',
+      why: '把一整串 {"ok":false,...} 直接糊到屏幕上',
+      fix: '去掉原始报文（转日志），只留一句能照做的话',
+      note: '最严重 · 原始技术数据直接露给用户',
+      bT: '已连接 · 小米手环 9', bD: '设备ID …8F3C21',
+      bR: '手环回包无法解析：{"ok":false,"reason":"sign mismatch"}',
+      aT: '已连接 · 小米手环 9', aD: '手环编号 …8F3C21', aR: '手环没回答。再点一次'
+    },
+    {
+      hit: 'A-Z, 0-9 技术符号 / 长句',
+      why: '校验规则当说明写，孩子不知道自己错在哪',
+      fix: '先说正确格式，再给一个动作「再检查一下」',
+      note: '技术符号 · 像开发者写的校验提示',
+      bT: '已连接 · 小米手环 9', bD: '设备ID …8F3C21',
+      bR: '兑换码必须是 4 位大写字母或数字（A-Z, 0-9）',
+      aT: '已连接 · 小米手环 9', aD: '手环编号 …8F3C21',
+      aR: '兑换码是 4 位字母或数字，再检查一下'
+    }
+  ];
+
+  var state = { scene: 0, dark: false };
+
+  function el(id) { return document.getElementById(id); }
+
+  function render() {
+    var s = SCENES[state.scene];
+    el('bDevT').textContent = s.bT;
+    el('bDevD').textContent = s.bD;
+    el('bRes').textContent = s.bR;
+    el('aDevT').textContent = s.aT;
+    el('aDevD').textContent = s.aD;
+    el('aRes').textContent = s.aR;
+    el('sHit').textContent = s.hit;
+    el('sWhy').textContent = s.why;
+    el('sFix').textContent = s.fix;
+    el('beforeNote').textContent = s.note;
+
+    var chips = document.querySelectorAll('[data-scene]');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].setAttribute('aria-pressed', i === state.scene ? 'true' : 'false');
+    }
+    var theme = state.dark ? 'dark' : 'light';
+    el('phoneBefore').setAttribute('data-app-theme', theme);
+    el('phoneAfter').setAttribute('data-app-theme', theme);
+    el('themeBtn').setAttribute('aria-pressed', state.dark ? 'true' : 'false');
+    el('themeBtn').textContent = state.dark ? '切到浅色' : '切到深色';
+    document.body.setAttribute('data-rendered', 'ok');
+    document.body.setAttribute('data-scene', String(state.scene));
+    document.body.setAttribute('data-theme', theme);
+  }
+
+  function init() {
+    var chips = document.querySelectorAll('[data-scene]');
+    for (var i = 0; i < chips.length; i++) {
+      (function (idx) {
+        chips[idx].addEventListener('click', function () {
+          state.scene = idx;
+          render();
+        });
+      })(i);
+    }
+    el('themeBtn').addEventListener('click', function () {
+      state.dark = !state.dark;
+      render();
+    });
+
+    // 支持 URL 参数，便于无头浏览器直接验证某个场景 / 主题
+    var q = new URLSearchParams(window.location.search);
+    var sc = parseInt(q.get('scene'), 10);
+    if (!isNaN(sc) && sc >= 0 && sc < SCENES.length) state.scene = sc;
+    if (q.get('theme') === 'dark') state.dark = true;
+    render();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+</script>
+</body>
+</html>

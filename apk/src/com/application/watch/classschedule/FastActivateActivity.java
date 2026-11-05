@@ -240,7 +240,7 @@ public class FastActivateActivity extends Activity {
                         + "一个兑换码能激活几台手环？\n"
                         + "一台。激活码跟随手环，换手机不用重新激活。\n\n"
                         + "激活码多长？需要我手输吗？\n"
-                        + "18 位数字，由服务端按你的设备 ID 生成，本页自动写入。\n\n"
+                        + "18 位数字，会自动填好，不用手输。\n\n"
                         + "iOS 能用吗？\n"
                         + "暂不支持，需要安卓手机。")
                 .setPositiveButton("知道了", null)
@@ -253,7 +253,7 @@ public class FastActivateActivity extends Activity {
      *    把「不可执行的动作」摆成按钮 = 引导用户去撞墙；此时唯一正确动作是「去首页连接」。
      */
     private void showDevMenu() {
-        final String[] items = {"重新读取设备ID", "呼叫手环（响铃找表）"};
+        final String[] items = {"重新找一下手环", "呼叫手环（响铃找表）"};
         new AlertDialog.Builder(this)
                 .setItems(items, new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int which) {
@@ -286,7 +286,7 @@ public class FastActivateActivity extends Activity {
         colLp.leftMargin = Ui.dp(this, Ui.GAP_SM);
         row.addView(col, colLp);
 
-        devStatus = Ui.textMedium(this, "正在读取设备ID…", Ui.SP_BODY, Ui.MUTED);
+        devStatus = Ui.textMedium(this, "正在找手环…", Ui.SP_BODY, Ui.MUTED);
         devStatus.setSingleLine(true);
         devStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
         col.addView(devStatus);
@@ -548,7 +548,7 @@ public class FastActivateActivity extends Activity {
                 .apply();
         fillBoxes(code);
         showResult(R_ACC, "已从链接自动填入兑换码 " + code
-                + (deviceId.length() > 0 ? "，正在激活…" : "，等待读取设备ID…"));
+                + (deviceId.length() > 0 ? "，正在激活…" : "，正在找手环…"));
         maybeDeepLinkActivate();
     }
 
@@ -801,8 +801,7 @@ public class FastActivateActivity extends Activity {
         boolean deviceKnown = deviceId.length() > 0;
         boolean deviceMatch = !deviceKnown || pendDev.length() == 0 || pendDev.equals(deviceId);
         if (!deviceMatch) {
-            showResult(R_WARN, "检测到未完成的激活，但它属于另一台手环（"
-                    + mask(pendDev) + "），请确认后重新输入兑换码");
+            showResult(R_WARN, "上次那个兑换码是别的手环的。请重新输入");
             return;
         }
 
@@ -840,7 +839,7 @@ public class FastActivateActivity extends Activity {
             return;
         }
         setGuideVisible(false);
-        setDeviceState(ST_LOADING, "正在读取设备ID…", "");
+        setDeviceState(ST_LOADING, "正在找手环…", "");
         updateActivateBtn();
         SyncEngine.get(this).getDeviceId(new SyncEngine.Reply() {
             @Override public void onReply(String json) {
@@ -848,7 +847,7 @@ public class FastActivateActivity extends Activity {
                     JSONObject o = new JSONObject(json);
                     if (!o.optBoolean("ok", false)
                             || !"get_device_id".equals(o.optString("action"))) {
-                        setDeviceState(ST_ERR, "设备ID读取失败", "手环 EV 版本可能过低，请先更新");
+                        setDeviceState(ST_ERR, "没找到手环", "手环上的课程表该更新了");
                         return;
                     }
                     deviceId = o.optString("deviceId");
@@ -857,21 +856,21 @@ public class FastActivateActivity extends Activity {
                     String name = SyncEngine.get(FastActivateActivity.this).deviceName;
                     setDeviceState(fallback ? ST_WARN : ST_OK,
                             name.length() > 0 ? "已连接 · " + name : "已连接",
-                            "设备ID " + mask(deviceId) + (fallback ? "（临时标识）" : ""));
+                            "手环编号 " + mask(deviceId) + (fallback ? "（临时编号）" : ""));
                     if (fallback) {
-                        showResult(R_WARN, "设备标识为临时值，激活后重装应用可能失效");
+                        showResult(R_WARN, "手环编号是临时的。卸载重装后要再激活一次");
                     }
                     tryResume();
                     maybeDeepLinkActivate();
                 } catch (Throwable t) {
-                    setDeviceState(ST_ERR, "设备ID回包无法解析", "");
+                    setDeviceState(ST_ERR, "手环没回答，再点一次", "");
                 }
             }
             @Override public void onTimeout(String hint) {
-                setDeviceState(ST_WARN, "设备ID读取超时", hint);
+                setDeviceState(ST_WARN, "手环没回答，再点一次", hint);
             }
             @Override public void onError(String msg) {
-                setDeviceState(ST_ERR, "设备ID读取失败", msg);
+                setDeviceState(ST_ERR, "没找到手环", msg);
             }
         });
     }
@@ -891,19 +890,19 @@ public class FastActivateActivity extends Activity {
     private void activate() {
         String code = collectCode();
         if (!REDEEM.matcher(code).matches()) {
-            showResult(R_ERR, "兑换码必须是 4 位大写字母或数字（A-Z, 0-9）");
+            showResult(R_ERR, "兑换码是 4 位字母或数字，再检查一下");
             return;
         }
         setBtnBusy();
         if (!SyncEngine.get(this).hasNode()) {
             // 未连接：先暂存兑换码，连接后自动继续
             savePending(code, "", null);
-            showResult(R_WARN, "手环未连接，兑换码已暂存。连上手环回到本页后会自动继续激活。");
+            showResult(R_WARN, "还没连上手环。兑换码先存着，连上后自动继续。");
             resetBtn();
             return;
         }
         if (TextUtils.isEmpty(deviceId)) {
-            showResult(R_WARN, "还没有取到设备ID，正在重试读取…");
+            showResult(R_WARN, "还没找到手环，正在再找一次…");
             resetBtn();
             loadDeviceId();
             return;
@@ -958,7 +957,7 @@ public class FastActivateActivity extends Activity {
     private void onBackend(int httpCode, String resp) {
         if (httpCode < 0 || resp == null) {
             resetBtn();
-            showResult(R_ERR, "网络请求失败，请检查网络后重试");
+            showResult(R_ERR, "网络没连上。连好网，再点一次");
             return;
         }
         String activationCode = null;
@@ -972,17 +971,18 @@ public class FastActivateActivity extends Activity {
                     err = "服务器返回失败";
                 }
                 resetBtn();
-                showResult(R_ERR, "激活失败：" + err);
+                android.util.Log.w("EVActivate", "backend error: " + err);
+                showResult(R_ERR, "没激活成功，再点一次");
                 return;
             }
         } catch (Throwable t) {
             resetBtn();
-            showResult(R_ERR, "服务器回包无法解析");
+            showResult(R_ERR, "没拿到激活码，再点一次");
             return;
         }
         if (activationCode == null || activationCode.length() != 18) {
             resetBtn();
-            showResult(R_ERR, "服务器没有返回有效的 18 位激活码");
+            showResult(R_ERR, "没拿到激活码，再点一次");
             return;
         }
         // 换码成功先落暂存：写入手环失败也能断点续传
@@ -1022,12 +1022,12 @@ public class FastActivateActivity extends Activity {
                                         "app_activate_ok", code18));
                     } else {
                         resetBtn();
-                        showResult(R_ERR, "手环拒绝激活：" + o.optString("reason")
-                                + "\n激活码已暂存，解决后回到本页会自动重试。");
+                        android.util.Log.w("EVActivate", "band refused: " + o.optString("reason"));
+                        showResult(R_ERR, "手环没接受。兑换码先存着，回来自动再试。");
                     }
                 } catch (Throwable t) {
                     resetBtn();
-                    showResult(R_ERR, "手环回包无法解析：" + json);
+                    showResult(R_ERR, "手环没回答。再点一次");
                 }
             }
             @Override public void onTimeout(String hint) {
@@ -1036,7 +1036,7 @@ public class FastActivateActivity extends Activity {
             }
             @Override public void onError(String msg) {
                 resetBtn();
-                showResult(R_ERR, "写入失败：" + msg + "\n激活码已暂存，重连手环后回到本页会自动补写。");
+                showResult(R_ERR, "没写进去：" + msg + "。兑换码先存着，回来自动补写。");
             }
         });
     }
@@ -1062,7 +1062,7 @@ public class FastActivateActivity extends Activity {
         String name = SyncEngine.get(this).deviceName;
         setDeviceState(ST_OK,
                 name.length() > 0 ? "已激活 · " + name : "已激活",
-                "设备ID " + mask(deviceId) + " · 可在手环「EV 课程表 → 高级版」查看");
+                "手环编号 " + mask(deviceId) + " · 可在手环「EV 课程表 → 高级版」查看");
     }
 
     @Override
