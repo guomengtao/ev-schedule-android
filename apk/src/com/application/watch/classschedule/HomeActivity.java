@@ -158,7 +158,9 @@ public class HomeActivity extends Activity {
         final String[] names = new String[devices.size()];
         int checked = -1;
         for (int i = 0; i < devices.size(); i++) {
-            names[i] = devices.get(i).name + "   (" + devices.get(i).id + ")";
+            String did = devices.get(i).id;
+            names[i] = devices.get(i).name + "   · 编号 "
+                    + (did.length() > 4 ? did.substring(did.length() - 4) : did);
             if (devices.get(i).id.equals(preferredId)) {
                 checked = i;
             }
@@ -1807,8 +1809,7 @@ public class HomeActivity extends Activity {
         SyncEngine e = SyncEngine.get(this);
         if (legacy) {
             welcomeView.setText("欢迎，" + (e.nickname.length() > 0 ? e.nickname : "同学") + "！");
-            statusView.setText("已连接 " + e.deviceName + "  ·  " + e.versionName
-                    + " (code " + e.versionCode + ")");
+            statusView.setText("已连接 " + e.deviceName + "  ·  " + e.versionName);
             statusView.setTextColor(Ui.OK);
             estimateView.setText("连接完成");
             estimateView.setTextColor(Ui.OK);
