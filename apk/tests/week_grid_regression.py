@@ -12,6 +12,7 @@ EV 同步器首页周课表网格 · 回归用例（L2 逻辑验证，纯标准�
   * SLOT_TOLERANCE_MIN  —— 本脚本的 TOL，改 Java 常量时这里要同步
   * CourseCache.minutes() / shortTime() —— minutes() / short_time()
   * periodIndex()       —— period_index()
+  * applyStickyHeader() —— sticky_offset()（表头吸顶位移 clamp）
   * renderFocusCard()   —— 焦点卡「第 N 节」与今日进度条的节次口径
 
 ⚠️ 边界：这是 L2 仿真，复刻 Java 算法而非在 JVM 上跑真实代码。
@@ -78,6 +79,12 @@ def period_index(starts, start_minute):
     return sum(1 for s in set(starts) if s < start_minute) + 1
 
 
+def sticky_offset(scroll_y, header_top, max_stick):
+    """对应 HomeActivity.applyStickyHeader()：位移夹在 [0, maxStick]。"""
+    ty = scroll_y - header_top
+    return max(0, min(max_stick, ty))
+
+
 def check(label, cond, detail=''):
     global TOTAL, FAILED
     TOTAL += 1
@@ -98,7 +105,7 @@ def main():
     print('=' * 62)
 
     # ---- 1. 用户截图的 13 个乱序时间标签（E1 主错误）----
-    case('[1/8] 截图 13 个乱序时间标签 → 排序 + 归一')
+    case('[1/9] 截图 13 个乱序时间标签 → 排序 + 归一')
     shot = ['10:55', '08:00', '08:15', '09:10', '10:25', '12:55', '11:20',
             '14:50', '15:45', '16:30', '18:45', '19:40', '18:50']
     courses = [(0, '课%d' % i, t + '-23:59') for i, t in enumerate(shot)]
@@ -115,7 +122,7 @@ def main():
     check('晚二 19:40 独立且在最后', alias['19:40'] == '19:40' and slots[-1] == '19:40')
 
     # ---- 2. 同一时间两门课（E2 静默丢课）----
-    case('[2/8] 同时间双课 → 分桶不覆盖，课程总数守恒')
+    case('[2/9] 同时间双课 → 分桶不覆盖，课程总数守恒')
     courses = [(0, '数学', '08:00-08:45'), (0, '物理', '08:00-08:45'),
                (0, '语文', '08:45-09:30')]
     slots, _, buckets = build_grid(courses)
@@ -127,7 +134,7 @@ def main():
     check('时间标签仍严格递增', minutes(slots[0]) < minutes(slots[1]))
 
     # ---- 3. 跨天 ±5 分钟（E2 晚一拆行）----
-    case('[3/8] 跨天 18:45 / 18:50 晚一 → 同一行左右对齐')
+    case('[3/9] 跨天 18:45 / 18:50 晚一 → 同一行左右对齐')
     courses = [(0, '晚一', '18:45-19:30'), (1, '晚一', '18:50-19:35'),
                (0, '晚二', '19:40-20:30')]
     slots, alias, buckets = build_grid(courses)
@@ -139,7 +146,7 @@ def main():
     check('晚二仍在晚一之后', slots.index('19:40') > slots.index('18:45'))
 
     # ---- 4. 占位槽「全」----
-    case('[4/8] 解析不出时间的占位槽 → 排最后且不吞其它槽')
+    case('[4/9] 解析不出时间的占位槽 → 排最后且不吞其它槽')
     courses = [(0, '数学', '08:00-08:45'), (0, '自习', '全'),
                (0, '语文', '10:00-10:45')]
     slots, alias, buckets = build_grid(courses)
@@ -149,7 +156,7 @@ def main():
     check('占位课也在格子里', '全' in buckets[0])
 
     # ---- 5. 假期列（空列）----
-    case('[5/8] 假期列无课 → 不新增行、其它列课程守恒')
+    case('[5/9] 假期列无课 → 不新增行、其它列课程守恒')
     courses = [(0, '数学', '08:00-08:45'), (2, '语文', '08:00-08:45'),
                (5, '英语', '14:00-14:45')]
     slots, _, buckets = build_grid(courses)
@@ -159,7 +166,7 @@ def main():
                        for v in col.values()) == 3)
 
     # ---- 6. 防链式串簇 ----
-    case('[6/8] 18:45 / 18:50 / 18:55 → 不被无限串成一簇')
+    case('[6/9] 18:45 / 18:50 / 18:55 → 不被无限串成一簇')
     courses = [(0, 'A', '18:45-19:00'), (0, 'B', '18:50-19:05'),
                (0, 'C', '18:55-19:10')]
     slots, alias, _ = build_grid(courses)
@@ -168,7 +175,7 @@ def main():
           alias['18:50'] == '18:45' and alias['18:55'] == '18:55')
 
     # ---- 7. 每门课都有对应行（无空槽错位）----
-    case('[7/8] 全部课程都能定位到某一行（无空槽错位）')
+    case('[7/9] 全部课程都能定位到某一行（无空槽错位）')
     courses = [(d, '课%d' % i, t + '-23:59')
                for i, (d, t) in enumerate([(0, '08:00'), (0, '10:55'),
                                           (2, '08:00'), (4, '18:50'),
@@ -183,15 +190,24 @@ def main():
           all(minutes(a) < minutes(b) for a, b in zip(slots, slots[1:])))
 
     # ---- 8. 焦点卡节次序号（P2 去重口径）----
-    case('[8/8] 焦点卡「第 N 节」按去重时间槽计数')
+    case('[8/9] 焦点卡「第 N 节」按去重时间槽计数')
     starts = [480, 480, 600, 660]   # 08:00 两门 + 10:00 + 11:00
     check('同槽双课都算第 1 节', period_index(starts, 480) == 1)
     check('10:00 是第 2 节（不是第 3 节）', period_index(starts, 600) == 2)
     check('11:00 是第 3 节', period_index(starts, 660) == 3)
     check('总节数 = 去重槽数 3', len(set(starts)) == 3)
 
+    # ---- 9. 日期表头吸顶位移（P2）----
+    case('[9/9] 表头吸顶位移 → 只滚过表头后生效、不越出卡片')
+    check('未滚到表头时不位移（静态 elevation 关闭）',
+          sticky_offset(100, 570, 400) == 0)
+    check('刚滚到表头位置时位移仍为 0', sticky_offset(570, 570, 400) == 0)
+    check('滚过 100px 时下移 100px（浮起）', sticky_offset(670, 570, 400) == 100)
+    check('远超上限时夹在 maxStick（不滑出卡片）',
+          sticky_offset(2000, 570, 400) == 400)
+
     print('\n' + '=' * 62)
-    print('结果：8 组用例 / %d 条断言，%s' %
+    print('结果：9 组用例 / %d 条断言，%s' %
           (TOTAL, '全绿（0 失败）' if FAILED == 0 else '失败 %d 条' % FAILED))
     return 1 if FAILED else 0
 

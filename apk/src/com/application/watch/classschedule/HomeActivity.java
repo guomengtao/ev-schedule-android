@@ -71,6 +71,8 @@ public class HomeActivity extends Activity {
     private int stickyHeaderTop = -1;
     /** 表头允许下移的最大值（不滑出网格卡片底部） */
     private int stickyHeaderMax = 0;
+    /** 表头当前是否处于浮起（吸顶）状态，避免每次滚动都重设 elevation */
+    private boolean stickyHeaderFloating = false;
     private int selectedDay = CourseCache.todayIndex();
     /** 周视图偏移：0=本周，-1 上周，+1 下周；点周标签回到本周 */
     private int weekOffset = 0;
@@ -610,6 +612,10 @@ public class HomeActivity extends Activity {
     private void prepareStickyHeader() {
         stickyHeaderTop = -1;
         stickyHeaderMax = 0;
+        stickyHeaderFloating = false;
+        if (dateStripView != null) {
+            dateStripView.setElevation(0f);
+        }
         if (pageScroller == null || dateStripView == null) {
             return;
         }
@@ -646,6 +652,12 @@ public class HomeActivity extends Activity {
         int ty = scrollY - stickyHeaderTop;
         if (ty < 0) ty = 0;
         if (ty > stickyHeaderMax) ty = stickyHeaderMax;
+        // 只有真正浮在课程行之上时才提升 Z 序；静态时 elevation=0，画面与修复前一致
+        boolean floating = ty > 0;
+        if (floating != stickyHeaderFloating) {
+            dateStripView.setElevation(floating ? Ui.dp(this, 2) : 0f);
+            stickyHeaderFloating = floating;
+        }
         dateStripView.setTranslationY(ty);
     }
 
@@ -1191,7 +1203,8 @@ public class HomeActivity extends Activity {
         // 必须不透明，否则会透出下方色块；用 elevation 提升 Z 序而不是 bringToFront()
         // —— 后者会改变 LinearLayout 子 View 顺序，把表头挪到卡片底部。
         dateStripView.setBackgroundColor(Ui.CARD);
-        dateStripView.setElevation(Ui.dp(this, 2));
+        // elevation 只在吸顶生效时开启（见 applyStickyHeader）：静态画面保持零视觉回归
+        stickyHeaderFloating = false;
         wrapper.addView(dateStripView);
         renderDateStrip();
         prepareStickyHeader();
