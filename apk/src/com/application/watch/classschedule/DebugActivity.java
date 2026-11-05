@@ -681,15 +681,17 @@ public class DebugActivity extends Activity {
     /** 打开小米运动健康：它到前台才会重新去连手环（步骤 2 超时的最常见恢复手段）。 */
     private void openMiFitness() {
         try {
-            Intent i = getPackageManager().getLaunchIntentForPackage("com.xiaomi.wearable");
-            if (i == null) {
-                i = getPackageManager().getLaunchIntentForPackage("com.xiaomi.health");
+            Intent i = null;
+            for (int k = 0; k < SyncEngine.MI_HEALTH_PACKAGES.length; k++) {
+                i = getPackageManager().getLaunchIntentForPackage(SyncEngine.MI_HEALTH_PACKAGES[k]);
+                if (i != null) break;
             }
             if (i == null) {
-                log("未找到小米运动健康，请手动打开");
+                log("未找到小米运动健康，请手动打开；或改用兑换码激活");
                 return;
             }
             startActivity(i);
+            SyncEngine.get(this).rebind();
             log("已打开小米运动健康——等它连上手环后，回来点「全部执行」");
         } catch (Throwable t) {
             log("打开失败：" + t);

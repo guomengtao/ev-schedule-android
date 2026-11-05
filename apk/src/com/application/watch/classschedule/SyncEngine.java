@@ -3,6 +3,8 @@ package com.application.watch.classschedule;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 
 import com.xiaomi.xms.wearable.Status;
 import com.xiaomi.xms.wearable.Wearable;
@@ -32,6 +34,44 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class SyncEngine {
 
     public static final int PENDING = 0, RUNNING = 1, OK = 2, FAIL = 3;
+
+    /** 小米运动健康历代包名，按优先级。现网国内版是 com.mi.health（实测 3.59.1）。 */
+    public static final String[] MI_HEALTH_PACKAGES = {
+        "com.mi.health", "com.xiaomi.wearable", "com.xiaomi.hm.health", "com.xiaomi.health"
+    };
+    public static final String XMS_SERVICE_ACTION = "com.xiaomi.wearable.XMS_WEARABLE_SERVICE";
+
+    /** L1：包是否安装。返回命中的包名；null 才是真的没装。 */
+    public static String installedMiHealth(Context c) {
+        PackageManager pm = c.getPackageManager();
+        for (int i = 0; i < MI_HEALTH_PACKAGES.length; i++) {
+            try {
+                pm.getPackageInfo(MI_HEALTH_PACKAGES[i], 0);
+                return MI_HEALTH_PACKAGES[i];
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
+    }
+
+    /** L3：该包是否声明了穿戴服务。 */
+    public static boolean serviceDeclared(Context c, String pkg) {
+        try {
+            Intent i = new Intent(XMS_SERVICE_ACTION).setPackage(pkg);
+            return c.getPackageManager().resolveService(i, 0) != null;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 分层结论：只有 L1 查不到包，才允许说「未安装」；其余一律归为服务不可用。 */
+    public static String serviceDiagnosis(Context c) {
+        String pkg = installedMiHealth(c);
+        if (pkg == null) {
+            return "这台手机还没安装小米运动健康";
+        }
+        return "已安装小米运动健康（" + pkg + "），但连不上它的穿戴服务；请允许后台运行后重试，或改用兑换码激活";
+    }
 
     public interface Steps {
         void onUpdate(String[] labels, int[] states, String[] details);
@@ -205,6 +245,37 @@ public final class SyncEngine {
     }
 
     public boolean sdkReady() { return api != null; }
+
+    /** 重新取 SDK 门面：api 不能是构造时的一次性快照，否则服务后来恢复了也永远报没装。 */
+    public void rebind() {
+        try {
+            api = Wearable.getMessageApi(ctx);
+        } catch (Throwable t) {
+            api = null;
+        }
+    }
+
+    /** 四步共用的超时层：穿戴 SDK 的回调可能永不触发，绝不让 UI 无限停在 RUNNING。 */
+    private Cb withTimeout(final Cb cb, final long ms, final String fallback) {
+        final boolean[] done = {false};
+        final Runnable timeout = new Runnable() {
+            @Override public void run() {
+                if (!done[0]) {
+                    done[0] = true;
+                    cb.on(false, fallback);
+                }
+            }
+        };
+        main.postDelayed(timeout, ms);
+        return new Cb() {
+            @Override public void on(boolean ok, String msg) {
+                if (done[0]) return;
+                done[0] = true;
+                main.removeCallbacks(timeout);
+                cb.on(ok, msg);
+            }
+        };
+    }
     public boolean hasNode() { return nodeId != null; }
     public String getNodeId() { return nodeId; }
 
@@ -356,7 +427,7 @@ public final class SyncEngine {
      *  串行化：若已有请求在途（pending 非空），新请求排队等待而非覆盖，杜绝回包错配。 */
     public void send(final String json, final Reply cb) {
         if (api == null) {
-            cb.onError("穿戴 SDK 不可用，请确认已安装「小米运动健康」");
+            cb.onError(serviceDiagnosis(ctx));
             return;
         }
         if (nodeId == null) {
@@ -1304,7 +1375,7 @@ public final class SyncEngine {
     /** 首屏失败时的可执行建议（比 detail 长，讲清楚下一步该干什么） */
     static String hintFor(Throwable t) {
         if (t == null) {
-            return "请安装并打开「小米运动健康」App，并让它在后台运行";
+            return "小米运动健康的服务暂时连不上，请允许它在后台运行后重试；也可以改用兑换码激活";
         }
         String low = (String.valueOf(t) + " " + String.valueOf(t.getMessage())).toLowerCase();
         if (low.contains("not bond") || low.contains("not bonded")) {
@@ -1319,16 +1390,16 @@ public final class SyncEngine {
         if (low.contains("sendmessage failed") || low.contains("send message failed")) {
             return "手机到手环的通道还没建立。请在「小米运动健康」确认手环已连接，并在手表上打开一次「EV 课程表」，然后重试。";
         }
-        return "请安装并打开「小米运动健康」App，并让它在后台运行";
+        return "小米运动健康的服务暂时连不上，请允许它在后台运行后重试；也可以改用兑换码激活";
     }
 
     // 步骤 1：穿戴服务
     private void stepService(final Steps s, final String[] labels, final int[] states, final String[] details) {
         if (api == null) {
             states[0] = FAIL;
-            details[0] = "还没装小米运动健康";
+            details[0] = serviceDiagnosis(ctx);
             emit(s, labels, states, details);
-            finish(s, false, "请安装并打开「小米运动健康」App，并让它在后台运行");
+            finish(s, false, serviceDiagnosis(ctx));
             return;
         }
         try {
@@ -1533,20 +1604,26 @@ public final class SyncEngine {
     // ======================= 单步动作（调试页用） =======================
 
     public void step1Service(final Cb cb) {
+        final Cb safe = withTimeout(cb, 8000L, serviceDiagnosis(ctx));
+        if (installedMiHealth(ctx) == null) {
+            safe.on(false, "这台手机还没安装小米运动健康");
+            return;
+        }
+        rebind();
         if (api == null) {
-            cb.on(false, "还没装小米运动健康");
+            safe.on(false, serviceDiagnosis(ctx));
             return;
         }
         try {
             Wearable.getServiceApi(ctx).getServiceApiLevel()
                     .addOnSuccessListener(new OnSuccessListener<Integer>() {
-                        @Override public void onSuccess(Integer lv) { cb.on(true, "已就绪"); }
+                        @Override public void onSuccess(Integer lv) { safe.on(true, "已就绪"); }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override public void onFailure(Exception e) { cb.on(false, humanize(e)); }
+                        @Override public void onFailure(Exception e) { safe.on(false, humanize(e)); }
                     });
         } catch (Throwable t) {
-            cb.on(false, humanize(t));
+            safe.on(false, humanize(t));
         }
     }
 
@@ -1613,26 +1690,30 @@ public final class SyncEngine {
     }
 
     public void step3Perm(final Cb cb) {
+        final Cb safe = withTimeout(cb, 8000L, "授权没有回应，请在小米运动健康里确认手环在线后重试");
         if (nodeId == null) {
-            cb.on(false, "先执行步骤 2");
+            safe.on(false, "先执行步骤 2");
             return;
         }
         try {
             Wearable.getAuthApi(ctx)
                     .requestPermission(nodeId, Permission.DEVICE_MANAGER, Permission.NOTIFY)
                     .addOnSuccessListener(new OnSuccessListener<Permission[]>() {
-                        @Override public void onSuccess(Permission[] ps) { cb.on(true, "已授权"); }
+                        @Override public void onSuccess(Permission[] ps) { safe.on(true, "已授权"); }
                     })
                     .addOnFailureListener(new OnFailureListener() {
-                        @Override public void onFailure(Exception e) { cb.on(false, humanize(e)); }
+                        @Override public void onFailure(Exception e) { safe.on(false, humanize(e)); }
                     });
         } catch (Throwable t) {
-            cb.on(false, humanize(t));
+            safe.on(false, humanize(t));
         }
     }
 
     /** 调试页第 4 步：同四步连接一样带「无回应自动拉起 EV 重试」。 */
-    public void step4Ping(final Cb cb) { step4PingN(cb, 3); }
+    public void step4Ping(final Cb cb) {
+        final Cb safe = withTimeout(cb, 15000L, "手环没有回应，请打开手环上的 EV 课程表后重试");
+        step4PingN(safe, 3);
+    }
 
     private void step4PingN(final Cb cb, final int left) {
         if (nodeId == null) {
