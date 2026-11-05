@@ -996,7 +996,8 @@ public final class SyncEngine {
                         })
                         .addOnFailureListener(new OnFailureListener() {
                             @Override public void onFailure(Exception e) {
-                                // 单条查询失败不致命：忽略（该机型/版本不支持的项拿不到就留零值）
+                                // 单条查询失败不致命：该机型/版本不支持的项留零值，但必须留下可诊断线索
+                                EvLog.i("devstate query FAIL item=" + item + " err=" + e);
                             }
                         });
             } catch (Throwable ignored) {
@@ -1007,8 +1008,12 @@ public final class SyncEngine {
     /** 把一条 query 结果并入对应字段（DataQueryResult 各项与 DataItem 一一对应）。 */
     private void applyQueryResult(DataItem item, DataQueryResult r) {
         if (r == null) {
+            EvLog.i("devstate query OK but result=null item=" + item);
             return;
         }
+        EvLog.i("devstate query OK item=" + item + " connected=" + r.isConnected
+                + " battery=" + r.battery + " charging=" + r.isCharging
+                + " wearing=" + r.isWearing + " sleeping=" + r.isSleeping);
         if (item == DataItem.ITEM_CONNECTION) {
             bandConnected = r.isConnected;
             bandConnKnown = true;
