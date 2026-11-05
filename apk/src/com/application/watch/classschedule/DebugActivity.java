@@ -37,10 +37,10 @@ public class DebugActivity extends Activity {
     private static final int STEPS = 4;
     /** 序号由步骤卡左侧圆点承担，标题不再带 "N " 前缀 */
     private static final String[] LABELS =
-            {"初始化穿戴服务", "查找已连接设备", "连接手环上的 EV 课程表", "和课程表打个招呼"};
+            {"小米运动健康装好了吗", "手环连上手机了吗", "连接手环上的 EV 课程表", "和课程表打个招呼"};
     private static final String[] SUBS = {
-            "检测小米穿戴服务是否可用",
-            "认一下是哪只手环（需保持连接）",
+            "装好并打开过一次「小米运动健康」就行",
+            "在小米运动健康里，先把手环连上",
             "在手环上呼起课程表，并申请通知权限",
             "ping 一下手环上的课程表"
     };
@@ -359,8 +359,8 @@ public class DebugActivity extends Activity {
     private String hintText(int i) {
         String d = details[i] == null ? "" : details[i];
         switch (i) {
-            case 0: return "小米穿戴服务不可用 —— 确认已安装并更新到新版，再回来重试";
-            case 1: return "小米运动健康与手环的 BLE 连接久了会自己断开 —— 把它拉到前台即可重连";
+            case 0: return "手机上的「小米运动健康」好像还没准备好呀 —— 把它装上（已经装了的话就打开一次），再回来重试这就好啦。";
+            case 1: return "还没看到你的手环哦 —— 打开「小米运动健康」，在底下「设备」里把手环连上，连好以后回来重试就好啦～";
             case 2:
                 // 第 3 步失败有四种完全不同的原因，给的建议也必须不同，
                 // 否则用户会照着错的方向去授权，越弄越乱
@@ -387,7 +387,7 @@ public class DebugActivity extends Activity {
         String d = details[i] == null ? "" : details[i];
         switch (i) {
             case 0: return "打开小米运动健康";
-            case 1: return "去重连";
+            case 1: return "去连手环";
             case 2:
                 // 手环上根本没装课程表时，「去小米运动健康」是个误导按钮
                 if (d.contains("还没装") || d.contains("未安装")) {

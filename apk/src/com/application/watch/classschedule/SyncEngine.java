@@ -181,7 +181,7 @@ public final class SyncEngine {
             return;
         }
         setPreferredNodeId(hit.id);
-        useNode(hit, "(已记住)", s, labels, states, details);
+        useNode(hit, "上次就是这台", s, labels, states, details);
     }
 
     /** 落定一台设备，进入第 3 步（授权） */
@@ -1319,7 +1319,7 @@ public final class SyncEngine {
     private void stepService(final Steps s, final String[] labels, final int[] states, final String[] details) {
         if (api == null) {
             states[0] = FAIL;
-            details[0] = "SDK 不可用";
+            details[0] = "还没装小米运动健康";
             emit(s, labels, states, details);
             finish(s, false, "请安装并打开「小米运动健康」App，并让它在后台运行");
             return;
@@ -1329,7 +1329,7 @@ public final class SyncEngine {
                     .addOnSuccessListener(new OnSuccessListener<Integer>() {
                         @Override public void onSuccess(Integer lv) {
                             states[0] = OK;
-                            details[0] = "穿戴服务可用";
+                            details[0] = "已就绪";
                             emit(s, labels, states, details);
                             stepNodes(s, labels, states, details);
                         }
@@ -1353,7 +1353,7 @@ public final class SyncEngine {
     // 步骤 2：找设备
     private void stepNodes(final Steps s, final String[] labels, final int[] states, final String[] details) {
         states[1] = RUNNING;
-        details[1] = "正在查找…";
+        details[1] = "正在找你的手环…";
         emit(s, labels, states, details);
         try {
             Wearable.getNodeApi(ctx).getConnectedNodes()
@@ -1361,7 +1361,7 @@ public final class SyncEngine {
                         @Override public void onSuccess(List<Node> nodes) {
                             if (nodes == null || nodes.isEmpty()) {
                                 states[1] = FAIL;
-                                details[1] = "没有已连接设备";
+                                details[1] = "还没看到你的手环";
                                 emit(s, labels, states, details);
                                 finish(s, false, "请在「小米运动健康」里确认手环已连接，并保持连接");
                                 return;
@@ -1372,20 +1372,20 @@ public final class SyncEngine {
                                 list.add(new DeviceInfo(n.id, n.name));
                             }
                             if (list.size() == 1) {
-                                useNode(list.get(0), "(唯一设备)", s, labels, states, details);
+                                useNode(list.get(0), "已连上", s, labels, states, details);
                                 return;
                             }
                             // 多台手环：优先用上次记住的那台；没记住就交给 UI 让用户选
                             final String pref = preferredNodeId();
                             for (int i = 0; i < list.size(); i++) {
                                 if (list.get(i).id.equals(pref)) {
-                                    useNode(list.get(i), "(已记住)", s, labels, states, details);
+                                    useNode(list.get(i), "上次就是这台", s, labels, states, details);
                                     return;
                                 }
                             }
                             if (chooser == null) {
                                 // 没有 UI 兜底：保持老行为（取第一台），但把提示写清楚
-                                useNode(list.get(0), "(默认第一台)", s, labels, states, details);
+                                useNode(list.get(0), "先选了这台", s, labels, states, details);
                                 return;
                             }
                             pendingDevices = list;
@@ -1527,13 +1527,13 @@ public final class SyncEngine {
 
     public void step1Service(final Cb cb) {
         if (api == null) {
-            cb.on(false, "SDK 不可用");
+            cb.on(false, "还没装小米运动健康");
             return;
         }
         try {
             Wearable.getServiceApi(ctx).getServiceApiLevel()
                     .addOnSuccessListener(new OnSuccessListener<Integer>() {
-                        @Override public void onSuccess(Integer lv) { cb.on(true, "服务可用 (level " + lv + ")"); }
+                        @Override public void onSuccess(Integer lv) { cb.on(true, "已就绪"); }
                     })
                     .addOnFailureListener(new OnFailureListener() {
                         @Override public void onFailure(Exception e) { cb.on(false, humanize(e)); }
@@ -1566,7 +1566,7 @@ public final class SyncEngine {
                             done[0] = true;
                             main.removeCallbacks(timeout);
                             if (nodes == null || nodes.isEmpty()) {
-                                cb.on(false, "没有已连接设备");
+                                cb.on(false, "还没看到你的手环");
                                 return;
                             }
                             Node pick = nodes.get(0);
@@ -1579,7 +1579,9 @@ public final class SyncEngine {
                             }
                             nodeId = pick.id;
                             deviceName = pick.name;
-                            cb.on(true, deviceName + "  nodeId=" + nodeId
+                            // 界面只给用户看「已连上」，nodeId 这类排障信息留给 logcat
+                            android.util.Log.i("EV_SYNC", "nodeId=" + nodeId + " deviceName=" + deviceName);
+                            cb.on(true, deviceName + " 已连上"
                                     + (nodes.size() > 1
                                         ? ("（共 " + nodes.size() + " 台，可在首页切换）") : ""));
                         }
