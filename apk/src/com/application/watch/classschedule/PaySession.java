@@ -196,7 +196,7 @@ final class PaySession {
         if (!picking.compareAndSet(false, true)) {
             return;
         }
-        Net.get(ZeroCfg.API_PAY_SESSION + "?sid=" + sid + "&pickup=1", new Net.Cb() {
+        Net.get(ZeroCfg.API_PAY_SESSION + "&sid=" + sid + "&pickup=1", new Net.Cb() {
             @Override
             public void on(final int code, final String resp) {
                 main.post(new Runnable() {

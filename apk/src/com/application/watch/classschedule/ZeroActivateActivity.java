@@ -654,7 +654,7 @@ public class ZeroActivateActivity extends Activity {
             setFeedback(R_ACC, "正在重新核对购买记录…");
         }
         String url = ZeroCfg.API_DEVICE
-                + "?key=" + Uri.encode(probe.mac)
+                + "&key=" + Uri.encode(probe.mac)
                 + "&nodeId=" + Uri.encode(probe.nodeId)
                 + "&deviceId=" + Uri.encode(probe.deviceId);
         Net.get(url, new Net.Cb() {

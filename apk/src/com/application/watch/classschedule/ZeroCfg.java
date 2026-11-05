@@ -18,8 +18,14 @@ final class ZeroCfg {
 
     /** 服务端（激活码真源仍在这里，Supabase 只承担事件推送） */
     static final String API_BASE = Net.BASE;
-    static final String API_DEVICE = API_BASE + "/api/device";
-    static final String API_PAY_SESSION = API_BASE + "/api/pay-session";
+    /**
+     * 单入口 + op 分派：Vercel Hobby 计划单次部署最多 12 个 Serverless Functions，
+     * 两个接口拆开后总数顶到 13 个，整次部署会被平台拒绝。故合并为 /api/zero。
+     * ⚠️ 拼接后续参数时用 "&" 而不是 "?"（URL 里已经有 ?op=）。
+     */
+    static final String API_ZERO = API_BASE + "/api/zero";
+    static final String API_DEVICE = API_ZERO + "?op=device";
+    static final String API_PAY_SESSION = API_ZERO + "?op=session";
 
     /** Supabase 项目（Realtime 直连，不经 Vercel） */
     static final String SUPA_URL = "https://kqzkdpmyivtpxkfmibnd.supabase.co";
