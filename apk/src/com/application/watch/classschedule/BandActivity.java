@@ -51,6 +51,15 @@ public class BandActivity extends Activity {
     private Runnable heroTick;
     private Runnable flashHide;
 
+    // ---- 未连接自动进排障（2026-11-05）----
+    /** 未连接时停留超过这个时间就自动打开调试页，避免用户「卡在空白页、没有操作方式」 */
+    private static final long AUTO_DEBUG_DELAY_MS = 1500L;
+    /** 冷却：同一台机器 2 分钟内只自动跳一次，防止从调试页返回就又被弹走 */
+    private static final long AUTO_DEBUG_COOLDOWN_MS = 2 * 60 * 1000L;
+    private static long lastAutoJumpAt = 0L;
+    private final android.os.Handler autoDebugHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable autoDebugTask;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -772,6 +781,55 @@ public class BandActivity extends Activity {
             e.queryDeviceState();   // SDK 直读：电量/连接/充电/佩戴/睡眠
             e.requestSysinfo();     // 手环端要一次存储/型号
             e.refreshBandScheduleCount(); // 刷新手环真实课表套数（顶部「课表 N 套」）
+        }
+        scheduleAutoDebugIfStuck();
+    }
+
+    @Override
+    protected void onPause() {
+        // 离开页面（含手动进了调试页）就取消待跳，避免在后台突然弹页
+        cancelAutoDebug();
+        super.onPause();
+    }
+
+    // ======================= 未连接自动进排障 =======================
+
+    /**
+     * 手环页在未连接时原本只有一句静态提示，用户会「卡着、不知道点哪」。
+     * 这里做兜底：停留 1.5 秒仍连不上，就自动打开调试页（四步排查），
+     * 让用户至少有一个可操作的地方。
+     *
+     * 三条收敛条件，避免变成骚扰：
+     *   ① 只在仍未连接时跳（期间连上了就不跳）；
+     *   ② 同一台机器 2 分钟内只跳一次（从调试页返回不会被立刻弹走）；
+     *   ③ 页面不可见时取消（onPause / onDestroy）。
+     */
+    private void scheduleAutoDebugIfStuck() {
+        cancelAutoDebug();
+        SyncEngine cur = SyncEngine.get(this);
+        if (cur.connected()) return;
+        autoDebugTask = new Runnable() {
+            @Override public void run() {
+                autoDebugTask = null;
+                if (isFinishing()) return;
+                if (SyncEngine.get(BandActivity.this).connected()) return;
+                long now = System.currentTimeMillis();
+                if (now - lastAutoJumpAt < AUTO_DEBUG_COOLDOWN_MS) return;
+                lastAutoJumpAt = now;
+                flash("手环还没连上，先带你去一步步排查", Ui.WARN);
+                try {
+                    startActivity(new Intent(BandActivity.this, DebugActivity.class));
+                } catch (Throwable ignored) {
+                }
+            }
+        };
+        autoDebugHandler.postDelayed(autoDebugTask, AUTO_DEBUG_DELAY_MS);
+    }
+
+    private void cancelAutoDebug() {
+        if (autoDebugTask != null) {
+            autoDebugHandler.removeCallbacks(autoDebugTask);
+            autoDebugTask = null;
         }
     }
 
