@@ -975,8 +975,10 @@ public final class SyncEngine {
      */
     public void queryDeviceState() {
         if (nodeId == null) {
+            EvLog.i("devstate query SKIP nodeId=null");
             return;
         }
+        EvLog.i("devstate query BEGIN nodeId=" + nodeId + " items=5");
         final NodeApi na;
         try {
             na = Wearable.getNodeApi(ctx);
