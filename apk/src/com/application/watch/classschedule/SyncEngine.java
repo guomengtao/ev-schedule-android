@@ -1259,19 +1259,19 @@ public final class SyncEngine {
         String msg = String.valueOf(t == null ? null : t.getMessage());   // not bond
         String low = (raw + " " + msg).toLowerCase();
         if (low.contains("not bond") || low.contains("not bonded")) {
-            return "手环未在本机配对";
+            return "手机还没和手环配对";
         }
         // 穿戴 SDK 的 RESULT_PACKAGE_NOT_INSTALLED 被 ExceptionUtil 直接写成英文 "app not installed"，
         // 极易被误读成「手机上的 App 没装」。真实含义是：手环侧没有同包名的快应用（EV 课程表）。
         // 这条必须排在 permission 分支之前，否则会被误判成「权限被拒绝」。
         if (low.contains("not installed") || low.contains("packagenotinstalled") || low.contains("appnotinstalled")) {
-            return "手环上未安装 EV 课程表";
+            return "手环上还没装课程表";
         }
         if (low.contains("signature")) {
-            return "签名校验未通过";
+            return "手机和手环签名不一致";
         }
         if (low.contains("permission") || low.contains("securityexception")) {
-            return "权限被拒绝";
+            return "手环拒绝了这次申请";
         }
         if (low.contains("timeout") || low.contains("timed out")) {
             return "超时未响应";
@@ -1304,7 +1304,7 @@ public final class SyncEngine {
             return "这台手机还没和手环配对。请打开「小米运动健康」完成手环配对、保持连接后重试。";
         }
         if (low.contains("not installed") || low.contains("packagenotinstalled") || low.contains("appnotinstalled")) {
-            return "手环上还没有安装「EV 课程表」，所以无法申请设备权限。请先把「EV 课程表」安装到手环（手机端与手环端必须同包名 com.application.watch.classschedule），装好后在手环上打开一次，再回来重试这一步。";
+            return "手环上还没装「EV 课程表」呀 —— 用电脑上的 EV 安装器（或 AstroBox）把课程表装进手环，装好后在手环上点开一次，再回来重试。这一步和小米运动健康的授权没有关系哦。";
         }
         if (low.contains("signature")) {
             return "APK 与手环端签名不一致，无法互通。请安装与手环匹配的版本。";

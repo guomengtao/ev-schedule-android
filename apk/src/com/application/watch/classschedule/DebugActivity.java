@@ -37,12 +37,12 @@ public class DebugActivity extends Activity {
     private static final int STEPS = 4;
     /** 序号由步骤卡左侧圆点承担，标题不再带 "N " 前缀 */
     private static final String[] LABELS =
-            {"初始化穿戴服务", "查找已连接设备", "申请设备权限", "连接 EV 课程表"};
+            {"初始化穿戴服务", "查找已连接设备", "连接手环上的 EV 课程表", "和课程表打个招呼"};
     private static final String[] SUBS = {
             "检测小米穿戴服务是否可用",
-            "拿到 nodeId（手环必须已连接）",
-            "DEVICE_MANAGER + NOTIFY",
-            "ping 手环上的 EV 课程表"
+            "认一下是哪只手环（需保持连接）",
+            "在手环上呼起课程表，并申请通知权限",
+            "ping 一下手环上的课程表"
     };
 
     private final int[] states = new int[STEPS];
@@ -364,19 +364,21 @@ public class DebugActivity extends Activity {
             case 2:
                 // 第 3 步失败有四种完全不同的原因，给的建议也必须不同，
                 // 否则用户会照着错的方向去授权，越弄越乱
-                if (d.contains("未安装")) {
-                    return "手环上没有「EV 课程表」，所以谈不上授权 —— 请先把课程表安装到手环并打开一次，再重试本步。这一步与小米运动健康的授权无关，去那里授权也不会有用";
+                if (d.contains("还没装") || d.contains("未安装")) {
+                    return "别急，这一步跟授权没关系 —— 是手环上还没装「EV 课程表」呀。"
+                            + "用电脑上的 EV 安装器（或 AstroBox）把课程表装进手环，"
+                            + "装好后在手环上点开一次，再回来点下面的「装好啦，重试」就行啦～";
                 }
                 if (d.contains("签名")) {
-                    return "手机端与手环端的「EV 课程表」签名不一致，小米拒绝对接 —— 请安装与手环同一批签名的手机端版本";
+                    return "手机和手环上的「EV 课程表」不是同一批签名的，两边握不上手 —— 换一个和手环配套的手机端版本就好啦。";
                 }
-                if (d.contains("未在本机配对")) {
-                    return "这台手机还没和手环完成系统配对 —— 打开小米运动健康完成配对并保持连接后重试";
+                if (d.contains("配对")) {
+                    return "这台手机还没和手环配对哦 —— 打开「小米运动健康」完成配对、保持连接，再回来重试这一步。";
                 }
-                if (d.contains("权限被拒绝")) {
-                    return "手环端拒绝了这次权限申请 —— 请在手环上打开一次「EV 课程表」，让它处于前台后重试";
+                if (d.contains("拒绝")) {
+                    return "手环这次没同意申请 —— 在手环上点开一次「EV 课程表」，让它停在前台，再回来重试就好。";
                 }
-                return "权限申请没有成功 —— 先确认手环已连接、手环上的「EV 课程表」已打开，再重试本步";
+                return "这步还没成功 —— 确认手环已连接、手环上的「EV 课程表」已经点开，再重试一次试试～";
             default: return "手环上的 EV 课程表没响应 —— 先把它拉起来再重试";
         }
     }
@@ -388,7 +390,10 @@ public class DebugActivity extends Activity {
             case 1: return "去重连";
             case 2:
                 // 手环上根本没装课程表时，「去小米运动健康」是个误导按钮
-                if (d.contains("未安装") || d.contains("签名")) {
+                if (d.contains("还没装") || d.contains("未安装")) {
+                    return "装好啦，重试";
+                }
+                if (d.contains("签名")) {
                     return "知道了";
                 }
                 return "去小米运动健康";
@@ -403,8 +408,17 @@ public class DebugActivity extends Activity {
                 @Override public void onClick(View v) { launchEv(); }
             };
         }
-        if (i == 2 && (d.contains("未安装") || d.contains("签名"))) {
-            // 无需外部动作，收起提示即可
+        if (i == 2 && (d.contains("还没装") || d.contains("未安装"))) {
+            // 用户装完回来，一键重跑本步，不用自己去找
+            return new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    setState(2, SyncEngine.RUNNING, "执行中…");
+                    runStep(2);
+                }
+            };
+        }
+        if (i == 2 && d.contains("签名")) {
+            // 签名不匹配换版本才能解决，无需外部动作，收起提示即可
             return new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     hintBox[2].removeAllViews();
