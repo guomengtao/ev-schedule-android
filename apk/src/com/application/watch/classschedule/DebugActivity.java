@@ -359,7 +359,13 @@ public class DebugActivity extends Activity {
     private String hintText(int i) {
         String d = details[i] == null ? "" : details[i];
         switch (i) {
-            case 0: return "手机上的「小米运动健康」好像还没准备好呀 —— 把它装上（已经装了的话就打开一次），再回来重试这就好啦。";
+            case 0:
+                // 穿戴服务连不上，最常见的原因是手环没连手机（而不是没装 App），
+                // 这时候提示「装小米运动健康」是张冠李戴，会把人带偏
+                if (d.contains("配对")) {
+                    return "手环好像还没连上手机呀 —— 打开「小米运动健康」，在底下「设备」里把手环连好，再回来试这一步就好啦～";
+                }
+                return "手机上的「小米运动健康」好像还没准备好呀 —— 把它装上（已经装了的话就打开一次），再回来重试这就好啦。";
             case 1: return "还没看到你的手环哦 —— 打开「小米运动健康」，在底下「设备」里把手环连上，连好以后回来重试就好啦～";
             case 2:
                 // 第 3 步失败有四种完全不同的原因，给的建议也必须不同，
@@ -386,7 +392,7 @@ public class DebugActivity extends Activity {
     private String hintBtn(int i) {
         String d = details[i] == null ? "" : details[i];
         switch (i) {
-            case 0: return "打开小米运动健康";
+            case 0: return d.contains("配对") ? "去连手环" : "打开小米运动健康";
             case 1: return "去连手环";
             case 2:
                 // 手环上根本没装课程表时，「去小米运动健康」是个误导按钮
