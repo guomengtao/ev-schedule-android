@@ -65,6 +65,12 @@ public class HomeActivity extends Activity {
     private LinearLayout focusCardView;
     private LinearLayout dateStripView, deviceCardView;
     private TextView deviceNameView, deviceStatusView, batteryView;
+    /** P2：页面级 ScrollView（Ui.wrapWithBottomBar 内），用于日期表头滚动吸顶 */
+    private android.widget.ScrollView pageScroller;
+    /** 表头在内容坐标系里的 top；-1 表示尚未测量 */
+    private int stickyHeaderTop = -1;
+    /** 表头允许下移的最大值（不滑出网格卡片底部） */
+    private int stickyHeaderMax = 0;
     private int selectedDay = CourseCache.todayIndex();
     /** 周视图偏移：0=本周，-1 上周，+1 下周；点周标签回到本周 */
     private int weekOffset = 0;
@@ -324,6 +330,7 @@ public class HomeActivity extends Activity {
         root.addView(header, 0, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 44)));
         setContentView(Ui.wrapWithBottomBar(this, root, 0));
+        bindStickyDateStrip(root);
         renderWeek();
     }
 
@@ -583,6 +590,75 @@ public class HomeActivity extends Activity {
         });
     }
 
+    /** P2：绑定页面级 ScrollView，滚动时把日期表头钉在网格卡顶部。 */
+    private void bindStickyDateStrip(LinearLayout contentRoot) {
+        if (!(contentRoot.getParent() instanceof android.widget.ScrollView)) {
+            return;
+        }
+        pageScroller = (android.widget.ScrollView) contentRoot.getParent();
+        pageScroller.setOnScrollChangeListener(new android.view.View.OnScrollChangeListener() {
+            @Override public void onScrollChange(View v, int sx, int sy, int ox, int oy) {
+                applyStickyHeader(sy);
+            }
+        });
+    }
+
+    /**
+     * P2：表头位置在布局完成后测量一次。renderWeek() 会重建整张网格卡，
+     * 因此每次新建 dateStripView 都要重新测量并套用当前滚动量。
+     */
+    private void prepareStickyHeader() {
+        stickyHeaderTop = -1;
+        stickyHeaderMax = 0;
+        if (pageScroller == null || dateStripView == null) {
+            return;
+        }
+        final LinearLayout strip = dateStripView;
+        strip.post(new Runnable() {
+            @Override public void run() {
+                if (dateStripView != strip || pageScroller == null) {
+                    return;
+                }
+                // 累加 layout 坐标（不含 translationY，测量稳定）到 ScrollView 的内容根
+                int top = 0;
+                View v = strip;
+                while (v.getParent() instanceof View && v.getParent() != pageScroller) {
+                    top += v.getTop();
+                    v = (View) v.getParent();
+                }
+                if (v.getParent() == pageScroller) {
+                    top += v.getTop();
+                }
+                stickyHeaderTop = top;
+                android.view.ViewGroup card = (android.view.ViewGroup) strip.getParent();
+                stickyHeaderMax = Math.max(0, card.getHeight() - card.getPaddingBottom()
+                        - strip.getTop() - strip.getHeight());
+                applyStickyHeader(pageScroller.getScrollY());
+            }
+        });
+    }
+
+    /** P2：scrollY 超过表头位置后按滚动量下移表头，视觉上保持在滚动视口顶部。 */
+    private void applyStickyHeader(int scrollY) {
+        if (dateStripView == null || stickyHeaderTop < 0) {
+            return;
+        }
+        int ty = scrollY - stickyHeaderTop;
+        if (ty < 0) ty = 0;
+        if (ty > stickyHeaderMax) ty = stickyHeaderMax;
+        dateStripView.setTranslationY(ty);
+    }
+
+    /** P2：第几节按「开始时间早于本节的去重时间槽」计数，同槽多课只算一节。 */
+    private int periodIndex(java.util.Set<Integer> slotStarts, int[] m) {
+        if (m == null) return 1;
+        int n = 0;
+        for (int s : slotStarts) {
+            if (s < m[0]) n++;
+        }
+        return n + 1;
+    }
+
     private void renderDateStrip() {
         if (dateStripView == null) {
             return;
@@ -739,22 +815,29 @@ public class HomeActivity extends Activity {
         int total = today.size();
         int now = CourseCache.nowMinutes();
 
+        // 2026-11-05 P2：节次按「去重后的开始时间」计数。同一节若有多门课
+        // （合班 / 单双周 / 手环重复导入），原来的列表索引会把一节算成两节，
+        // 使「第 N 节」与今日进度条同时偏大；时间定位本身仍按 nowMinutes()。
+        java.util.Set<Integer> slotStarts = new java.util.HashSet<Integer>();
+        java.util.Set<Integer> doneSlots = new java.util.HashSet<Integer>();
         CourseCache.Course current = null, next = null;
-        int currentIdx = 0, nextIdx = 0, done = 0;
         for (int i = 0; i < total; i++) {
             int[] m = CourseCache.minutes(today.get(i).time);
             if (m == null) continue;
-            if (now >= m[1]) done++;
-            if (current == null && now >= m[0] && now < m[1]) { current = today.get(i); currentIdx = i; }
+            slotStarts.add(m[0]);
+            if (now >= m[1]) doneSlots.add(m[0]);
+            if (current == null && now >= m[0] && now < m[1]) { current = today.get(i); }
         }
         if (current == null) {
             int best = Integer.MAX_VALUE;
             for (int i = 0; i < total; i++) {
                 int[] m = CourseCache.minutes(today.get(i).time);
                 if (m == null) continue;
-                if (m[0] > now && m[0] < best) { best = m[0]; next = today.get(i); nextIdx = i; }
+                if (m[0] > now && m[0] < best) { best = m[0]; next = today.get(i); }
             }
         }
+        final int totalSlots = Math.max(1, slotStarts.size());
+        final int doneSlotCount = doneSlots.size();
 
         // ---- 今天一节都没有 ----
         if (total == 0) {
@@ -775,12 +858,12 @@ public class HomeActivity extends Activity {
         if (current != null) {
             show = current; running = true;
             int[] cm = CourseCache.minutes(current.time);
-            kicker = "进行中 · 第" + (currentIdx + 1) + "节"
+            kicker = "进行中 · 第" + periodIndex(slotStarts, cm) + "节"
                     + (cm != null ? "　" + CourseCache.hm(cm[0]) + "–" + CourseCache.hm(cm[1]) : "");
         } else if (next != null) {
             show = next; running = false;
             int[] nm = CourseCache.minutes(next.time);
-            kicker = "接下来 · 第" + (nextIdx + 1) + "节"
+            kicker = "接下来 · 第" + periodIndex(slotStarts, nm) + "节"
                     + (nm != null ? "　" + CourseCache.hm(nm[0]) + "–" + CourseCache.hm(nm[1]) : "");
         } else {
             show = today.get(total - 1); running = false;
@@ -831,13 +914,13 @@ public class HomeActivity extends Activity {
             card.addView(mv);
         }
 
-        // 今日进度条（已完成 / 今日总节数）
-        if (total > 1) {
+        // 今日进度条（已完成 / 今日总节数）：分子分母都按去重时间槽，和「第 N 节」同口径
+        if (totalSlots > 1) {
             card.addView(Ui.space(this, Ui.GAP_SM));
             LinearLayout track = new LinearLayout(this);
             track.setOrientation(LinearLayout.HORIZONTAL);
             track.setBackground(Ui.round(Ui.LINE, 2, 0, this));
-            float frac = (float) (done + (running ? 1 : 0)) / (float) total;
+            float frac = (float) (doneSlotCount + (running ? 1 : 0)) / (float) totalSlots;
             if (frac < 0f) frac = 0f;
             if (frac > 1f) frac = 1f;
             View rest = new View(this);
@@ -850,7 +933,7 @@ public class HomeActivity extends Activity {
             track.addView(rest, new LinearLayout.LayoutParams(0, Ui.dp(this, 4),
                     Math.max(0.0001f, 1f - frac)));
             card.addView(track);
-            TextView pv = Ui.textLh(this, "今日 " + done + "/" + total + " 节",
+            TextView pv = Ui.textLh(this, "今日 " + doneSlotCount + "/" + totalSlots + " 节",
                     Ui.SP_MICRO, Ui.MUTED, false, Ui.LH_CAPTION);
             pv.setPadding(0, Ui.dp(this, 4), 0, 0);
             card.addView(pv);
@@ -1012,12 +1095,14 @@ public class HomeActivity extends Activity {
         weekBox.addView(Ui.space(this, Ui.GAP_MD));
         weekBox.addView(weekGridWithTime(s.courses));
         // note 信息去重：sync 课表"最后同步"与"更新于"是同一件事，只说一遍
+        // 2026-11-05 P2：门数口径写明「全周 N 节课」—— 这是整份课表（7 天）的课程条数，
+        // 不是今天门数、也不是去重后的课名数，避免被误读成「网格少了一门课」。
         String note;
         if (s.isSync()) {
-            note = "从手环来的 · " + s.courses.size() + " 门课 · 最后同步 "
+            note = "从手环来的 · 全周 " + s.courses.size() + " 节课 · 最后同步 "
                     + CourseCache.ago(s.syncedAt);
         } else {
-            note = "只在这台手机 · " + s.courses.size() + " 门课 · 更新于 "
+            note = "只在这台手机 · 全周 " + s.courses.size() + " 节课 · 更新于 "
                     + CourseCache.ago(s.createdAt);
         }
         TextView n = Ui.textLh(this, note, Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
@@ -1102,8 +1187,14 @@ public class HomeActivity extends Activity {
         // 不再另起一行「一二三四五六日」——从根上消除重复文本与横向对齐问题。
         dateStripView = new LinearLayout(this);
         dateStripView.setOrientation(LinearLayout.HORIZONTAL);
+        // 2026-11-05 P2（evtask-D-evev-schedul-261105-8qd7kf）：滚动吸顶时表头浮在课程行之上，
+        // 必须不透明，否则会透出下方色块；用 elevation 提升 Z 序而不是 bringToFront()
+        // —— 后者会改变 LinearLayout 子 View 顺序，把表头挪到卡片底部。
+        dateStripView.setBackgroundColor(Ui.CARD);
+        dateStripView.setElevation(Ui.dp(this, 2));
         wrapper.addView(dateStripView);
         renderDateStrip();
+        prepareStickyHeader();
         wrapper.addView(Ui.space(this, Ui.GAP_XS));
 
         // 每列对应的日期（含 weekOffset），用于假期 / 调休判定
