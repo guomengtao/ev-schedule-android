@@ -215,8 +215,10 @@ final class PaySession {
             return;
         }
         if (httpCode < 0 || TextUtils.isEmpty(resp)) {
-            if ("manual".equals(why) && cb != null) {
-                cb.onFail("网络请求失败，请检查网络后重试");
+            if (cb != null) {
+                // 推送能到、取码接口却失败（部署未就绪/网络抖动）必须说出来，
+                // 否则用户看到「已就绪」却永远等不到激活，比报错更糟。
+                cb.onFail("已收到付款信号，但取码请求失败，请点「我已付款，检查一下」重试");
             }
             return;
         }
@@ -254,8 +256,8 @@ final class PaySession {
                 cb.onState("还没收到付款。付完款通常 3 秒内自动激活，也可以稍后再点一次");
             }
         } catch (Throwable t) {
-            if ("manual".equals(why) && cb != null) {
-                cb.onFail("服务器回包无法解析");
+            if (cb != null) {
+                cb.onFail("服务器回包无法解析，请点「我已付款，检查一下」重试");
             }
         }
     }

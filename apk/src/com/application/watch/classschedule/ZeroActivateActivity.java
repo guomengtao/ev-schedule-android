@@ -757,6 +757,9 @@ public class ZeroActivateActivity extends Activity {
             @Override
             public void onCreated(String sid, String payUrl) {
                 payBtn.setEnabled(true);
+                // 进入等待态就把「正在识别这台手环」整块收掉：识别已经完成，
+                // 留着会让用户以为还在读、也把等待区挤得没有呼吸感。
+                detectSection.setVisibility(View.GONE);
                 notOwnedSection.setVisibility(View.GONE);
                 waitSection.setVisibility(View.VISIBLE);
                 waitHint.setText("下单页的留言框已经填好了会话号，付完款会自动激活");
