@@ -1164,17 +1164,15 @@ public class HomeActivity extends Activity {
 
     /**
      * 课程小色块（周视图网格用）：单字模式近正方 40dp、双行 44dp；上下均分补足 ROW_PITCH，行距恒对齐。
-     * 字色按底色亮度自动选深/白（Ui.onCourseColor），单字模式放大课名。
+     * ev-ui-android v1.1：浅底 + 4dp 身份色条，课名走 Ui.courseInk 深字；单字模式放大课名。
      * current=true（今天列里正在上的课）加 2dp ACCENT 描边。
      */
     private View courseBlockCompact(CourseCache.Course c, boolean current) {
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.VERTICAL);
         b.setGravity(android.view.Gravity.CENTER);
-        int bg = Ui.courseColor(c.name);
-        b.setBackground(current
-                ? Ui.round(bg, Ui.R_BLOCK, Ui.ACCENT, 2, this)
-                : Ui.round(bg, Ui.R_BLOCK, 0, this));
+        // ev-ui-android v1.1 · P1-①：浅底 + 4dp 身份色条，课名深字；底色与字色全由 Ui.java token 提供
+        b.setBackground(Ui.courseBlockBg(this, c.name, current));
         // 2026-10-05 首页 UI 精细化：块高按模式收敛（单字近正方），上下均分补足 ROW_PITCH；
         // 左右外边距由 3 收口到 BLOCK_MARGIN → 相邻块横向缝 10→4dp、可用文字宽 +25%
         int blockH = shortModeHere() ? Ui.BLOCK_H_1CHAR : Ui.BLOCK_H_2LINE;
@@ -1186,7 +1184,7 @@ public class HomeActivity extends Activity {
         lp.setMargins(Ui.dp(this, Ui.BLOCK_MARGIN), Ui.dp(this, vMargin),
                 Ui.dp(this, Ui.BLOCK_MARGIN), Ui.dp(this, vMargin));
         b.setLayoutParams(lp);
-        int fg = Ui.onCourseColor(bg);
+        int fg = Ui.courseInk(c.name);
         String disp = CourseCache.displayName(c.name, CourseCache.shortNameMode(this));
         // 10f → 11.5sp（原 10sp 偏小）；单字 16f → 15sp 与次标题档一致
         TextView tv = Ui.textMediumLh(this, disp,

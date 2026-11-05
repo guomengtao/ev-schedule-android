@@ -103,6 +103,42 @@ public final class Ui {
             0xFFFF6B6B, // c-red
     };
 
+    // ===== ev-ui-android v1.1 · P1-① 课表块降饱和（2026-11-05 首页 Pilot）=====
+    /**
+     * 课程块浅底：不再整块铺高饱和纯色，改低饱和浅底 + 左侧 COURSE_BAR_DP 身份色条，
+     * 课名走 COURSE_INK_COLORS 深字。原 COURSE_COLORS 语义不变，仍是「身份色」，
+     * 供桌面小组件色条 / 编辑网格 / 色条本身继续取用（改它们会破坏既有对比度）。
+     */
+    public static final int[] COURSE_SURFACE_COLORS = {
+            0xFFEDF1FE, // blue
+            0xFFE7F7EE, // green
+            0xFFFFF1E2, // orange
+            0xFFF3ECFE, // purple
+            0xFFE5F6F9, // cyan
+            0xFFFDEBF2, // pink
+            0xFFFDECEC, // red
+    };
+    public static final int[] COURSE_INK_COLORS = {
+            0xFF3A55C8, // blue
+            0xFF1E8A55, // green
+            0xFFB2650F, // orange
+            0xFF7444C4, // purple
+            0xFF137A90, // cyan
+            0xFFB24570, // pink
+            0xFFB24545, // red
+    };
+    /** 课程块左侧身份色条宽度（dp） */
+    public static final int COURSE_BAR_DP = 4;
+
+    /** 深色「夜幕蓝」主题下的课程块底（与 COURSE_SURFACE_COLORS 一一对应，避免深底上浮一块白） */
+    public static final int[] COURSE_SURFACE_DARK_COLORS = {
+            0xFF1B2545, 0xFF16302A, 0xFF332718, 0xFF271C40,
+            0xFF153038, 0xFF331E29, 0xFF331E1E,
+    };
+
+    /** ev-ui-android v1.1 · P1-③ elevation 收敛三档（原散落 3/4/6/8dp） */
+    public static final int E0 = 0, E1 = 4, E2 = 8;
+
     // ============ 排版 / 间距 / 圆角 令牌（2026-10-03 首页精细化新增）============
     /**
      * 字号阶梯：首页原散落 11 档（26/16/15/13/12.5/12/11.5/11/10.5/10/9），
@@ -308,10 +344,45 @@ public final class Ui {
         }
     }
 
+    /** 课名 → 色板下标（三个数组共用同一 hash，保证底 / 字 / 色条永远对齐） */
+    public static int courseIndex(String courseName) {
+        int h = (courseName == null) ? 0 : courseName.hashCode();
+        return (h & 0x7fffffff) % COURSE_COLORS.length;
+    }
+
     /** 课程 → 区分色（稳定：同一门课在任何页面/任何手机上都是同一个颜色） */
     public static int courseColor(String courseName) {
-        int h = (courseName == null) ? 0 : courseName.hashCode();
-        return COURSE_COLORS[(h & 0x7fffffff) % COURSE_COLORS.length];
+        return COURSE_COLORS[courseIndex(courseName)];
+    }
+
+    /** ev-ui-android v1.1：课程块课名色（浅底深字，浅/深主题共用） */
+    public static int courseInk(String courseName) {
+        int i = courseIndex(courseName);
+        // 深底用亮身份色，浅底用压暗的 ink，保证两套主题都有对比度
+        return isDark() ? COURSE_COLORS[i] : COURSE_INK_COLORS[i];
+    }
+
+    /**
+     * ev-ui-android v1.1：课程块底 = 低饱和浅底 + 左侧 COURSE_BAR_DP 身份色条。
+     * 今天的课另外加 ACCENT 描边。页面只调这个工厂，不许自己拼颜色 / 圆角 / 描边。
+     */
+    public static android.graphics.drawable.Drawable courseBlockBg(Context c,
+            String courseName, boolean current) {
+        int i = courseIndex(courseName);
+        GradientDrawable bar = new GradientDrawable();
+        bar.setColor(COURSE_COLORS[i]);
+        bar.setCornerRadius(dp(c, R_BLOCK));
+        GradientDrawable face = new GradientDrawable();
+        face.setColor(isDark() ? COURSE_SURFACE_DARK_COLORS[i] : COURSE_SURFACE_COLORS[i]);
+        face.setCornerRadius(dp(c, R_BLOCK));
+        if (current) {
+            face.setStroke(dp(c, 2), ACCENT);
+        }
+        android.graphics.drawable.LayerDrawable ld =
+                new android.graphics.drawable.LayerDrawable(
+                        new android.graphics.drawable.Drawable[]{bar, face});
+        ld.setLayerInset(1, dp(c, COURSE_BAR_DP), 0, 0, 0);
+        return ld;
     }
 
     public static int dp(Context c, int v) {
