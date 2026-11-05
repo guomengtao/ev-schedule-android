@@ -38,6 +38,11 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- 快速激活（换 18 位激活码）与埋点上报需要联网 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 零操作激活：读系统 bonding 列表里手环的 BLE MAC（出厂烧录、重置/换机不变）。
+         Android 12+ 读 bonding 列表必须要 BLUETOOTH_CONNECT；未授权时页面自动降级为只用
+         nodeId，不弹窗、不阻塞（见 DeviceProbe）——所以申请它是「可选增强」而非硬依赖。 -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- 查天气：尝试用手机定位自动取当前城市（授权后生效；未授权则回退默认城市） -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -133,6 +138,12 @@
                 <data android:scheme="evsched" android:host="activate" />
             </intent-filter>
         </activity>
+        <!-- 零操作激活：已购手环重置/换机后凭 BLE MAC / nodeId 自动恢复；
+             未购用户同页提供「去支付（付完自动激活）」与「4 位兑换码」两条平级通道。
+             与 FastActivateActivity 分开成独立页，避免动既有验证主链路。 -->
+        <activity android:name="com.application.watch.classschedule.ZeroActivateActivity"
+            android:exported="true"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.HomepageSettingsActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />

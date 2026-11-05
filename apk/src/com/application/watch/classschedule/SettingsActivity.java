@@ -190,7 +190,10 @@ public class SettingsActivity extends Activity {
             addRow(helpCard, row("高级版", subLabel(AuthState.displayText(this)),
                     chevronOnly(), new View.OnClickListener() {
                         @Override public void onClick(View v) {
-                            startActivity(new Intent(SettingsActivity.this, FastActivateActivity.class));
+                            // 2026-11-05 起主入口改为「零操作激活」页：它同时提供
+                            // 「已购自动恢复（重置/换机后仍可激活）」与「4 位兑换码」两条通道；
+                            // 原来那页仍在（零操作页底部有入口，深链 evsched://activate 也仍指向它）。
+                            startActivity(new Intent(SettingsActivity.this, ZeroActivateActivity.class));
                         }
                     }));
         }

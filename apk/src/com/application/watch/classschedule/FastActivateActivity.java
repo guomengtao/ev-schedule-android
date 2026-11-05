@@ -172,6 +172,12 @@ public class FastActivateActivity extends Activity {
         buyLp.topMargin = Ui.dp(this, Ui.GAP_MD);
         root.addView(buyRow, buyLp);
 
+        // ===== 2026-11-05 新增：零操作激活页入口（独立页；本页逻辑一行未动）=====
+        // 为什么在本页也放一个：手环重置后 UUID 与 deviceId 都变了，本页要求手环上报新
+        // deviceId 才能换码，用户容易卡在「码是有效的但激活不了」。零操作页用不变的
+        // BLE MAC / nodeId 直接认设备，是那种情况下的正解。
+        root.addView(buildZeroEntry());
+
         setContentView(Ui.wrapWithBottomBar(this, root, 2));
 
         root.setFocusableInTouchMode(true);
@@ -183,10 +189,29 @@ public class FastActivateActivity extends Activity {
         Analytics.pageView(this, "/apk/activate");
     }
 
+    /**
+     * 零操作激活页入口（本页只加这一个链接，激活/暂存/续传逻辑全部保持原样）。
+     * 用文本链而不是按钮：本页主按钮留给「一键激活」，这个入口服务的是
+     * 「手环重置后旧码失效」这一类人，提示语直接说明适用场景，避免所有人乱点。
+     */
+    private View buildZeroEntry() {
+        TextView t = Ui.text(this,
+                "手环重置过、或换过手机后激活不了？试试自动恢复 →",
+                Ui.SP_CAPTION, Ui.ACCENT, false);
+        t.setPadding(0, Ui.dp(this, 12), 0, Ui.dp(this, 4));
+        t.setGravity(Gravity.CENTER);
+        t.setClickable(true);
+        t.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(FastActivateActivity.this, ZeroActivateActivity.class));
+            }
+        });
+        return t;
+    }
+
     // ======================= 顶栏 / 次级入口 =======================
 
-    private View buildHeaderMore() {
-        ImageView more = new ImageView(this);
+    private View buildHeaderMore() {        ImageView more = new ImageView(this);
         more.setImageResource(R.drawable.ic_more_vertical);
         more.setColorFilter(Ui.TEXT);
         more.setScaleType(ImageView.ScaleType.CENTER);
