@@ -343,17 +343,15 @@ public class BandActivity extends Activity {
         box.addView(Ui.space(this, Ui.GAP_SM));
 
         LinearLayout card = Ui.card(this);
-        // 电量：唯一用主色大数字的项（页内锚点）
-        mBatteryView = Ui.textMedium(this, "—", Ui.SP_TITLE, Ui.ACCENT);
-        mChargeView = Ui.textMedium(this, "—", 12.5f, Ui.TEXT);
-        mWearView = Ui.textMedium(this, "—", 12.5f, Ui.TEXT);
-        mSleepView = Ui.textMedium(this, "—", 12.5f, Ui.TEXT);
+        // 电量/充电/佩戴/睡眠：SDK 数据面在「小米运动健康+部分机型」环境不开放
+        // （NodeApi.query 恒 query failed，2026-11-05 日志实锤），四格恒「—」观感差，
+        // 先隐藏只留存储格；等手环端 EV 上报通道（get_battery）打通后恢复。
+        mBatteryView = null;
+        mChargeView = null;
+        mWearView = null;
+        mSleepView = null;
         mStorageView = Ui.textMedium(this, "—", 12.5f, Ui.TEXT);
 
-        card.addView(metricRow(metricCell(mBatteryView, "电量"), metricCell(mChargeView, "充电")));
-        card.addView(hLine());
-        card.addView(metricRow(metricCell(mWearView, "佩戴"), metricCell(mSleepView, "睡眠")));
-        card.addView(hLine());
         LinearLayout storageCell = new LinearLayout(this);
         storageCell.setOrientation(LinearLayout.VERTICAL);
         storageCell.setPadding(Ui.dp(this, 2), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
@@ -848,34 +846,42 @@ public class BandActivity extends Activity {
 
     /** 按 SyncEngine 的最新设备状态刷新指标网格。未取到的项一律显示「—」，绝不给假数据。 */
     private void updateStatus() {
-        if (mBatteryView == null) {
-            return;
-        }
         SyncEngine e = SyncEngine.get(this);
 
-        mBatteryView.setText(e.batteryPercent > 0 ? (e.batteryPercent + "%") : "—");
-
-        if (e.bandChargingKnown) {
-            mChargeView.setText(e.bandCharging ? "充电中" : "未充电");
-            mChargeView.setTextColor(e.bandCharging ? Ui.ACCENT : Ui.TEXT);
-        } else {
-            mChargeView.setText("—");
-            mChargeView.setTextColor(Ui.TEXT);
+        // 四格 view 已隐藏（见 buildStatusSection），判空兜底，恢复时无需改这里
+        if (mBatteryView != null) {
+            mBatteryView.setText(e.batteryPercent > 0 ? (e.batteryPercent + "%") : "—");
         }
 
-        mWearView.setText(e.bandWearingKnown ? (e.bandWearing ? "佩戴中" : "未佩戴") : "—");
-        mWearView.setTextColor(Ui.TEXT);
-
-        if (e.bandSleepingKnown) {
-            mSleepView.setText(e.bandSleeping ? "睡眠中" : "清醒");
-        } else {
-            mSleepView.setText("—");
+        if (mChargeView != null) {
+            if (e.bandChargingKnown) {
+                mChargeView.setText(e.bandCharging ? "充电中" : "未充电");
+                mChargeView.setTextColor(e.bandCharging ? Ui.ACCENT : Ui.TEXT);
+            } else {
+                mChargeView.setText("—");
+                mChargeView.setTextColor(Ui.TEXT);
+            }
         }
-        mSleepView.setTextColor(Ui.TEXT);
 
-        mStorageView.setText(e.bandStorageKnown
-                ? (fmtBytes(e.bandAvailStorage) + " 可用 / " + fmtBytes(e.bandTotalStorage))
-                : "—");
+        if (mWearView != null) {
+            mWearView.setText(e.bandWearingKnown ? (e.bandWearing ? "佩戴中" : "未佩戴") : "—");
+            mWearView.setTextColor(Ui.TEXT);
+        }
+
+        if (mSleepView != null) {
+            if (e.bandSleepingKnown) {
+                mSleepView.setText(e.bandSleeping ? "睡眠中" : "清醒");
+            } else {
+                mSleepView.setText("—");
+            }
+            mSleepView.setTextColor(Ui.TEXT);
+        }
+
+        if (mStorageView != null) {
+            mStorageView.setText(e.bandStorageKnown
+                    ? (fmtBytes(e.bandAvailStorage) + " 可用 / " + fmtBytes(e.bandTotalStorage))
+                    : "—");
+        }
     }
 
     /** 字节数人性化（B / KB / MB / GB）。 */
