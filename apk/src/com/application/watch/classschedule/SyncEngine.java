@@ -68,9 +68,9 @@ public final class SyncEngine {
     public static String serviceDiagnosis(Context c) {
         String pkg = installedMiHealth(c);
         if (pkg == null) {
-            return "这台手机还没安装小米运动健康";
+            return "还没装小米运动健康";
         }
-        return "已安装小米运动健康（" + pkg + "），但连不上它的穿戴服务；请允许后台运行后重试，或改用兑换码激活";
+        return "小米运动健康已装好，但手环没回应。打开它，再点一次；还不行就用兑换码";
     }
 
     public interface Steps {
@@ -1346,51 +1346,51 @@ public final class SyncEngine {
             return "手环上还没装课程表";
         }
         if (low.contains("signature")) {
-            return "手机和手环签名不一致";
+            return "手机和手环的版本不是一套";
         }
         if (low.contains("permission") || low.contains("securityexception")) {
-            return "手环拒绝了这次申请";
+            return "手环没同意";
         }
         if (low.contains("timeout") || low.contains("timed out")) {
-            return "超时未响应";
+            return "手环没回应";
         }
         if (low.contains("disconnected") || low.contains("binder died")) {
-            return "服务连接中断";
+            return "连接断了";
         }
         if (low.contains("not found") || low.contains("unavailable")) {
-            return "服务不可用";
+            return "手环没回应";
         }
         // 穿戴 SDK 通道没建立时会直接报 "sendMessage failed"：
         // 它短且无冒号，会掉进下面兜底分支把英文糊给用户，必须先拦掉
         if (low.contains("sendmessage failed") || low.contains("send message failed")) {
-            return "手环通道未建立";
+            return "还没连上手环";
         }
         // 兜底：只有 message 足够短、且不含类名前缀时才敢直接用，否则给通用文案
         if (msg.length() > 0 && msg.length() <= 40 && msg.indexOf(':') < 0) {
             return msg;
         }
-        return "穿戴服务不可用";
+        return "手环没回应";
     }
 
     /** 首屏失败时的可执行建议（比 detail 长，讲清楚下一步该干什么） */
     static String hintFor(Throwable t) {
         if (t == null) {
-            return "小米运动健康的服务暂时连不上，请允许它在后台运行后重试；也可以改用兑换码激活";
+            return "小米运动健康还没准备好。打开它，再点一次；还不行就用兑换码";
         }
         String low = (String.valueOf(t) + " " + String.valueOf(t.getMessage())).toLowerCase();
         if (low.contains("not bond") || low.contains("not bonded")) {
-            return "这台手机还没和手环配对。请在手环上点「连接到新手机」，再在「小米运动健康」里配对好、保持连接后重试。";
+            return "手环还没连上手机。先在手环点「连接到新手机」，再用小米运动健康配对好。";
         }
         if (low.contains("not installed") || low.contains("packagenotinstalled") || low.contains("appnotinstalled")) {
-            return "手环上还没装「EV 课程表」呀 —— 用电脑上的 EV 安装器（或 AstroBox）把课程表装进手环，装好后在手环上点开一次，再回来重试。这一步和小米运动健康的授权没有关系哦。";
+            return "手环上还没装 EV 课程表。用电脑装好后，在手环上点开一次。";
         }
         if (low.contains("signature")) {
-            return "APK 与手环端签名不一致，无法互通。请安装与手环匹配的版本。";
+            return "手机和手环的版本不是一套。重装配套的版本就好。";
         }
         if (low.contains("sendmessage failed") || low.contains("send message failed")) {
-            return "手机到手环的通道还没建立。请在「小米运动健康」确认手环已连接，并在手表上打开一次「EV 课程表」，然后重试。";
+            return "还没连上手环。在小米运动健康里确认手环在线，再点一次。";
         }
-        return "小米运动健康的服务暂时连不上，请允许它在后台运行后重试；也可以改用兑换码激活";
+        return "小米运动健康还没准备好。打开它，再点一次；还不行就用兑换码";
     }
 
     // 步骤 1：穿戴服务
@@ -1524,15 +1524,15 @@ public final class SyncEngine {
                             details[2] = humanize(e);
                             emit(s, labels, states, details);
                             finish(s, false, sig
-                                    ? "签名校验未通过：本 APK 与手环 EV 课程表不是同一把签名"
-                                    : "权限申请失败，请在小米运动健康中允许本应用访问");
+                                    ? "手机和手环的版本不是一套。重装一下就好"
+                                    : "手环没同意。在小米运动健康里点「允许」");
                         }
                     });
         } catch (Throwable t) {
             states[2] = FAIL;
             details[2] = humanize(t);
             emit(s, labels, states, details);
-            finish(s, false, "权限申请失败");
+            finish(s, false, "手环没同意。再点一次");
         }
     }
 
@@ -1544,8 +1544,8 @@ public final class SyncEngine {
     private void stepPingOnce(final Steps s, final String[] labels, final int[] states,
                               final String[] details, final int left) {
         states[3] = RUNNING;
-        details[3] = (left == 3) ? "正在唤醒手环上的 EV 课程表…"
-                : ("EV 没应答，已自动拉起，第 " + (4 - left) + " 次尝试…");
+        details[3] = (left == 3) ? "正在叫醒手环…"
+                : ("还没回应，再试第 " + (4 - left) + " 次…");
         emit(s, labels, states, details);
         ping(new Reply() {
             @Override public void onReply(String json) {
@@ -1553,9 +1553,9 @@ public final class SyncEngine {
                     org.json.JSONObject o = new org.json.JSONObject(json);
                     if (!o.optBoolean("ok", false) || !o.optBoolean("pong", false)) {
                         states[3] = FAIL;
-                        details[3] = "EV 返回异常";
+                        details[3] = "课程表没回应";
                         emit(s, labels, states, details);
-                        finish(s, false, "EV 课程表返回了异常回包，请确认手环上的版本不低于 1.6.62");
+                        finish(s, false, "手环回的话没听清。把课程表更到最新，再点一次");
                         return;
                     }
                     versionName = o.optString("versionName");
@@ -1566,9 +1566,9 @@ public final class SyncEngine {
                     finish(s, true, "");
                 } catch (Throwable t) {
                     states[3] = FAIL;
-                    details[3] = "回包无法解析";
+                    details[3] = "没听清，再点一次";
                     emit(s, labels, states, details);
-                    finish(s, false, "收到回包但无法解析，请更新手环上的 EV 课程表");
+                    finish(s, false, "手环回的话没听清。更新课程表，再点一次");
                 }
             }
 
@@ -1587,7 +1587,7 @@ public final class SyncEngine {
                            final String[] details, final int left, final String why) {
         if (left <= 1) {
             states[3] = FAIL;
-            details[3] = "无回应（已自动拉起 EV 重试过）";
+            details[3] = "还是没回应，已经试过几次了";
             emit(s, labels, states, details);
             finish(s, false, why);
             return;
@@ -1606,7 +1606,7 @@ public final class SyncEngine {
     public void step1Service(final Cb cb) {
         final Cb safe = withTimeout(cb, 8000L, serviceDiagnosis(ctx));
         if (installedMiHealth(ctx) == null) {
-            safe.on(false, "这台手机还没安装小米运动健康");
+            safe.on(false, "还没装小米运动健康");
             return;
         }
         rebind();

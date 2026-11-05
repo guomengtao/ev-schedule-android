@@ -69,16 +69,16 @@ public class DebugActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         LinearLayout root = Ui.screen(this);
-        root.addView(Ui.header(this, "调试"));
+        root.addView(Ui.header(this, "连不上？查一查"));
         root.addView(Ui.space(this, 4));
         root.addView(buildSumBar());
         root.addView(Ui.space(this, 12));
 
         // ---------- 链路自检 ----------
-        root.addView(grpTitle("链路自检"));
+        root.addView(grpTitle("连接检查"));
         for (int i = 0; i < STEPS; i++) {
             states[i] = SyncEngine.PENDING;
-            details[i] = "待执行";
+            details[i] = "还没检查";
             rows[i] = stepCard(i);
             root.addView(rows[i]);
 
@@ -97,10 +97,10 @@ public class DebugActivity extends Activity {
             }
         }
         root.addView(Ui.space(this, 10));
-        root.addView(Ui.button(this, "全部执行", true, new View.OnClickListener() {
+        root.addView(Ui.button(this, "全部检查", true, new View.OnClickListener() {
             @Override public void onClick(View v) { runAll(); }
         }));
-        root.addView(ghost("重置状态", new View.OnClickListener() {
+        root.addView(ghost("重新检查", new View.OnClickListener() {
             @Override public void onClick(View v) { reset(); }
         }));
 
@@ -274,8 +274,8 @@ public class DebugActivity extends Activity {
         tp.leftMargin = Ui.dp(this, 10);
         tp.rightMargin = Ui.dp(this, 8);
         texts.setLayoutParams(tp);
-        sumTitle = Ui.text(this, "尚未执行", Ui.SP_BODY, Ui.TEXT, true);
-        sumSub = Ui.text(this, "点任一步骤开始定位，或点「全部执行」",
+        sumTitle = Ui.text(this, "还没检查", Ui.SP_BODY, Ui.TEXT, true);
+        sumSub = Ui.text(this, "点「全部检查」开始",
                 Ui.SP_MICRO, Ui.MUTED, false);
         texts.addView(sumTitle);
         texts.addView(sumSub);
@@ -356,54 +356,51 @@ public class DebugActivity extends Activity {
 
     // ---------- 就地恢复建议条 ----------
 
+    // ev-ui-android v1.2：诊断文案改成人话后，旧说法与新说法都要认，
+    // 否则「版本不是一套」会被当成普通失败，给出错误的恢复按钮。
+    private static boolean isNotPaired(String d) {
+        return d.contains("配对") || d.contains("没连上");
+    }
+    private static boolean isNotInstalled(String d) {
+        return d.contains("还没装") || d.contains("未安装") || d.contains("没装课程表");
+    }
+    private static boolean isVersionMismatch(String d) {
+        return d.contains("签名") || d.contains("不是一套");
+    }
+    private static boolean isDenied(String d) {
+        return d.contains("拒绝") || d.contains("没同意");
+    }
+
     private String hintText(int i) {
         String d = details[i] == null ? "" : details[i];
         switch (i) {
             case 0:
-                // 穿戴服务连不上，最常见的原因是手环没连手机（而不是没装 App），
-                // 这时候提示「装小米运动健康」是张冠李戴，会把人带偏
-                if (d.contains("配对")) {
-                    return "手环好像还没连上手机呀 —— 先在手环上点「连接到新手机」，再到「小米运动健康」里配对好，然后回来试这一步就好啦～";
-                }
-                return "手机上的「小米运动健康」好像还没准备好呀 —— 把它装上（已经装了的话就打开一次），再回来重试这就好啦。";
-            case 1: return "还没看到你的手环哦 —— 先在手环上点「连接到新手机」，再到「小米运动健康」里配对好，回来点这一步重试就好啦～";
+                if (isNotPaired(d)) return "手环还没连上手机。先去连手环，再点一次";
+                if (isNotInstalled(d)) return "还没装小米运动健康。先装上，再点一次";
+                return "小米运动健康还没准备好。打开它，再点一次";
+            case 1: return "还没找到手环。先去连手环，再点一次";
             case 2:
-                // 第 3 步失败有四种完全不同的原因，给的建议也必须不同，
-                // 否则用户会照着错的方向去授权，越弄越乱
-                if (d.contains("还没装") || d.contains("未安装")) {
-                    return "别急，这一步跟授权没关系 —— 是手环上还没装「EV 课程表」呀。"
-                            + "用电脑上的 EV 安装器（或 AstroBox）把课程表装进手环，"
-                            + "装好后在手环上点开一次，再回来点下面的「装好啦，重试」就行啦～";
-                }
-                if (d.contains("签名")) {
-                    return "手机和手环上的「EV 课程表」不是同一批签名的，两边握不上手 —— 换一个和手环配套的手机端版本就好啦。";
-                }
-                if (d.contains("配对")) {
-                    return "这台手机还没和手环配对哦 —— 打开「小米运动健康」完成配对、保持连接，再回来重试这一步。";
-                }
-                if (d.contains("拒绝")) {
-                    return "手环这次没同意申请 —— 在手环上点开一次「EV 课程表」，让它停在前台，再回来重试就好。";
-                }
-                return "这步还没成功 —— 确认手环已连接、手环上的「EV 课程表」已经点开，再重试一次试试～";
-            default: return "手环上的课程表没反应 —— 先在手环上打开它，再重试";
+                if (isNotInstalled(d)) return "手环上还没装课程表。装好后点下面的按钮";
+                if (isVersionMismatch(d)) return "手机和手环的版本不是一套。重装一下就好";
+                if (isNotPaired(d)) return "手环还没连上手机。先去连手环";
+                if (isDenied(d)) return "手环没同意。在手环上点开课程表，再试一次";
+                return "这步没成功。打开课程表，再点一次";
+            default: return "课程表没回应。在手环上打开它，再点一次";
         }
     }
 
     private String hintBtn(int i) {
         String d = details[i] == null ? "" : details[i];
         switch (i) {
-            case 0: return d.contains("配对") ? "去连手环" : "打开小米运动健康";
+            case 0:
+                if (isNotInstalled(d)) return "装好啦，再试";
+                return isNotPaired(d) ? "去连手环" : "打开小米运动健康";
             case 1: return "去连手环";
             case 2:
-                // 手环上根本没装课程表时，「去小米运动健康」是个误导按钮
-                if (d.contains("还没装") || d.contains("未安装")) {
-                    return "装好啦，重试";
-                }
-                if (d.contains("签名")) {
-                    return "知道了";
-                }
+                if (isNotInstalled(d)) return "装好啦，再试";
+                if (isVersionMismatch(d)) return "知道了";
                 return "去小米运动健康";
-            default: return "拉起手环 EV";
+            default: return "打开课程表";
         }
     }
 
@@ -414,17 +411,18 @@ public class DebugActivity extends Activity {
                 @Override public void onClick(View v) { launchEv(); }
             };
         }
-        if (i == 2 && (d.contains("还没装") || d.contains("未安装"))) {
-            // 用户装完回来，一键重跑本步，不用自己去找
+        if ((i == 0 && isNotInstalled(d)) || (i == 2 && isNotInstalled(d))) {
+            // 装好回来，一键重跑本步，不用自己去找
+            final int target = i;
             return new View.OnClickListener() {
                 @Override public void onClick(View v) {
-                    setState(2, SyncEngine.RUNNING, "执行中…");
-                    runStep(2);
+                    setState(target, SyncEngine.RUNNING, "正在检查…");
+                    runStep(target);
                 }
             };
         }
-        if (i == 2 && d.contains("签名")) {
-            // 签名不匹配换版本才能解决，无需外部动作，收起提示即可
+        if (i == 2 && isVersionMismatch(d)) {
+            // 版本不配套只能重装，收起提示即可
             return new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     hintBox[2].removeAllViews();
@@ -432,7 +430,6 @@ public class DebugActivity extends Activity {
                 }
             };
         }
-        // 步骤 1/2/3 的恢复手段都是把小米运动健康拉到前台（openMiFitness 已实现，零风险）
         return new View.OnClickListener() {
             @Override public void onClick(View v) { openMiFitness(); }
         };
@@ -548,7 +545,7 @@ public class DebugActivity extends Activity {
         if (state == SyncEngine.PENDING) {
             sub = SUBS[i] + " · 待执行";
         } else if (state == SyncEngine.RUNNING) {
-            sub = "执行中…";
+            sub = "正在检查…";
         } else if (detail == null || detail.length() == 0) {
             sub = SUBS[i];
         } else {
@@ -576,20 +573,20 @@ public class DebugActivity extends Activity {
         String title, sub;
         if (runIdx >= 0) {
             dotColor = Ui.ACCENT;
-            title = "正在自检…";
-            sub = "依次执行 4 个步骤，请稍候";
+            title = "正在检查…";
+            sub = "正在一步步检查，稍等一下";
         } else if (failIdx >= 0) {
             dotColor = Ui.ERR;
-            title = "停在第 " + (failIdx + 1) + " 步";
-            sub = LABELS[failIdx] + " 未通过，看该步下方的建议";
+            title = "第 " + (failIdx + 1) + " 步没通过";
+            sub = "看这一步下面的提示，照着做一次";
         } else if (okCount == STEPS) {
             dotColor = Ui.OK;
-            title = "4 项全部通过";
-            sub = "链路正常，手环可以收发消息";
+            title = "都检查好了";
+            sub = "手环连上了，可以正常用";
         } else {
             dotColor = Ui.MUTED;
-            title = "尚未执行";
-            sub = "点任一步骤开始定位，或点「全部执行」";
+            title = "还没检查";
+            sub = "点「全部检查」开始";
         }
         sumDot.setBackground(circle(dotColor, 4));
         sumTitle.setText(title);
@@ -623,7 +620,7 @@ public class DebugActivity extends Activity {
     // ======================= 步骤 =======================
 
     private void runStep(final int i) {
-        setState(i, SyncEngine.RUNNING, "执行中…");
+        setState(i, SyncEngine.RUNNING, "正在检查…");
         final SyncEngine.Cb cb = new SyncEngine.Cb() {
             @Override public void on(boolean ok, String msg) {
                 setState(i, ok ? SyncEngine.OK : SyncEngine.FAIL, msg);
@@ -650,7 +647,7 @@ public class DebugActivity extends Activity {
                     if (states[idx - 1] == SyncEngine.OK) {
                         runStep(idx);
                     } else {
-                        setState(idx, SyncEngine.PENDING, "前一步未完成，已跳过");
+                        setState(idx, SyncEngine.PENDING, "上一步没过，先跳过这步");
                     }
                 }
             }, 1500L * i);
@@ -659,7 +656,7 @@ public class DebugActivity extends Activity {
 
     private void reset() {
         for (int i = 0; i < STEPS; i++) {
-            setState(i, SyncEngine.PENDING, "待执行");
+            setState(i, SyncEngine.PENDING, "还没检查");
         }
         resultBar.setVisibility(View.GONE);
     }
