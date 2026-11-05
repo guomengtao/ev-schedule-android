@@ -35,6 +35,11 @@ RULES = (
     ("hardcoded-corner",
      re.compile(r"\.setCornerRadius\(\s*\d+|Ui\.round\([^,]+,\s*\d+"),
      "Ui.R_CARD / R_CTRL / R_BLOCK"),
+    # ev-ui-android v1.3：elevation 收敛到 E0/E1/E2，新增行禁止数字字面量。
+    # 放行 setElevation(0f)（重置）与 Ui.* 形式（如 setElevation(Ui.dp(c, E1))）。
+    ("hardcoded-elevation",
+     re.compile(r"\.setElevation\(\s*(?!0f?\s*\))(?!Ui\.)\d+(?:\.\d+)?f?"),
+     "Ui.E0 / E1 / E2 (e.g. setElevation(Ui.dp(c, E1)))"),
 )
 
 

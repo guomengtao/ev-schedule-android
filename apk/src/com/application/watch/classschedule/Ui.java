@@ -65,9 +65,9 @@ public final class Ui {
             0xFF64748B, // MUTED
             0xFF2F6BFF, // ACCENT
             0xFFEBF0FF, // ACCENT_LIGHT（主色 8% 透明混白，用于今天列背景）
-            0xFF16A34A, // OK
-            0xFFF59E0B, // WARN
-            0xFFDC2626, // ERR
+            0xFF146B41, // OK   v1.3 6.54:1（原 3.30 不达标）
+            0xFF8A4A08, // WARN v1.3 6.85:1（原 2.15 不达标）
+            0xFFB91C1C, // ERR  v1.3 6.47:1
             0xFFFFFFFF, // ON_ACCENT
             0x2E22C55E, // OK_LIGHT
             0x40FDE68A, // WARN_LIGHT
@@ -118,14 +118,16 @@ public final class Ui {
             0xFFFDEBF2, // pink
             0xFFFDECEC, // red
     };
+    /** v1.3：7 色 ink 全部压暗到与浅底 ≥4.5:1（原绿 3.93、橙 3.98、青 4.48 不达标）。
+     *  实测：蓝 7.19 / 绿 5.90 / 橙 6.18 / 紫 7.62 / 青 6.00 / 粉 6.42 / 红 6.30。 */
     public static final int[] COURSE_INK_COLORS = {
-            0xFF3A55C8, // blue
-            0xFF1E8A55, // green
-            0xFFB2650F, // orange
-            0xFF7444C4, // purple
-            0xFF137A90, // cyan
-            0xFFB24570, // pink
-            0xFFB24545, // red
+            0xFF2F47A8, // blue
+            0xFF146B41, // green
+            0xFF8A4A08, // orange
+            0xFF5B329E, // purple
+            0xFF0F6577, // cyan
+            0xFF933453, // pink
+            0xFF963838, // red
     };
     /** 课程块左侧身份色条宽度（dp） */
     public static final int COURSE_BAR_DP = 4;
@@ -144,8 +146,8 @@ public final class Ui {
      * 字号阶梯：首页原散落 11 档（26/16/15/13/12.5/12/11.5/11/10.5/10/9），
      * 相邻档差 <1sp 视觉无差别纯属噪音 → 收敛为 7 档。新页面一律用这些常量。
      */
-    public static final float SP_DISPLAY = 22f;   // 页面大标题
-    public static final float SP_TITLE = 17f;     // 分区标题 / 顶栏
+    public static final float SP_DISPLAY = 24f;   // 页面大标题（v1.3 22→24）
+    public static final float SP_TITLE = 18f;     // 分区标题 / 顶栏（v1.3 17→18）
     public static final float SP_SUBTITLE = 15f;  // 次标题 / 日期数字
     public static final float SP_BODY = 13f;      // 正文 / 按钮 / 课表名
     public static final float SP_CAPTION = 11.5f; // 次要说明 / 备注 / 星期
@@ -166,8 +168,9 @@ public final class Ui {
     /** 间距栅格（4dp 基线）：首页所有间距都应落在这四档上 */
     public static final int GAP_XS = 4, GAP_SM = 8, GAP_MD = 12, GAP_LG = 16;
 
-    /** 圆角三档（原 20/16/15/14/12/8 六种 → 收敛）。R_BLOCK 2026-10-05 6→4：块短边仅 ~34dp，圆角率 21%→14%，不再「按钮化」 */
-    public static final int R_CARD = 14, R_CTRL = 12, R_BLOCK = 4;
+    /** 圆角三档（原 20/16/15/14/12/8 六种 → 收敛）。
+     *  v1.3：卡片 14→18、控件 12→14、课程块 4→8，配合色条沿圆角裁剪，去掉「方盒子」感。 */
+    public static final int R_CARD = 18, R_CTRL = 14, R_BLOCK = 8;
 
     /** 周课表网格节奏（2026-10-05 首页 UI 精细化）：行距单一真源，时间标签/课程块/空行全部对齐它 */
     public static final int ROW_PITCH = 48;      // 每行统一总高（时间列 / 课程块行 / 空格行）
@@ -366,23 +369,86 @@ public final class Ui {
      * ev-ui-android v1.1：课程块底 = 低饱和浅底 + 左侧 COURSE_BAR_DP 身份色条。
      * 今天的课另外加 ACCENT 描边。页面只调这个工厂，不许自己拼颜色 / 圆角 / 描边。
      */
+    /**
+     * ev-ui-android v1.3：课程块底 = 低饱和浅底 + 左侧身份色条。
+     *
+     * 旧实现用 LayerDrawable 叠两张「各自四角带圆角」的 GradientDrawable：
+     * 面层左内缩 4dp 后，它的左上/左下圆角会咬掉色条端头；底层色条自身也被
+     * 圆角切出斜边 —— 真机表现为「粗糙一根边线，上下两端各一个刺头」，
+     * 与附录 A 设计图（色条沿卡片圆角包边）完全不符。
+     * 现在改用 CourseBlockDrawable：色条 = 左侧矩形 ∩ 卡片圆角轮廓，
+     * 端头严格沿圆角收口，右边缘为垂直直线，无缺口、无尖角、无溢出。
+     */
     public static android.graphics.drawable.Drawable courseBlockBg(Context c,
             String courseName, boolean current) {
         int i = courseIndex(courseName);
-        GradientDrawable bar = new GradientDrawable();
-        bar.setColor(COURSE_COLORS[i]);
-        bar.setCornerRadius(dp(c, R_BLOCK));
-        GradientDrawable face = new GradientDrawable();
-        face.setColor(isDark() ? COURSE_SURFACE_DARK_COLORS[i] : COURSE_SURFACE_COLORS[i]);
-        face.setCornerRadius(dp(c, R_BLOCK));
-        if (current) {
-            face.setStroke(dp(c, 2), ACCENT);
+        return new CourseBlockDrawable(c,
+                isDark() ? COURSE_SURFACE_DARK_COLORS[i] : COURSE_SURFACE_COLORS[i],
+                COURSE_COLORS[i], current ? ACCENT : 0, 2);
+    }
+
+    /** 课程块专用 Drawable：圆角面 + 沿轮廓精确裁剪的身份色条 + 可选当前节描边。 */
+    private static final class CourseBlockDrawable extends android.graphics.drawable.Drawable {
+        private final float radius, barW, strokeW;
+        private final int faceColor, barColor, strokeColor;
+        private final android.graphics.Paint paint =
+                new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.Path card = new android.graphics.Path();
+        private final android.graphics.Path barPath = new android.graphics.Path();
+
+        CourseBlockDrawable(Context c, int faceColor, int barColor,
+                            int strokeColor, int strokeDp) {
+            this.faceColor = faceColor;
+            this.barColor = barColor;
+            this.strokeColor = strokeColor;
+            radius = dp(c, R_BLOCK);
+            barW = dp(c, COURSE_BAR_DP);
+            strokeW = strokeColor == 0 ? 0f : dp(c, strokeDp);
         }
-        android.graphics.drawable.LayerDrawable ld =
-                new android.graphics.drawable.LayerDrawable(
-                        new android.graphics.drawable.Drawable[]{bar, face});
-        ld.setLayerInset(1, dp(c, COURSE_BAR_DP), 0, 0, 0);
-        return ld;
+
+        @Override protected void onBoundsChange(android.graphics.Rect b) {
+            card.reset();
+            card.addRoundRect(new android.graphics.RectF(b), radius, radius,
+                    android.graphics.Path.Direction.CW);
+            barPath.reset();
+            barPath.addRect(b.left, b.top, b.left + barW, b.bottom,
+                    android.graphics.Path.Direction.CW);
+            // 关键：交集让色条左上/左下角完全跟随卡片圆角，端头不再有斜切刺头
+            barPath.op(card, android.graphics.Path.Op.INTERSECT);
+        }
+
+        @Override public void draw(android.graphics.Canvas canvas) {
+            android.graphics.RectF r = new android.graphics.RectF(getBounds());
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+            paint.setColor(faceColor);
+            canvas.drawRoundRect(r, radius, radius, paint);
+            paint.setColor(barColor);
+            canvas.drawPath(barPath, paint);
+            if (strokeColor != 0) {
+                paint.setStyle(android.graphics.Paint.Style.STROKE);
+                paint.setStrokeWidth(strokeW);
+                paint.setColor(strokeColor);
+                float h = strokeW / 2f;
+                canvas.drawRoundRect(new android.graphics.RectF(
+                                r.left + h, r.top + h, r.right - h, r.bottom - h),
+                        Math.max(0f, radius - h), Math.max(0f, radius - h), paint);
+                paint.setStyle(android.graphics.Paint.Style.FILL);
+            }
+        }
+
+        @Override public void setAlpha(int alpha) {
+            paint.setAlpha(alpha);
+            invalidateSelf();
+        }
+
+        @Override public void setColorFilter(android.graphics.ColorFilter cf) {
+            paint.setColorFilter(cf);
+            invalidateSelf();
+        }
+
+        @Override public int getOpacity() {
+            return android.graphics.PixelFormat.TRANSLUCENT;
+        }
     }
 
     public static int dp(Context c, int v) {
@@ -405,9 +471,24 @@ public final class Ui {
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
         t.setTextColor(color);
         if (bold) {
-            t.setTypeface(null, Typeface.BOLD);
+            // ev-ui-android v1.3：中文 BOLD 是伪粗体、发糊发硬；统一走真字重 medium，
+            // 一处改动让全站标题/强调字重分层，页面零改动。
+            t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         }
+        // v1.3：默认行高按字号取 LH_* 阶梯，全站中文不再「挤成一团」；
+        // 单行 TextView 的 lineSpacing 不改变测量高度，紧凑布局零回归。
+        setLineHeight(c, t, size, lineHeightFor(size));
         return t;
+    }
+
+    /** 字号 → 行高倍率（v1.3：让 Ui.text 默认路径也遵守 LH_* 阶梯） */
+    private static float lineHeightFor(float sp) {
+        if (sp >= SP_DISPLAY) return LH_DISPLAY;
+        if (sp >= SP_NUM) return LH_TITLE;
+        if (sp >= SP_SUBTITLE) return LH_SUBTITLE;
+        if (sp >= SP_BODY) return LH_BODY;
+        if (sp >= SP_CAPTION) return LH_CAPTION;
+        return LH_MICRO;
     }
 
     /**
@@ -499,7 +580,12 @@ public final class Ui {
         LinearLayout l = new LinearLayout(c);
         l.setOrientation(LinearLayout.VERTICAL);
         l.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12));
-        l.setBackground(round(CARD, R_CARD, LINE, c));
+        // ev-ui-android v1.3：浅色用 E1 轻阴影替代 1dp 灰描边，去掉「白卡+描边」的平面年代感；
+        // 深色下投影几乎不可见，仍保留细描边维持边界。
+        l.setBackground(round(CARD, R_CARD, isDark() ? LINE : 0, c));
+        if (!isDark()) {
+            l.setElevation(dp(c, E1));
+        }
         return l;
     }
 
@@ -508,7 +594,7 @@ public final class Ui {
         l.setOrientation(LinearLayout.VERTICAL);
         l.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12));
         l.setBackground(round(CARD, R_CARD, 0, c));
-        l.setElevation(dp(c, 6));
+        l.setElevation(dp(c, E2));   // v1.3：散落 6dp → 收敛到 E2
         return l;
     }
 

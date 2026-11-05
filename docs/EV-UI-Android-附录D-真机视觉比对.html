@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EV-UI·Android v1.3 · 真机视觉前后对照（附录 D）</title>
+<style>
+  :root{
+    --bg:#0F1115; --panel:#181B22; --panel2:#1E222B; --line:#2C323E;
+    --ink:#E8EDF5; --dim:#A7B2C2; --blue:#7AA2FF; --green:#6FD39B;
+    --red:#FF8A8A; --amber:#FFC98A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+       line-height:1.65;padding:36px 28px 72px}
+  .wrap{max-width:1400px;margin:0 auto}
+  h1{font-size:28px;letter-spacing:.3px;margin:0 0 8px}
+  h2{font-size:19px;margin:44px 0 6px;padding-left:12px;border-left:3px solid var(--blue)}
+  .sub{color:var(--dim);font-size:14px;margin:0 0 22px}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;
+         background:#1B2A46;color:var(--blue);border:1px solid #2E4470;margin-right:8px}
+  .badge.real{background:#163026;color:var(--green);border-color:#26543C}
+  .callout{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--red);
+           border-radius:12px;padding:16px 20px;margin:18px 0 8px}
+  .callout b{color:var(--red)}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
+  .card h3{font-size:14px;margin:0 0 4px;font-weight:600}
+  .card .meta{font-size:12px;color:var(--dim);margin:0 0 12px}
+  .card img{display:block;width:100%;height:620px;object-fit:contain;
+            background:#0B0D11;border-radius:8px;border:1px solid var(--line)}
+  .card.zoom img{height:330px}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;margin-top:10px}
+  .tag.bad{background:#3A1F22;color:var(--red)}
+  .tag.mid{background:#332A18;color:var(--amber)}
+  .tag.good{background:#163026;color:var(--green)}
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:12.5px;letter-spacing:.4px}
+  td code{background:var(--panel2);padding:2px 6px;border-radius:5px;font-size:12.5px;color:var(--blue)}
+  .num{font-variant-numeric:tabular-nums}
+  .ok{color:var(--green)} .no{color:var(--red)}
+  ul{margin:10px 0 0;padding-left:20px} li{margin:5px 0}
+  .foot{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:var(--dim);font-size:12.5px}
+  a{color:var(--blue);text-decoration:none}
+  @media(max-width:1000px){.grid3{grid-template-columns:1fr}.card img{height:520px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>EV-UI·Android v1.3 · 真机视觉前后对照</h1>
+  <p class="sub">
+    <span class="badge real">真机实拍 · 非设计稿</span>
+    <span class="badge">1080 × 1920 · BTF4C17222009588</span>
+    <span class="badge">2026-11-05 19:20–19:27 +0800</span>
+    规范附录 D · 「真机截图比对铁律」第一份验收材料
+  </p>
+
+  <div class="callout">
+    <b>这次修的是一个「设计图和真机不一样」的事故。</b>
+    附录 A 画的是色条沿卡片圆角精致包边；真机渲染出来却是一根<b>上下两端带斜切刺头的粗糙边线</b>。
+    根因：<code>Ui.courseBlockBg()</code> 用 <code>LayerDrawable</code> 叠了两张<b>各自带四角圆角</b>的
+    <code>GradientDrawable</code>，面层左内缩 4dp 后它的左上/左下圆角把色条端头咬掉，底层色条自身也被大圆角切出斜边。
+    v1.3 改为 <code>CourseBlockDrawable</code>：色条 = 左侧矩形 <b>∩</b> 卡片圆角轮廓（<code>Path.op(INTERSECT)</code>），
+    端头严格沿圆角收口。下面三列全部是同一台真机、同一页、同一滚动位置的 <code>adb screencap</code> 实拍。
+  </div>
+
+  <h2>1　整页 · 改前 / 迭代 1 / 最终</h2>
+  <p class="sub">迭代 1 = 修刺头 + 圆角 + 字重；最终 = 再加配色 AA + 阴影 + 字号行高。每轮都编译、<code>adb install -r -g</code>、重新截图。</p>
+  <div class="grid3">
+    <div class="card">
+      <h3>改前 · 0.6.6 / code188</h3>
+      <p class="meta">ev-ui-android-v1.3-before-home.png</p>
+      <img src="../apk/shots/ev-ui-android-v1.3-before-home.png" alt="改前首页真机截图">
+      <span class="tag bad">色条两端刺头 · 白卡 + 1dp 描边 · 圆角偏方</span>
+    </div>
+    <div class="card">
+      <h3>迭代 1 · 结构修复</h3>
+      <p class="meta">ev-ui-android-v1.3-iter1-home.png</p>
+      <img src="../apk/shots/ev-ui-android-v1.3-iter1-home.png" alt="迭代1首页真机截图">
+      <span class="tag mid">刺头消失 · 圆角柔和 · 字重分层</span>
+    </div>
+    <div class="card">
+      <h3>最终 · 0.6.7 / code189</h3>
+      <p class="meta">ev-ui-android-v1.3-after-home.png</p>
+      <img src="../apk/shots/ev-ui-android-v1.3-after-home.png" alt="最终首页真机截图">
+      <span class="tag good">轻阴影卡片 · 标题层级更强 · 课名深字达 AA</span>
+    </div>
+  </div>
+
+  <h2>2　课程块放大 3× · 刺头是否真的没了</h2>
+  <p class="sub">≤8dp 的细节必须放大看，整页缩略图会骗人。这是本次验收的核心证据。</p>
+  <div class="grid3">
+    <div class="card zoom">
+      <h3>改前</h3>
+      <p class="meta">色条上下端被斜切，浅底圆角「咬」进色条，形成月牙缺口与尖刺</p>
+      <img src="../apk/shots/ev-ui-android-v1.3-before-course-zoom.png" alt="改前课程块放大">
+      <span class="tag bad">两端各一个刺头</span>
+    </div>
+    <div class="card zoom">
+      <h3>迭代 1</h3>
+      <p class="meta">色条左上/左下沿卡片圆角平滑收口，右边缘为干净的垂直直线</p>
+      <img src="../apk/shots/ev-ui-android-v1.3-iter1-course-zoom.png" alt="迭代1课程块放大">
+      <span class="tag good">端头无缺口、无尖角、无溢出</span>
+    </div>
+    <div class="card zoom">
+      <h3>最终</h3>
+      <p class="meta">再叠加 ink 压暗，课名更清晰；色条形状保持不变（改配色不破坏几何）</p>
+      <img src="../apk/shots/ev-ui-android-v1.3-after-course-zoom.png" alt="最终课程块放大">
+      <span class="tag good">几何正确 + 文字对比度达标</span>
+    </div>
+  </div>
+
+  <h2>3　六项视觉令牌改动</h2>
+  <table>
+    <thead><tr><th style="width:14%">维度</th><th style="width:34%">改前</th><th style="width:38%">v1.3 改后</th><th style="width:14%">真机证据</th></tr></thead>
+    <tbody>
+      <tr><td><b>配色</b></td>
+        <td>7 色 ink 里绿 3.93:1 / 橙 3.98:1 / 青 4.48:1 未达 AA；浅色 <code>WARN</code> 2.15:1、<code>OK</code> 3.30:1 几乎看不清</td>
+        <td>7 色 ink 全压到 <b class="num">5.90–7.62:1</b>；<code>OK/WARN/ERR</code> → <code>#146B41 / #8A4A08 / #B91C1C</code>（白卡 ≥6.4:1）</td>
+        <td class="ok">课名更清晰</td></tr>
+      <tr><td><b>字体 / 字重</b></td>
+        <td><code>Ui.text(..., bold=true)</code> 走 <code>Typeface.BOLD</code>：中文伪粗体、发糊发硬</td>
+        <td>统一走 <code>sans-serif-medium</code> 真字重，一处改动全站生效，页面零改动</td>
+        <td class="ok">标题变柔和</td></tr>
+      <tr><td><b>字号</b></td>
+        <td><code>SP_DISPLAY 22</code> / <code>SP_TITLE 17</code></td>
+        <td><code>24</code> / <code>18</code>，大标题与分区标题层级拉开；正文 / 课名档不动，紧凑布局不回归</td>
+        <td class="ok">无截断</td></tr>
+      <tr><td><b>行高</b></td>
+        <td>只有 <code>Ui.textLh*</code> 设行高，<code>Ui.text()</code> 默认路径中文挤成一团</td>
+        <td>新增 <code>lineHeightFor(sp)</code>，<code>Ui.text()</code> 默认按字号套 <code>LH_*</code> 阶梯；单行测量高度不变</td>
+        <td class="ok">无溢出</td></tr>
+      <tr><td><b>圆角</b></td>
+        <td><code>R_CARD / R_CTRL / R_BLOCK = 14 / 12 / 4</code></td>
+        <td><code>18 / 14 / 8</code>，配合色条沿圆角裁剪，去掉方盒子感</td>
+        <td class="ok">卡片更柔和</td></tr>
+      <tr><td><b>阴影</b></td>
+        <td><code>Ui.card()</code> 白卡 + 1dp 灰描边 + 0 elevation；elevation 散落 3/4/6/8dp</td>
+        <td>浅色用 <code>E1</code> 轻阴影替代描边，<code>cardElevated()</code> 收敛到 <code>E2</code>；深色保留细描边（投影不可见）；校验脚本拦新增数字字面量</td>
+        <td class="ok">平面感消失</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4　WCAG 对比度实测（脚本计算，非目测）</h2>
+  <table>
+    <thead><tr><th>色对</th><th>改前</th><th>v1.3</th><th>判定</th></tr></thead>
+    <tbody>
+      <tr><td>绿 ink / 浅绿底</td><td class="num"><span class="no">3.93:1</span></td><td class="num"><span class="ok">5.90:1</span></td><td>AA 达标</td></tr>
+      <tr><td>橙 ink / 浅橙底</td><td class="num"><span class="no">3.98:1</span></td><td class="num"><span class="ok">6.18:1</span></td><td>AA 达标</td></tr>
+      <tr><td>青 ink / 浅青底</td><td class="num"><span class="no">4.48:1</span></td><td class="num"><span class="ok">6.00:1</span></td><td>AA 达标</td></tr>
+      <tr><td>蓝 / 紫 / 粉 / 红 ink</td><td class="num">5.42–5.62:1</td><td class="num"><span class="ok">6.30–7.62:1</span></td><td>一并压暗统一</td></tr>
+      <tr><td><code>WARN</code> / 白卡</td><td class="num"><span class="no">2.15:1</span></td><td class="num"><span class="ok">6.85:1</span></td><td>AA 达标</td></tr>
+      <tr><td><code>OK</code> / 白卡</td><td class="num"><span class="no">3.30:1</span></td><td class="num"><span class="ok">6.54:1</span></td><td>AA 达标</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5　验收记录与未验证项</h2>
+  <ul>
+    <li><b class="ok">✓ 两轮编译通过</b>：<code>apk/build.sh</code> 各约 7s，产物 <code>EVSyncProbe-v0.6.6.apk</code> / <code>-v0.6.7.apk</code>（均 527942 B）。</li>
+    <li><b class="ok">✓ 两轮装机</b>：<code>adb -s BTF4C17222009588 install -r -g</code> 均 Success，<code>dumpsys</code> 最终 <code>versionName=0.6.7</code>。</li>
+    <li><b class="ok">✓ 规范校验</b>：<code>tools/check-ui-spec.py</code> 新增行 0 硬违规；elevation 新规则四探针 ALL PASS。</li>
+    <li><b class="ok">✓ 目视比对</b>：整页无文字截断 / 重叠 / 错位；放大图确认刺头消失、色条端头沿圆角收口。</li>
+    <li><b class="no">✗ 深色主题未取得真机实拍</b>：<code>cmd uimode night yes</code> 在这台 EMUI 真机上返回成功，但 App 仍是白卡浅底（<code>WatchAppearance</code> 本地主题覆盖系统夜间模式）。按铁律<b>明确标注未验证</b>，不拿附录 A 的深色模拟图冒充实拍。</li>
+    <li><b>未发布</b>：线上仍是 <code>0.6.0 / code183</code>；<code>version.env</code> 已被两次构建 bump 到 <code>0.6.8 / 190</code>。</li>
+    <li><b>范围边界</b>：本轮只改 <code>Ui.java</code> 一个源文件；措辞未做专项试点（按 Tom 本轮要求降为二级任务）；工作区里另一会话的首页表头 WIP 有活跃认领，只读不碰、不代发。</li>
+  </ul>
+
+  <div class="foot">
+    规范正文：<a href="EV-UI-Android-v1.md">docs/EV-UI-Android-v1.md</a>（v1.3，§7「真机截图比对铁律」） ·
+    任务单 <code>evtask-D-evev-schedul-261105-8bysct</code> ·
+    截图归档 <code>apk/shots/ev-ui-android-v1.3-*.png</code><br>
+    本页是规范的<b>验收材料</b>，不是新的「XX 页全新设计方案」。
+  </div>
+</div>
+</body>
+</html>

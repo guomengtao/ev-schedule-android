@@ -159,7 +159,7 @@ Ui.text(c, "标题", 17f, Ui.TEXT, true); // ✗ 中文标题用 bold → Ui.tex
 
 ---
 
-## 3. Token 表（v1 现行值）
+## 3. Token 表（v1.3 现行值）
 
 ### 3.1 语义色（15 个，浅色「晴空蓝」/ 深色「夜幕蓝」）
 
@@ -174,7 +174,7 @@ Ui.text(c, "标题", 17f, Ui.TEXT, true); // ✗ 中文标题用 bold → Ui.tex
 | `MUTED` | `#64748B` | `#8695B4` | 次要文字 / 说明 |
 | `ACCENT` | `#2F6BFF` | `#5B9BFF` | 主色 / 主按钮 / 选中态 |
 | `ACCENT_LIGHT` | `#EBF0FF` | `#1A2544` | 今天列 / 主色淡底 |
-| `OK` / `WARN` / `ERR` | `#16A34A` / `#F59E0B` / `#DC2626` | `#34C759` / `#FFB020` / `#FF6B6B` | 成功 / 警告 / 失败 |
+| `OK` / `WARN` / `ERR` | `#146B41` / `#8A4A08` / `#B91C1C` | `#34C759` / `#FFB020` / `#FF6B6B` | 成功 / 警告 / 失败（v1.3 浅色三色压暗到白卡上 ≥6.4:1） |
 | `ON_ACCENT` | `#FFFFFF` | `#FFFFFF` | 主色底上的文字 |
 | `OK_LIGHT` / `WARN_LIGHT` | 带 alpha 淡底 | 同左 | 假期 / 调休语义底 |
 
@@ -182,22 +182,25 @@ Ui.text(c, "标题", 17f, Ui.TEXT, true); // ✗ 中文标题用 bold → Ui.tex
 
 | Token | 值 | 行高 | 用途 |
 |---|---|---|---|
-| `SP_DISPLAY` | 22 | `LH_DISPLAY` 1.27 | 页面大标题 |
-| `SP_TITLE` | 17 | `LH_TITLE` 1.41 | 分区标题 / 顶栏 |
+| `SP_DISPLAY` | 24 | `LH_DISPLAY` 1.27 | 页面大标题（v1.3 22→24） |
+| `SP_TITLE` | 18 | `LH_TITLE` 1.41 | 分区标题 / 顶栏（v1.3 17→18） |
 | `SP_SUBTITLE` | 15 | `LH_SUBTITLE` 1.47 | 次标题 / 日期 |
 | `SP_BODY` | 13 | `LH_BODY` 1.54 | 正文 / 按钮 / 课名 |
 | `SP_CAPTION` | 11.5 | `LH_CAPTION` 1.52 | 次要说明 / 星期 |
 | `SP_MICRO` / `SP_TAB` | 10.5 | `LH_MICRO` 1.48 | 时间轴 / 底部导航 |
 | `SP_NUM` | 16 | — | 日期 / 数值强调 |
 
-> 中文字重只走 `Ui.textMedium*`；`bold=true` 仅限数值强调。**禁止**在页面里出现 `if (Ui.isDark())` 的颜色分支，一律用 token。
+> **v1.3 字重统一**：`Ui.text(..., bold=true)` 内部已改用 `sans-serif-medium`（中文伪粗体发糊发硬），页面零改动即全站字重分层；仍推荐标题显式走 `Ui.textMedium*`。
+> **v1.3 行高统一**：`Ui.text()` 默认按字号套 `LH_*` 阶梯（新增 `lineHeightFor`），`textLh` 可覆盖；单行 TextView 的 lineSpacing 不改变测量高度，紧凑布局零回归。
+> **禁止**在页面里出现 `if (Ui.isDark())` 的颜色分支，一律用 token。
 
 ### 3.3 间距 / 圆角 / 热区 / 课表网格
 
 | Token | 值 | 备注 |
 |---|---|---|
 | `GAP_XS / SM / MD / LG` | 4 / 8 / 12 / 16 dp | 4dp 基线，间距只允许这四档 |
-| `R_CARD / R_CTRL / R_BLOCK` | 14 / 12 / 4 dp | 卡片 / 控件 / 课程块（块短边 ~34dp，R 不能再大） |
+| `R_CARD / R_CTRL / R_BLOCK` | **18 / 14 / 8** dp | 卡片 / 控件 / 课程块（v1.3 由 14/12/4 上调，配合色条沿圆角裁剪） |
+| `E0 / E1 / E2` | 0 / 4 / 8 dp | 平 / 卡片 / 浮层；v1.3 起 `Ui.card()` 浅色用 `E1` 轻阴影替代 1dp 灰描边，`cardElevated()` 收敛到 `E2`；**新增行禁止数字字面量 `setElevation`**（校验脚本已拦） |
 | `TOUCH_MIN` / `ensureTouch` | 44 dp | 最小触摸热区 |
 | `ROW_PITCH` | 48 dp | 周课表行距唯一真源 |
 | `BLOCK_H_2LINE / BLOCK_H_1CHAR` | 44 / 40 dp | 双行块 / 单字块 |
@@ -209,17 +212,20 @@ Ui.text(c, "标题", 17f, Ui.TEXT, true); // ✗ 中文标题用 bold → Ui.tex
 
 | 色系 | 身份色 `COURSE_COLORS`（色条 / 小组件 / 编辑网格） | 浅底 `COURSE_SURFACE_COLORS` | 深字 `COURSE_INK_COLORS` |
 |---|---|---|---|
-| 蓝 | `#5B6CF9` | `#EDF1FE` | `#3A55C8` |
-| 绿 | `#33C77A` | `#E7F7EE` | `#1E8A55` |
-| 橙 | `#FF9E42` | `#FFF1E2` | `#B2650F` |
-| 紫 | `#9C6BF7` | `#F3ECFE` | `#7444C4` |
-| 青 | `#35C4D6` | `#E5F6F9` | `#137A90` |
-| 粉 | `#FF7AA8` | `#FDEBF2` | `#B24570` |
-| 红 | `#FF6B6B` | `#FDECEC` | `#B24545` |
+| 蓝 | `#5B6CF9` | `#EDF1FE` | `#2F47A8` |
+| 绿 | `#33C77A` | `#E7F7EE` | `#146B41` |
+| 橙 | `#FF9E42` | `#FFF1E2` | `#8A4A08` |
+| 紫 | `#9C6BF7` | `#F3ECFE` | `#5B329E` |
+| 青 | `#35C4D6` | `#E5F6F9` | `#0F6577` |
+| 粉 | `#FF7AA8` | `#FDEBF2` | `#933453` |
+| 红 | `#FF6B6B` | `#FDECEC` | `#963838` |
+
+> **v1.3 深字压暗**：原绿 3.93:1、橙 3.98:1、青 4.48:1 未达 WCAG AA；7 色全部压到 **5.90–7.62:1**（实测值见附录 D）。
 
 | 用途 | 唯一入口 |
 |---|---|
 | 课程块底 | `Ui.courseBlockBg(c, name, current)`：浅底 + 左侧 `COURSE_BAR_DP = 4dp` 身份色条 + 今天 2dp `ACCENT` 描边 |
+| **色条实现（v1.3 硬约束）** | 必须走 `Ui.CourseBlockDrawable`：`色条矩形 ∩ 卡片圆角轮廓`（`Path.op(INTERSECT)`），端头严格沿圆角收口。**禁止**用 `LayerDrawable` 叠两张各自带四角圆角的 `GradientDrawable` 再 `setLayerInset` —— 真机会在色条上下两端产生斜切刺头（v1.3 已修，见附录 D） |
 | 课名 / 地点 | `Ui.courseInk(name)`；地点沿用其 alpha 变体 |
 | elevation | `Ui.E0 = 0 / E1 = 4 / E2 = 8`（新代码禁止直接 `setElevation`） |
 
@@ -287,6 +293,15 @@ if (Ui.needRecreate(this, lastThemeVersion)) { recreate(); return; }
 
 ## 7. 机器校验与验收
 
+### 真机截图比对铁律（v1.3 · Tom 2026-11-05 19:16 明令）
+
+> **改任何视觉 token 或 Drawable，必须把包 `adb install` 到真机，改动前 / 改动后各截同一屏并并排比对。「设计图画得好看」不算验收。**
+> 设计图是**意图**，真机渲染是**事实**；两者不一致时以真机为准、修实现，而不是改设计图去迁就。
+> v1.3 的课程块色条刺头，正是「附录 A 只画了设计态、没比对真机」造成的事故：设计图里色条沿圆角包边，真机里是两端带尖角的粗糙边线。
+
+流程：① 改前截 `apk/shots/<name>-before-*.png` → ② 改 token → ③ `build.sh` + `adb install -r -g` → ④ 同机同页截 `after` → ⑤ 局部放大并排比对（色条 / 圆角 / 描边这类 ≤8dp 的细节必须放大看）→ ⑥ 对照页归档为规范附录。
+截图不可用时（真机 / AVD 均离线）必须**明确标注未验证**，禁止拿设计图冒充实拍。
+
 ```bash
 python3 tools/check-ui-spec.py          # 只查新增行；有违规退出码 1（提交前应通过）
 python3 tools/check-ui-spec.py --all    # 全量报告，只看迁移进度，不阻断
@@ -295,7 +310,7 @@ python3 tools/check-ui-spec.py --all    # 全量报告，只看迁移进度，�
 每次改 UI 的**七条验收**（缺一不算完成）：
 
 1. 校验脚本通过，新增行零硬编码；
-2. 真机浅色 / 深色各截一屏，归档 `apk/shots/<page>-<theme>-v<version>.png`（沿用现有命名）；
+2. **按「真机截图比对铁律」改前 / 改后各截同一屏并并排比对**（≤8dp 细节必须放大），真机浅色 / 深色各一屏，归档 `apk/shots/`；设计图不能代替实拍；
 3. 中文输入法弹出 / 收起不黑屏、完成键不闪烁（`Ui.editText` 防线）；
 4. 主题切换不触发窗口连环重建（`Ui.needRecreate` 防线）；
 5. 可点元素 ≥44dp 热区（新页面 48dp），浅深两套正文对比度 ≥4.5:1；
@@ -311,8 +326,8 @@ python3 tools/check-ui-spec.py --all    # 全量报告，只看迁移进度，�
 1. **读本文 + `Ui.java` token 段**（不要只读那一页的旧设计方案）；
 2. 确认所需 token 已存在；不存在 → 先补 `Ui.java` 与本文 §3 表格；
 3. 按 §5 骨架写页面，图标走 Lucide；**所有可见文案按「设计宪法」B 写，先过朗读测试**；
-4. 跑 `python3 tools/check-ui-spec.py`（硬编码 + 技术黑话双查）；
-5. 真机按 §7 七条验收（含动画红线）；
+4. 跑 `python3 tools/check-ui-spec.py`（硬编码 + elevation + 技术黑话三查）；
+5. **真机截图比对**：`build.sh` → `adb install -r -g` → 同机同页截 before/after → 放大并排比对，不一致就修实现；再按 §7 七条验收（含动画红线）；
 6. 提交信息带 `ev-ui-android: vN`，便于回溯。
 
 **禁止**：新开一份「XX 页全新设计方案」而不回流本文 —— 那正是风格漂移的源头。新方案只能作为本文附录或修订，并更新 §10 变更日志。
@@ -325,7 +340,7 @@ python3 tools/check-ui-spec.py --all    # 全量报告，只看迁移进度，�
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | **P0** | 本文 + `.codebuddy/rules/ui-design-spec.md` 规则入口 + `tools/check-ui-spec.py`；**新代码立即强制** | ✅ 本次落地 |
-| **P1** | `COURSE_COLORS` 降饱和；字重分层；`E0/E1/E2` 三档写进 `Ui.java`；状态栏背景统一；把校验规则扩到 elevation | 🟢 **部分完成（v1.1 首页 Pilot）**：降饱和 + `E0/E1/E2` 已落地并编译通过；字重分层沿用 `textMedium*`；状态栏 / 校验扩规则仍待做 |
+| **P1** | `COURSE_COLORS` 降饱和；字重分层；`E0/E1/E2` 三档写进 `Ui.java`；状态栏背景统一；把校验规则扩到 elevation | ✅ **v1.3 完成**：降饱和(v1.1)、`Ui.text` 统一 medium 字重 + 默认 LH 行高、`card()` 落地 E1 轻阴影 / `cardElevated()` 收敛 E2、校验脚本新增 `hardcoded-elevation`；仅状态栏背景统一仍待做 |
 | **P0-K12** | 面向中小学生设计宪法 + 技术黑话词表进校验脚本；**新代码立即强制** | ✅ v1.2 落地 |
 | **P2** | 可变字重字体（先评估包体）、空状态组件化、`ev map` 登记 lint 字段；动效规范已由「设计宪法」C 定案，不再另写 motion 方案 | ⬜ 可选 |
 
@@ -342,7 +357,9 @@ python3 tools/check-ui-spec.py --all    # 全量报告，只看迁移进度，�
 | 2026-11-05 18:20 | v1.2 | 新增「设计宪法 · 面向中小学生」：K12 认知基线、真实扫描出的技术黑话词表与替换示例、简单大方 P0 / 动画 P2 的 6 条量化红线、WCAG AA 与 48dp 热区；§7 验收扩到七条、§8 工作流同步；校验脚本新增 K12 词表拦截 | `evtask-D-evev-schedul-261105-utex3d` |
 | 2026-11-05 18:42 | v1.2 试点 | 附录 B：连接检查页文案人话化落地 —— `SyncEngine` 诊断源头 24 处 + `DebugActivity` 学生可见文案 15 处 + 建议条整块重写；新增「诊断词双兼容」第 4 条硬规则；校验 85 行新增 0 硬违规（3 处功能名软提醒）、`build.sh` 编译通过；未发布 | `evtask-D-evev-schedul-261105-vrss7g` |
 | 2026-11-05 19:12 | v1.2 试点二 | 附录 C：激活页文案人话化 —— `FastActivateActivity` 22 条 + `ZeroActivateActivity` 14 条替换，两页学生可见硬禁词清零；原始 `json` / `reason` / 设备号不再显示、转入日志；词表补「设备 ID / 设备号 / 设备标识」并进校验脚本；设计图含 4 场景交互 + 浅深双主题 + 实测 WCAG 对比度与 48dp 热区；未发布 | `evtask-D-evev-schedul-261105-m46vrv` |
+| 2026-11-05 19:27 | v1.3 | **视觉层为主**：真机实测发现并修复课程块色条「上下两端刺头」（`LayerDrawable` 双圆角叠加 → `CourseBlockDrawable` 路径交集）；配色 7 色 ink + 浅色 OK/WARN/ERR 全压到 WCAG AA；卡片 1dp 描边 → E1 轻阴影；圆角 14/12/4 → 18/14/8；`SP_DISPLAY/TITLE` 22/17 → 24/18；`Ui.text` 统一 medium 字重与默认行高；新增「真机截图比对铁律」与 elevation 机器校验；两轮真机前后截图归档（附录 D） | `evtask-D-evev-schedul-261105-8bysct` |
 
 **附录 A**：[首页 Pilot 设计图（前后对照）](EV-UI-Android-附录A-首页Pilot设计图.html) —— 规范的设计态验证，**不是**新的「XX 页全新设计方案」。
 **附录 B**：[连接检查页文案人话化前后对照](EV-UI-Android-附录B-连接失败页文案对照.html) —— 按「设计宪法 B」做的 K12 文案试点，含真实源码反例对照、词表验收与「诊断词双兼容」坑；同样是规范的验证材料，不是新设计方案。
 **附录 C**：[激活页文案人话化设计对照](EV-UI-Android-附录C-激活页文案对照.html) —— 4 个失败场景可切换、浅深双主题、实测 WCAG 对比度与 48dp 热区标注；按「设计宪法 B/D」做的试点二验证材料。
+**附录 D**：[v1.3 真机视觉前后对照](EV-UI-Android-附录D-真机视觉比对.html) —— 真机实拍前后并排 + 色条放大对照（刺头消失）、六项视觉 token 改动表、实测对比度；**这是「真机截图比对铁律」的第一份验收材料，不是设计稿**。
