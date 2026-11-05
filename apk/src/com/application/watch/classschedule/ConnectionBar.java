@@ -33,7 +33,7 @@ public final class ConnectionBar {
         icon.setColorFilter(Ui.MUTED);
         bar.addView(icon, new LinearLayout.LayoutParams(Ui.dp(a, 16), Ui.dp(a, 16)));
 
-        final TextView tv = Ui.text(a, "● 检查连接状态…", 12f, Ui.MUTED, false);
+        final TextView tv = Ui.text(a, "● 正在看看手环在不在…", 12f, Ui.MUTED, false);
         tv.setPadding(Ui.dp(a, 8), 0, 0, 0);
         bar.addView(tv);
 
@@ -68,19 +68,19 @@ public final class ConnectionBar {
         if (e.connected()) {
             icon.setImageResource(R.drawable.ic_link);
             icon.setColorFilter(Ui.OK);
-            tv.setText("已连接 · " + e.deviceName + " · v" + e.versionName);
+            tv.setText("已连上 · " + e.deviceName + " · v" + e.versionName);
             tv.setTextColor(Ui.OK);
         } else if (e.autoRetryRunning()) {
             icon.setImageResource(R.drawable.ic_refresh_cw);
             icon.setColorFilter(Ui.ACCENT);
             // 与首页连接进度同款文案（连接中（n/4）：步骤名）
             String p = e.connectProgress();
-            tv.setText(p.length() > 0 ? "重连中：" + p : "重连中…（自动拉起手环 EV）");
+            tv.setText(p.length() > 0 ? "正在重新连：" + p : "正在重新连…（会自动打开手环课程表）");
             tv.setTextColor(Ui.ACCENT);
         } else {
             icon.setImageResource(R.drawable.ic_unlink);
             icon.setColorFilter(Ui.MUTED);
-            tv.setText("离线 · 自动重连未成功，点此去连接调试");
+            tv.setText("没连上 · 自动重连没成功，点这里看看怎么办");
             tv.setTextColor(Ui.MUTED);
         }
     }

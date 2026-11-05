@@ -1147,7 +1147,7 @@ public final class SyncEngine {
         failStep = 0;
         failDetail = "";
         Stats.connectStart(ctx);
-        final String[] labels = {"初始化穿戴服务", "查找已连接设备", "申请设备权限", "连接 EV 课程表"};
+        final String[] labels = {"看看小米运动健康在不在", "找找你的手环", "请手环点个同意", "打开手环上的课程表"};
         final int[] states = {RUNNING, PENDING, PENDING, PENDING};
         final String[] details = {"", "", "", ""};
         emit(s, labels, states, details);

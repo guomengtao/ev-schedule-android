@@ -165,7 +165,7 @@ public class HomeActivity extends Activity {
         }
         try {
             new AlertDialog.Builder(this)
-                    .setTitle("发现 " + devices.size() + " 台已连接设备，请选择")
+                    .setTitle("找到 " + devices.size() + " 个手环，请选择")
                     .setSingleChoiceItems(names, checked,
                             new DialogInterface.OnClickListener() {
                                 @Override public void onClick(DialogInterface d, int which) {
@@ -237,10 +237,10 @@ public class HomeActivity extends Activity {
         errorCard.addView(hintView);
         errorCard.addView(Ui.space(this, Ui.GAP_MD));
         errorCard.addView(Ui.grid(this,
-                Ui.button(this, "重试连接", true, new View.OnClickListener() {
+                Ui.button(this, "再试一次", true, new View.OnClickListener() {
                     @Override public void onClick(View v) { startConnect(); }
                 }),
-                Ui.button(this, "打开手环 EV", false, new View.OnClickListener() {
+                Ui.button(this, "打开手环课表", false, new View.OnClickListener() {
                     @Override public void onClick(View v) { launchEv(); }
                 })));
         root.addView(errorCard);
@@ -558,7 +558,7 @@ public class HomeActivity extends Activity {
             // 共用美化弹窗：图标章 + 提示 + 去连接
             Dialogs.confirm(this, R.drawable.ic_unlink, 0,
                     "手环未连接",
-                    "手环蓝牙还没有连接，无法呼叫。\n先到「手环」页连接手环？",
+                    "手环还没连上，叫不醒它呀。\n先去「手环」页连一下吧？",
                     null, "去连接", false,
                     new Dialogs.Action() {
                         @Override public void run() {
@@ -573,7 +573,7 @@ public class HomeActivity extends Activity {
                 if (ok) {
                     miniStatus("已呼叫手环 ✓（" + info + "）", Ui.OK);
                 } else {
-                    miniStatus("呼叫手环失败：" + info, Ui.WARN);
+                    miniStatus("呼叫失败，再试一次吧：" + info, Ui.WARN);
                 }
             }
         });
@@ -933,7 +933,7 @@ public class HomeActivity extends Activity {
             if (greetingView != null) {
                 greetingView.setText("Hi，同学");
             }
-            weekBox.addView(Ui.textLh(this, "连接手环后会自动同步课表", Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION));
+            weekBox.addView(Ui.textLh(this, "连上手环，课表会自动飞进手机", Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION));
             return;
         }
         // update greeting with nickname
@@ -1010,10 +1010,10 @@ public class HomeActivity extends Activity {
         // note 信息去重：sync 课表"最后同步"与"更新于"是同一件事，只说一遍
         String note;
         if (s.isSync()) {
-            note = "来自手环 · " + s.courses.size() + " 门课 · 最后同步 "
+            note = "从手环来的 · " + s.courses.size() + " 门课 · 最后同步 "
                     + CourseCache.ago(s.syncedAt);
         } else {
-            note = "仅本机 · " + s.courses.size() + " 门课 · 更新于 "
+            note = "只在这台手机 · " + s.courses.size() + " 门课 · 更新于 "
                     + CourseCache.ago(s.createdAt);
         }
         TextView n = Ui.textLh(this, note, Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
@@ -1272,13 +1272,13 @@ public class HomeActivity extends Activity {
                 }
             }
             @Override public void onTimeout(String hint) {
-                miniStatus("手环无回应（" + label + "）", Ui.WARN);
+                miniStatus("手环没理我（" + label + "）", Ui.WARN);
             }
             @Override public void onError(String msg) {
                 miniStatus(label + "发送失败：" + msg, Ui.ERR);
             }
             @Override public void onWaking() {
-                miniStatus("手环未响应，正在唤醒手环并重发「" + label + "」…", Ui.ACCENT);
+                miniStatus("手环没理我，正在叫醒它再发一次「" + label + "」…", Ui.ACCENT);
             }
         });
     }
@@ -1326,18 +1326,18 @@ public class HomeActivity extends Activity {
                     miniStatus("「" + label + "」已提醒手环 ✓", Ui.OK);
                 } else {
                     // 旧版手环不认 notify → 回落长震动，保证有反馈
-                    miniStatus("手环版本较旧，改用震动提醒「" + label + "」…", Ui.MUTED);
+                    miniStatus("手环有点老，改成用震动提醒「" + label + "」…", Ui.MUTED);
                     quickSend("{\"action\":\"call\",\"text\":\"" + label + "\"}", label);
                 }
             }
             @Override public void onTimeout(String hint) {
-                miniStatus("手环无回应（" + label + "）", Ui.WARN);
+                miniStatus("手环没理我（" + label + "）", Ui.WARN);
             }
             @Override public void onError(String msg) {
                 miniStatus(label + "提醒失败：" + msg, Ui.ERR);
             }
             @Override public void onWaking() {
-                miniStatus("手环未响应，正在唤醒手环并重发「" + label + "」…", Ui.ACCENT);
+                miniStatus("手环没理我，正在叫醒它再发一次「" + label + "」…", Ui.ACCENT);
             }
         });
     }
@@ -1366,8 +1366,8 @@ public class HomeActivity extends Activity {
         ivLp.rightMargin = Ui.dp(this, 12);
         LinearLayout titles = new LinearLayout(this);
         titles.setOrientation(LinearLayout.VERTICAL);
-        titles.addView(Ui.text(this, "快速留言", 16.5f, Ui.TEXT, true));
-        titles.addView(Ui.text(this, "送达手环首页 · 未连接时连上自动补发", 11f, Ui.MUTED, false));
+        titles.addView(Ui.text(this, "给手环留言", 16.5f, Ui.TEXT, true));
+        titles.addView(Ui.text(this, "会显示在手环首页；没连上就先存着，连上自动发", 11f, Ui.MUTED, false));
         head.addView(titles, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         box.addView(head);
@@ -1412,7 +1412,7 @@ public class HomeActivity extends Activity {
         // 按钮：打开留言页（幽灵） + 发送（主色，空输入置灰）
         LinearLayout btns = new LinearLayout(this);
         btns.setOrientation(LinearLayout.HORIZONTAL);
-        Button page = Ui.button(this, "打开留言页", false, new View.OnClickListener() {
+        Button page = Ui.button(this, "去留言页", false, new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (holder[0] != null) {
                     holder[0].dismiss();
@@ -1435,7 +1435,7 @@ public class HomeActivity extends Activity {
                     holder[0].dismiss();
                 }
                 MessageActivity.enqueueOutgoing(HomeActivity.this, text);
-                miniStatus("留言已发送（未连接时会在连上后自动补发）", Ui.OK);
+                miniStatus("留言发出去啦（手环没连上也不要紧，连上会自动补发）", Ui.OK);
             }
         });
         send.setBackground(Ui.round(Ui.ACCENT, 12, 0, this));
@@ -1476,7 +1476,7 @@ public class HomeActivity extends Activity {
     private void manualSync() {
         SyncEngine e = SyncEngine.get(this);
         if (e.connected()) {
-            miniStatus("正在同步课表…", Ui.ACCENT);
+            miniStatus("正在把课表取过来…", Ui.ACCENT);
             pullSchedule();
         } else {
             startConnect();
@@ -1524,10 +1524,10 @@ public class HomeActivity extends Activity {
         errorCard.addView(hintView);
         errorCard.addView(Ui.space(this, 10));
         errorCard.addView(Ui.grid(this,
-                Ui.button(this, "重试连接", true, new View.OnClickListener() {
+                Ui.button(this, "再试一次", true, new View.OnClickListener() {
                     @Override public void onClick(View v) { startConnect(); }
                 }),
-                Ui.button(this, "打开手环 EV", false, new View.OnClickListener() {
+                Ui.button(this, "打开手环课表", false, new View.OnClickListener() {
                     @Override public void onClick(View v) { launchEv(); }
                 })));
         root.addView(errorCard);
@@ -1556,7 +1556,7 @@ public class HomeActivity extends Activity {
     }
 
     private static final String[] STEP_LABELS =
-            {"初始化穿戴服务", "查找已连接设备", "申请设备权限", "连接 EV 课程表"};
+            {"看看小米运动健康在不在", "找找你的手环", "请手环点个同意", "打开手环上的课程表"};
 
     private String version() {
         try {
@@ -1689,7 +1689,7 @@ public class HomeActivity extends Activity {
             statusView.setText("已连接，正在读取资料…");
             estimateView.setText("预计还需 ~2 秒");
         } else {
-            connectingLabel = "已连接，正在同步课表…";
+            connectingLabel = "连上啦，正在把课表取过来…";
             miniStatus("● " + connectingLabel, Ui.ACCENT);
         }
         SyncEngine.get(this).export(new SyncEngine.Reply() {
@@ -1731,7 +1731,7 @@ public class HomeActivity extends Activity {
                     }
                     done();
                 } catch (Throwable t) {
-                    fail("读取资料失败：回包无法解析");
+                    fail("没读懂手环的回复，再试一次吧");
                 }
             }
 
@@ -1786,14 +1786,14 @@ public class HomeActivity extends Activity {
                     JSONObject d = o.optJSONObject("data");
                     JSONArray sch = (d == null) ? null : d.optJSONArray("schedule");
                     if (sch == null) {
-                        miniStatus("手环回包里没课表数据", Ui.WARN);
+                        miniStatus("手环里好像还没有课表", Ui.WARN);
                         return;
                     }
                     SyncEngine.get(HomeActivity.this).lastExportJson = json;
                     syncScheduleToStore(sch);
-                    flashStatus("● 课表已同步 ✓", Ui.OK);
+                    flashStatus("● 课表已更新 ✓", Ui.OK);
                 } catch (Throwable t) {
-                    miniStatus("同步失败：回包无法解析", Ui.ERR);
+                    miniStatus("更新失败：没读懂手环的回复", Ui.ERR);
                 }
             }
             @Override public void onTimeout(String hint) { miniStatus(hint, Ui.WARN); }

@@ -75,7 +75,7 @@ public class ScheduleListActivity extends Activity {
         ScheduleStore.ensureInitialized(this);
         if (ScheduleStore.lastReadCorrupt) {
             ScheduleStore.lastReadCorrupt = false;
-            Toast.makeText(this, "本地课表数据曾损坏，已保留损坏备份；连接手环后可重新拉取",
+            Toast.makeText(this, "本地课表有点问题，旧数据已经备份好了；连上手环可以重新取回来",
                     Toast.LENGTH_LONG).show();
         }
         buildUi();
@@ -174,11 +174,11 @@ public class ScheduleListActivity extends Activity {
         refreshBtn.setImageResource(R.drawable.ic_refresh_cw);
         refreshBtn.setColorFilter(Ui.ACCENT);
         refreshBtn.setPadding(Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 2), Ui.dp(this, 4));
-        refreshBtn.setContentDescription("刷新手环课表清单");
+        refreshBtn.setContentDescription("看看手环里有几份课表");
         refreshBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 v.animate().rotation(v.getRotation() + 360f).setDuration(700).start();
-                forcePull("正在刷新手环课表清单…");
+                forcePull("正在看手环里有几份课表…");
             }
         });
         deviceBar.addView(refreshBtn);
@@ -218,7 +218,7 @@ public class ScheduleListActivity extends Activity {
     private View buildTopBar() {
         android.widget.FrameLayout bar = new android.widget.FrameLayout(this);
 
-        TextView t = Ui.textMediumLh(this, "课表库", Ui.SP_TITLE, Ui.TEXT, Ui.LH_TITLE);
+        TextView t = Ui.textMediumLh(this, "我的课表", Ui.SP_TITLE, Ui.TEXT, Ui.LH_TITLE);
         bar.addView(t, new android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
@@ -259,12 +259,12 @@ public class ScheduleListActivity extends Activity {
         pw.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0x00000000));
         pw.setOutsideTouchable(true);
 
-        addMenuItem(panel, pw, "新建本地课表", null);
+        addMenuItem(panel, pw, "自己做一份课表", null);
         if (Variant.isEv(this)) {
             panel.addView(menuDivider());
-            addMenuItem(panel, pw, "导入课程表", TransferActivity.MODE_IMPORT);
+            addMenuItem(panel, pw, "导入课表", TransferActivity.MODE_IMPORT);
             panel.addView(menuDivider());
-            addMenuItem(panel, pw, "导出课程表", TransferActivity.MODE_EXPORT);
+            addMenuItem(panel, pw, "导出课表", TransferActivity.MODE_EXPORT);
         }
 
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
@@ -382,14 +382,14 @@ public class ScheduleListActivity extends Activity {
             final String key = en.getKey();
             List<ScheduleStore.Schedule> g = en.getValue();
             String label = "legacy".equals(key)
-                    ? "未识别手环（旧数据，连接后归位）"
+                    ? "没认出是哪只手环（连上后会自动归位）"
                     : devLabel(key, g);
             listBox.addView(groupHeader(label, g.size(), key));
             addGroupBody(key, g, activeId);
         }
         // 本地课程分组（组头已是细行、自带呼吸感 → 不再需要分割线，B3.3）
         if (!local.isEmpty()) {
-            listBox.addView(groupHeader("本地课程", local.size(), "local"));
+            listBox.addView(groupHeader("自己的课表", local.size(), "local"));
             addGroupBody("local", local, activeId);
         }
         refreshSyncView();
@@ -419,7 +419,7 @@ public class ScheduleListActivity extends Activity {
         // 判据用「连接状态」而非 deviceId：手环端未实现 get_device_id 时 deviceId 恒空，
         // 但 interconnect 其实已连上，不能误报「未连接手环」。
         if (!e.connected()) {
-            deviceBarTitle.setText("未连接手环 · 点此连接");
+            deviceBarTitle.setText("还没连手环 · 点这里连");
             deviceBarTitle.setTextColor(Ui.MUTED);
             if (deviceCountView != null) {
                 deviceCountView.setVisibility(View.GONE);
@@ -436,12 +436,12 @@ public class ScheduleListActivity extends Activity {
         }
         String title = (name.isEmpty() ? "当前手环" : name)
                 + (tail.isEmpty() ? "" : " ··" + tail)
-                + (curDev.isEmpty() ? "（设备ID未取到）" : "");
+                + (curDev.isEmpty() ? "（没拿到手环编号）" : "");
         deviceBarTitle.setText(withGreenDot(title));
         deviceBarTitle.setTextColor(Ui.TEXT);
         if (deviceCountView != null) {
             if (curGroupCount >= 0) {
-                deviceCountView.setText(curGroupCount + " 套");
+                deviceCountView.setText(curGroupCount + " 份");
                 deviceCountView.setVisibility(View.VISIBLE);
             } else {
                 deviceCountView.setVisibility(View.GONE);
@@ -486,7 +486,7 @@ public class ScheduleListActivity extends Activity {
         });
         TextView t = Ui.textMediumLh(this, title, Ui.SP_CAPTION, Ui.MUTED, Ui.LH_CAPTION);
         head.addView(t, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        TextView cnt = Ui.text(this, n + " 套", 11f, Ui.MUTED, false);
+        TextView cnt = Ui.text(this, n + " 份", 11f, Ui.MUTED, false);
         cnt.setPadding(0, 0, Ui.dp(this, 6), 0);
         head.addView(cnt);
         // 箭头用 chevron_right 旋转：展开 90°（朝下）/ 折叠 0°（朝右）
@@ -657,12 +657,12 @@ public class ScheduleListActivity extends Activity {
         });
         if (!s.isSync()) {
             panel.addView(menuDivider());
-            cardMenuItem(panel, pw, "同步到手环", Ui.TEXT, new Runnable() {
+            cardMenuItem(panel, pw, "存进手环", Ui.TEXT, new Runnable() {
                 @Override public void run() { syncToWatch(s); }
             });
         }
         panel.addView(menuDivider());
-        cardMenuItem(panel, pw, "从本机移除", Ui.ERR, new Runnable() {
+        cardMenuItem(panel, pw, "从手机里删掉", Ui.ERR, new Runnable() {
             @Override public void run() { deleteSchedule(s); }
         });
 
@@ -731,7 +731,7 @@ public class ScheduleListActivity extends Activity {
     /** 「设为当前」描边按钮（D4：互斥选择改用单选语义，替代原 CheckBox）；44dp 热区。 */
     private View setCurrentBtn(final ScheduleStore.Schedule s) {
         android.widget.FrameLayout box = new android.widget.FrameLayout(this);
-        TextView pill = Ui.textMedium(this, "设为当前", Ui.SP_CAPTION, Ui.ACCENT);
+        TextView pill = Ui.textMedium(this, "用这份", Ui.SP_CAPTION, Ui.ACCENT);
         pill.setGravity(android.view.Gravity.CENTER);
         pill.setPadding(Ui.dp(this, 13), Ui.dp(this, 5), Ui.dp(this, 13), Ui.dp(this, 5));
         pill.setBackground(Ui.round(0x00000000, 14, Ui.ACCENT, this));
@@ -740,12 +740,12 @@ public class ScheduleListActivity extends Activity {
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
                 android.view.Gravity.CENTER_VERTICAL));
         box.setClickable(true);
-        box.setContentDescription("设为当前");
+        box.setContentDescription("用这份");
         box.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (!s.id.equals(ScheduleStore.activeId(ScheduleListActivity.this))) {
                     ScheduleStore.setActive(ScheduleListActivity.this, s.id);
-                    status("已切换到「" + s.name + "」", Ui.OK);
+                    status("已经换成「" + s.name + "」", Ui.OK);
                     render();
                 }
             }
@@ -760,7 +760,7 @@ public class ScheduleListActivity extends Activity {
         }
         boolean connected = SyncEngine.get(this).connected();
         if (live && syncPendingConnect && !connected) {
-            v.setText("手环未连接 · 点此去连接");
+            v.setText("还没连手环 · 点这里连");
             v.setTextColor(Ui.WARN);
             v.setBackground(Ui.round(Ui.WARN_LIGHT, 14, 0, this));
             return;
@@ -768,19 +768,19 @@ public class ScheduleListActivity extends Activity {
         int unsaved = SyncCoordinator.unsavedCount(s);
         if (!connected) {
             // 未连接 → 明确「无法同步」，别让用户误以为是自己忘了同步（语义澄清）
-            v.setText("未连接 · 无法同步");
+            v.setText("没连手环 · 存不进去");
             v.setTextColor(Ui.WARN);
             v.setBackground(Ui.round(Ui.WARN_LIGHT, 14, 0, this));
         } else if (s.isSync() && unsaved == 0) {
-            v.setText("✓ 已同步");
+            v.setText("✓ 已在手环里");
             v.setTextColor(Ui.OK);
             v.setBackground(Ui.round(Ui.OK_LIGHT, 14, 0, this));
         } else if (unsaved > 0) {
-            v.setText(unsaved + " 门课未同步");
+            v.setText(unsaved + " 门课还没存进手环");
             v.setTextColor(Ui.ACCENT);
             v.setBackground(Ui.round(Ui.ACCENT_LIGHT, 14, 0, this));
         } else {
-            v.setText("尚未同步到手环");
+            v.setText("还没存进手环");
             v.setTextColor(Ui.WARN);
             v.setBackground(Ui.round(Ui.WARN_LIGHT, 14, 0, this));
         }
@@ -806,8 +806,8 @@ public class ScheduleListActivity extends Activity {
         box.addView(h);
 
         TextView p = Ui.textLh(this,
-                connected ? "手环上还没有课表，可以新建一套本地课表开始。"
-                          : "连接手环会自动导入手环里的课表，也可以直接新建一套本地课表。",
+                connected ? "手环里还没有课表，可以先自己做一份。"
+                          : "连上手环，手环里的课表会自动进来；也可以自己做一份。",
                 Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
         p.setGravity(android.view.Gravity.CENTER);
         p.setPadding(0, Ui.dp(this, 6), 0, 0);
@@ -825,12 +825,12 @@ public class ScheduleListActivity extends Activity {
         LinearLayout btns = new LinearLayout(this);
         btns.setOrientation(LinearLayout.VERTICAL);
         btns.setPadding(0, Ui.dp(this, 22), 0, 0);
-        btns.addView(Ui.button(this, connected ? "＋ 新建本地课表" : "连接手环",
+        btns.addView(Ui.button(this, connected ? "＋ 自己做一份" : "连接手环",
                 true, connected ? toCreate : toConnect),
                 new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT));
         btns.addView(Ui.space(this, Ui.GAP_SM));
-        btns.addView(Ui.button(this, connected ? "连接手环" : "＋ 新建本地课表",
+        btns.addView(Ui.button(this, connected ? "连接手环" : "＋ 自己做一份",
                 false, connected ? toConnect : toCreate),
                 new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT));
@@ -881,13 +881,13 @@ public class ScheduleListActivity extends Activity {
                 syncOnly ? "从本机移除课表" : "删除课表",
                 "「" + s.name + "」\n" + s.sub(),
                 syncOnly
-                        ? "仅从本机删除；手环上仍保留，连接同步后会重新拉回。\n彻底从手环删除需手环端支持，暂未开放"
+                        ? "只从手机里删掉；手环里还留着，下次连上又会被取回来。"
                         : "此操作不可撤销，删除后无法恢复。",
-                syncOnly ? "仅删本地" : "删除", true,
+                syncOnly ? "只删手机的" : "删除", true,
                 new Dialogs.Action() {
                     @Override public void run() {
                         ScheduleStore.remove(ScheduleListActivity.this, s.id);
-                        status(syncOnly ? "已从本机删除「" + s.name + "」（手环仍保留）"
+                        status(syncOnly ? "已经从手机里删掉「" + s.name + "」（手环里还留着）"
                                 : "已删除「" + s.name + "」", Ui.OK);
                         render();
                     }
@@ -901,7 +901,7 @@ public class ScheduleListActivity extends Activity {
         pullRetryArmed = false;
         SyncEngine e = SyncEngine.get(this);
         if (!e.hasNode()) {
-            status("手环未连接 · 连接后自动拉取课表清单", Ui.WARN);
+            status("还没连手环 · 连上后自动取回课表", Ui.WARN);
             return;
         }
         lastPullAt = 0;
@@ -918,17 +918,17 @@ public class ScheduleListActivity extends Activity {
         if (e.isPullingMissing()) {
             return;
         }
-        status("正在从手环读取课表清单…", Ui.ACCENT);
+        status("正在看手环里有几份课表…", Ui.ACCENT);
         e.pullMissingFromWatch(this, new SyncEngine.PullCallback() {
             @Override public void onStart() { }
             @Override public void onDone(int pulled, int failed) {
                 if (pulled > 0) {
-                    status("已从手环同步 " + pulled + " 套课表到本机 ✓", Ui.OK);
+                    status("已经从手环取回 " + pulled + " 份课表 ✓", Ui.OK);
                     Toast.makeText(ScheduleListActivity.this,
-                            "已从手环同步 " + pulled + " 套课表", Toast.LENGTH_SHORT).show();
+                            "已经从手环取回 " + pulled + " 份课表", Toast.LENGTH_SHORT).show();
                 } else if (failed > 0) {
                     pullRetryArmed = true;
-                    status("从手环读取课表失败（" + failed + " 项）· 点此重试", Ui.ERR);
+                    status("从手环取课表没成功（" + failed + " 项）· 点此重试", Ui.ERR);
                 } else {
                     status("", Ui.MUTED);
                 }
@@ -964,7 +964,7 @@ public class ScheduleListActivity extends Activity {
             return;
         }
         syncPendingConnect = false;
-        status("正在同步课表…", Ui.ACCENT);
+        status("正在把课表存进手环…", Ui.ACCENT);
         SyncCoordinator.syncNow(this, new SyncCoordinator.Callback() {
             @Override public void onDone(boolean ok, String msg) {
                 status((ok ? "● " : "✕ ") + msg, ok ? Ui.OK : Ui.WARN);
@@ -976,7 +976,7 @@ public class ScheduleListActivity extends Activity {
     private void syncToWatch(final ScheduleStore.Schedule s) {
         SyncEngine e = SyncEngine.get(this);
         if (!e.hasNode()) {
-            status("手环未连接，请先在首页完成连接", Ui.WARN);
+            status("手环还没连上，先回首页连一下", Ui.WARN);
             return;
         }
         try {
@@ -1001,7 +1001,7 @@ public class ScheduleListActivity extends Activity {
             msg.put("action", "import");
             msg.put("payload", body);
 
-            status("正在同步「" + s.name + "」到手环…", Ui.ACCENT);
+            status("正在把「" + s.name + "」到手环…", Ui.ACCENT);
             e.send(msg.toString(), new SyncEngine.Reply() {
                 @Override public void onReply(String json) {
                     try {
@@ -1010,20 +1010,20 @@ public class ScheduleListActivity extends Activity {
                             SyncEngine e2 = SyncEngine.get(ScheduleListActivity.this);
                             ScheduleStore.markSynced(ScheduleListActivity.this, s.id,
                                     e2.currentDeviceId(), e2.currentDeviceName());
-                            status("已同步到手环 ✓（覆盖手环当前课表）", Ui.OK);
+                            status("已经存进手环 ✓（会替换手环现在的课表）", Ui.OK);
                             render();
                         } else {
-                            status("手环拒绝了导入：" + o.optString("reason", "未知原因"), Ui.WARN);
+                            status("手环说不行：" + o.optString("reason", "未知原因"), Ui.WARN);
                         }
                     } catch (Throwable t) {
-                        status("回包无法解析", Ui.ERR);
+                        status("没读懂手环的回复", Ui.ERR);
                     }
                 }
                 @Override public void onTimeout(String hint) { status(hint, Ui.WARN); }
-                @Override public void onError(String msg) { status("同步失败：" + msg, Ui.ERR); }
+                @Override public void onError(String msg) { status("没成功：" + msg, Ui.ERR); }
             });
         } catch (Throwable t) {
-            status("构造同步报文失败", Ui.ERR);
+            status("准备要发的内容时出错了", Ui.ERR);
         }
     }
 

@@ -124,7 +124,7 @@ public class BandActivity extends Activity {
         hit.addView(more, new android.widget.FrameLayout.LayoutParams(
                 Ui.dp(this, 34), Ui.dp(this, 34), android.view.Gravity.CENTER));
         hit.setClickable(true);
-        hit.setContentDescription("设备操作");
+        hit.setContentDescription("手环设置");
         hit.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { showDeviceMenu(v); }
         });
@@ -153,12 +153,12 @@ public class BandActivity extends Activity {
         pw.setOutsideTouchable(true);
 
         // 有副作用的动作：琥珀 + 一句后果说明（原来它藏在没人认识的裸「▼」里）
-        addMenuItem(panel, pw, "清除记忆并重连", "会忘记当前设备，重新选择", Ui.WARN, new Runnable() {
+        addMenuItem(panel, pw, "忘掉这只手环，重新连", "会清掉记住的手环，要重新选一次", Ui.WARN, new Runnable() {
             @Override public void run() { clearMemoryAndReconnect(); }
         });
         panel.addView(menuDivider());
         // 排障入口：连不上时更需要它（D7：从常驻页底收进菜单）
-        addMenuItem(panel, pw, "连接调试", "连不上时分步排查", Ui.TEXT, new Runnable() {
+        addMenuItem(panel, pw, "连不上？一步步看看", "连不上时，一步一步看哪里卡住", Ui.TEXT, new Runnable() {
             @Override public void run() {
                 startActivity(new Intent(BandActivity.this, DebugActivity.class));
             }
@@ -213,7 +213,7 @@ public class BandActivity extends Activity {
     private void clearMemoryAndReconnect() {
         SyncEngine.get(this).setPreferredNodeId("");
         SyncEngine.get(this).autoReconnect();
-        flash("已清除设备记忆，正在重新连接…", Ui.ACCENT);
+        flash("旧记录已经忘掉了，正在重新连接…", Ui.ACCENT);
         updateHero();
     }
 
@@ -243,7 +243,7 @@ public class BandActivity extends Activity {
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
 
-        heroNameView = Ui.textMediumLh(this, "未连接手环", Ui.SP_TITLE, Ui.TEXT, Ui.LH_TITLE);
+        heroNameView = Ui.textMediumLh(this, "还没连上手环", Ui.SP_TITLE, Ui.TEXT, Ui.LH_TITLE);
         info.addView(heroNameView);
 
         LinearLayout sRow = new LinearLayout(this);
@@ -260,7 +260,7 @@ public class BandActivity extends Activity {
         sRow.addView(heroStatusView);
         info.addView(sRow);
 
-        heroInfoView = Ui.textLh(this, "打开小米运动健康连接手环", Ui.SP_CAPTION, Ui.MUTED,
+        heroInfoView = Ui.textLh(this, "在小米运动健康里连上手环", Ui.SP_CAPTION, Ui.MUTED,
                 false, Ui.LH_CAPTION);
         heroInfoView.setPadding(0, Ui.dp(this, 3), 0, 0);
         info.addView(heroInfoView);
@@ -274,13 +274,13 @@ public class BandActivity extends Activity {
         heroOpsBox = new LinearLayout(this);
         heroOpsBox.setOrientation(LinearLayout.HORIZONTAL);
 
-        heroPrimaryBtn = Ui.button(this, "同步手环课表", true, new View.OnClickListener() {
+        heroPrimaryBtn = Ui.button(this, "把课表存进手机", true, new View.OnClickListener() {
             @Override public void onClick(View v) { manualSync(); }
         });
         heroOpsBox.addView(heroPrimaryBtn, new LinearLayout.LayoutParams(
                 0, Ui.dp(this, 38), 1f));
 
-        heroSecondaryBtn = Ui.button(this, "同步课表", false, new View.OnClickListener() {
+        heroSecondaryBtn = Ui.button(this, "更新课表", false, new View.OnClickListener() {
             @Override public void onClick(View v) { manualSync(); }
         });
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
@@ -339,7 +339,7 @@ public class BandActivity extends Activity {
     private LinearLayout buildStatusSection() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.addView(Ui.textMediumLh(this, "设备状态", Ui.SP_BODY, Ui.TEXT, Ui.LH_BODY));
+        box.addView(Ui.textMediumLh(this, "手环状态", Ui.SP_BODY, Ui.TEXT, Ui.LH_BODY));
         box.addView(Ui.space(this, Ui.GAP_SM));
 
         LinearLayout card = Ui.card(this);
@@ -358,7 +358,7 @@ public class BandActivity extends Activity {
         storageCell.setOrientation(LinearLayout.VERTICAL);
         storageCell.setPadding(Ui.dp(this, 2), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
         storageCell.addView(mStorageView);
-        TextView sl = Ui.textLh(this, "存储空间", Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
+        TextView sl = Ui.textLh(this, "还能存多少", Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
         sl.setPadding(0, Ui.dp(this, 3), 0, 0);
         storageCell.addView(sl);
         card.addView(storageCell, new LinearLayout.LayoutParams(
@@ -402,7 +402,7 @@ public class BandActivity extends Activity {
         info.setOrientation(LinearLayout.VERTICAL);
         info.addView(Ui.textMediumLh(this, MessageActivity.CHAT_NAME, Ui.SP_SUBTITLE,
                 Ui.ACCENT, Ui.LH_SUBTITLE));
-        TextView sub = Ui.textLh(this, "手环 ↔ 手机 实时聊天", Ui.SP_CAPTION, Ui.MUTED,
+        TextView sub = Ui.textLh(this, "和手环聊天", Ui.SP_CAPTION, Ui.MUTED,
                 false, Ui.LH_CAPTION);
         sub.setPadding(0, Ui.dp(this, 2), 0, 0);
         info.addView(sub);
@@ -466,7 +466,7 @@ public class BandActivity extends Activity {
         LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         lp2.leftMargin = Ui.dp(this, Ui.GAP_SM);
-        grid.addView(toolCell(R.drawable.ic_tab_home, "首页设置", "模板 / 字号",
+        grid.addView(toolCell(R.drawable.ic_tab_home, "手环首页", "挑模板、调字号",
                 HomepageSettingsActivity.class), lp);
         grid.addView(toolCell(R.drawable.ic_timer, "工具箱", "找手机 / 静音",
                 ToolboxActivity.class), lp2);
@@ -587,13 +587,13 @@ public class BandActivity extends Activity {
         art.setColorFilter(Ui.MUTED);
         card.addView(art, new LinearLayout.LayoutParams(Ui.dp(this, 64), Ui.dp(this, 64)));
 
-        TextView t = Ui.textMediumLh(this, "还没有连接手环", Ui.SP_SUBTITLE, Ui.TEXT, Ui.LH_SUBTITLE);
+        TextView t = Ui.textMediumLh(this, "还没连上手环呀", Ui.SP_SUBTITLE, Ui.TEXT, Ui.LH_SUBTITLE);
         t.setGravity(android.view.Gravity.CENTER);
         t.setPadding(0, Ui.dp(this, Ui.GAP_MD), 0, 0);
         card.addView(t);
 
         TextView s = Ui.textLh(this,
-                "先在「小米运动健康」里配对手环，回到这里点「同步手环课表」即可把课表读进手机。",
+                "先在「小米运动健康」里把手环连上，再回来点「把课表存进手机」，课表就进来了。",
                 12.5f, Ui.MUTED, false, Ui.LH_BODY);
         s.setGravity(android.view.Gravity.CENTER);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
@@ -601,7 +601,7 @@ public class BandActivity extends Activity {
         sp.topMargin = Ui.dp(this, Ui.GAP_SM);
         card.addView(s, sp);
 
-        Button go = Ui.button(this, "去同步手环课表", true, new View.OnClickListener() {
+        Button go = Ui.button(this, "把课表存进手机", true, new View.OnClickListener() {
             @Override public void onClick(View v) { manualSync(); }
         });
         LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(
@@ -610,7 +610,7 @@ public class BandActivity extends Activity {
         card.addView(go, gp);
 
         // 排障文字链：连不上时它反而更显眼（D7 / R2 —— 常驻入口收进菜单后，这里兜底）
-        TextView link = Ui.textLh(this, "连不上？打开连接调试", Ui.SP_MICRO, Ui.ACCENT,
+        TextView link = Ui.textLh(this, "连不上？点这里一步一步看", Ui.SP_MICRO, Ui.ACCENT,
                 false, Ui.LH_MICRO);
         link.setGravity(android.view.Gravity.CENTER);
         link.setPadding(0, Ui.dp(this, Ui.GAP_MD), 0, 0);
@@ -630,10 +630,10 @@ public class BandActivity extends Activity {
     private void manualSync() {
         final SyncEngine e = SyncEngine.get(this);
         if (!e.hasNode()) {
-            flash("手环未连接，先连接手环", Ui.WARN);
+            flash("手环还没连上，先连一下吧", Ui.WARN);
             return;
         }
-        flash("正在从手环读取课表…", Ui.ACCENT);
+        flash("正在从手环里取课表…", Ui.ACCENT);
         e.sendWake("{\"action\":\"export\"}", new SyncEngine.Reply() {
             @Override public void onReply(String json) {
                 try {
@@ -641,7 +641,7 @@ public class BandActivity extends Activity {
                     JSONObject d = o.optJSONObject("data");
                     final org.json.JSONArray sch = (d == null) ? null : d.optJSONArray("schedule");
                     if (sch == null) {
-                        flash("手环回包里没课表数据", Ui.WARN);
+                        flash("手环里还没有课表", Ui.WARN);
                         return;
                     }
                     e.lastExportJson = json;
@@ -660,20 +660,20 @@ public class BandActivity extends Activity {
                             ScheduleStore.upsertFromWatch(BandActivity.this,
                                     SyncEngine.get(BandActivity.this).currentDeviceId(),
                                     SyncEngine.get(BandActivity.this).currentDeviceName(), name, sch);
-                            flash("课表已同步 ✓" + (name.length() > 0 ? "（" + name + "）" : ""), Ui.OK);
+                            flash("课表已经存好 ✓" + (name.length() > 0 ? "（" + name + "）" : ""), Ui.OK);
                         }
                         @Override public void onTimeout(String h) { store(sch); }
                         @Override public void onError(String m) { store(sch); }
                     });
                 } catch (Throwable t) {
-                    flash("同步失败：回包无法解析", Ui.ERR);
+                    flash("没成功：没读懂手环的回复", Ui.ERR);
                 }
             }
             @Override public void onTimeout(String hint) {
-                flash("读取超时：" + hint, Ui.WARN);
+                flash("等太久了：" + hint, Ui.WARN);
             }
             @Override public void onError(String msg) {
-                flash("同步失败：" + msg, Ui.ERR);
+                flash("没成功：" + msg, Ui.ERR);
             }
         });
     }
@@ -682,23 +682,23 @@ public class BandActivity extends Activity {
         ScheduleStore.upsertFromWatch(BandActivity.this,
                 SyncEngine.get(BandActivity.this).currentDeviceId(),
                 SyncEngine.get(BandActivity.this).currentDeviceName(), "", sch);
-        flash("课表已同步 ✓（课表名未取到，用默认名）", Ui.OK);
+        flash("课表已经存好 ✓（没看到课表名，先用默认名）", Ui.OK);
     }
 
     /** 呼叫手环：双通道（① 系统通知卡 + ② EV {@code action=call}），一路断开另一路兜底。 */
     private void callBand() {
         SyncEngine e = SyncEngine.get(this);
         if (!e.hasNode()) {
-            flash("手环未连接，无法呼叫", Ui.WARN);
+            flash("手环还没连上，叫不醒它", Ui.WARN);
             return;
         }
         flash("正在呼叫手环…", Ui.ACCENT);
         e.ringBand(new SyncEngine.Cb() {
             @Override public void on(boolean ok, String info) {
                 if (ok) {
-                    flash("呼叫已送达 ✓（" + info + "）看看手腕吧", Ui.OK);
+                    flash("叫到手环啦 ✓（" + info + "）看看手腕吧", Ui.OK);
                 } else {
-                    flash("呼叫失败：" + info + "。可到「连接调试」拉起 EV 后重试", Ui.WARN);
+                    flash("呼叫失败：" + info + "。可以到「连不上？」里让手环打开课程表再试", Ui.WARN);
                 }
             }
         });
@@ -719,7 +719,7 @@ public class BandActivity extends Activity {
                             return;
                         }
                         MessageActivity.enqueueOutgoing(BandActivity.this, text);
-                        flash("留言已入队（连上手环后自动补发）", Ui.OK);
+                        flash("留言先存着（连上手环就自动发过去）", Ui.OK);
                     }
                 })
                 .setNegativeButton("取消", null)
@@ -752,7 +752,7 @@ public class BandActivity extends Activity {
                     updateHero();
                     refresh();
                 } else {
-                    flash("连接未完成：" + hint + "\n可到「连接调试」分步排查", Ui.ERR);
+                    flash("还没连上：" + hint + "\n可以点「连不上？」一步一步看", Ui.ERR);
                 }
             }
         });
@@ -794,7 +794,7 @@ public class BandActivity extends Activity {
                     ? " · 电量 " + e.batteryPercent + "%" : ""));
             heroStatusView.setTextColor(Ui.OK);
             // 元信息独立次行：只报 EV 版本 + 课表套数（电量已上移到状态行/指标网格）
-            heroInfoView.setText("EV " + e.versionName + scheduleSetsSuffix(e));
+            heroInfoView.setText("手环课程表 " + e.versionName + scheduleSetsSuffix(e));
             heroInfoView.setTextColor(Ui.MUTED);
             // 两枚等高按钮：呼叫手环（主）+ 同步课表（次）
             heroPrimaryBtn.setText("呼叫手环");
@@ -803,14 +803,14 @@ public class BandActivity extends Activity {
             });
             heroSecondaryBtn.setVisibility(View.VISIBLE);
         } else {
-            heroNameView.setText("未连接手环");
+            heroNameView.setText("还没连上手环");
             heroNameView.setTextColor(Ui.MUTED);
             statusDotView.setBackground(Ui.round(Ui.MUTED, 4, 0, this));
             heroStatusView.setText("未连接");
             heroStatusView.setTextColor(Ui.MUTED);
-            heroInfoView.setText("打开小米运动健康连接手环");
+            heroInfoView.setText("在小米运动健康里连上手环");
             heroInfoView.setTextColor(Ui.MUTED);
-            heroPrimaryBtn.setText("同步手环课表");
+            heroPrimaryBtn.setText("把课表存进手机");
             heroPrimaryBtn.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) { manualSync(); }
             });
@@ -843,7 +843,7 @@ public class BandActivity extends Activity {
             }
             n = (local > 0) ? local : -1;
         }
-        return (n >= 0) ? (" · 课表 " + n + " 套") : "";
+        return (n >= 0) ? (" · 手环里有 " + n + " 份") : "";
     }
 
     /** 按 SyncEngine 的最新设备状态刷新指标网格。未取到的项一律显示「—」，绝不给假数据。 */
@@ -931,10 +931,10 @@ public class BandActivity extends Activity {
             return;
         }
         if (!SyncEngine.get(this).connected()) {
-            flash("手环未连接：请先回首页连接手环", Ui.WARN);
+            flash("手环还没连上：先回首页连一下", Ui.WARN);
             return;
         }
-        flash("正在写入手环…", Ui.MUTED);
+        flash("正在存进手环…", Ui.MUTED);
         SyncEngine.get(this).setNickname(nick, new SyncEngine.Reply() {
             @Override public void onReply(String json) {
                 try {
@@ -944,10 +944,10 @@ public class BandActivity extends Activity {
                         flash("已保存，手环首页昵称已更新", Ui.OK);
                         refresh();
                     } else {
-                        flash("手环拒绝：" + o.optString("reason"), Ui.ERR);
+                        flash("手环说不行：" + o.optString("reason"), Ui.ERR);
                     }
                 } catch (Throwable t) {
-                    flash("回包无法解析：" + json, Ui.ERR);
+                    flash("没读懂手环的回复：" + json, Ui.ERR);
                 }
             }
 
@@ -956,7 +956,7 @@ public class BandActivity extends Activity {
             }
 
             @Override public void onError(String msg) {
-                flash("写入失败：" + msg, Ui.ERR);
+                flash("没存进去：" + msg, Ui.ERR);
             }
         });
     }
