@@ -1050,6 +1050,19 @@ public class HomeActivity extends Activity {
             }
         }
         java.util.List<String> timeSlots = new java.util.ArrayList<>(timeSet);
+        // 2026-11-05 修复（evtask-D-evev-schedul-261105-jf47jt）：LinkedHashSet 保留的是
+        // 课程在数据里的插入顺序（手环导出 JSON 的顺序），不是时间先后 —— 会出现 10:55 置顶、
+        // 12:55 排在 11:20 前、18:50 掉到 19:40 后。统一按「开始时间的当日分钟数」升序；
+        // 解析不出时间的槽位（如占位「全」）排最后，并保持其原有相对顺序（Collections.sort 稳定）。
+        java.util.Collections.sort(timeSlots, new java.util.Comparator<String>() {
+            @Override public int compare(String a, String b) {
+                int[] ma = CourseCache.minutes(a);
+                int[] mb = CourseCache.minutes(b);
+                int va = ma == null ? Integer.MAX_VALUE : ma[0];
+                int vb = mb == null ? Integer.MAX_VALUE : mb[0];
+                return (va < vb) ? -1 : (va > vb ? 1 : 0);
+            }
+        });
         if (timeSlots.isEmpty()) {
             timeSlots.add("全");
         }
@@ -1126,25 +1139,39 @@ public class HomeActivity extends Activity {
             // 调休列按目标星期几取课
             java.util.List<CourseCache.Course> dayList = CourseCache.coursesOfDay(all, override >= 0 ? override : d);
 
-            java.util.Map<String, CourseCache.Course> map = new java.util.LinkedHashMap<>();
+            // 2026-11-05 修复：同一时间槽可能有多门课（合班 / 单双周 / 手环重复导入）。
+            // 原来是 Map<String, Course>，map.put 会把靠前的那门静默覆盖掉；改成按槽位分桶，
+            // 全部保留，多课时合成一个块并显式标注数量，点开可逐门查看。
+            java.util.Map<String, java.util.List<CourseCache.Course>> map =
+                    new java.util.LinkedHashMap<String, java.util.List<CourseCache.Course>>();
             for (CourseCache.Course c : dayList) {
                 String key = CourseCache.shortTime(c.time);
-                map.put(key, c);
+                java.util.List<CourseCache.Course> bucket = map.get(key);
+                if (bucket == null) {
+                    bucket = new java.util.ArrayList<CourseCache.Course>();
+                    map.put(key, bucket);
+                }
+                bucket.add(c);
             }
 
             for (String ts : timeSlots) {
-                CourseCache.Course c = map.get(ts);
-                if (c != null) {
-                    // 当前节：本周 + 今天列 + 现在时刻落在该课时间区间内
+                java.util.List<CourseCache.Course> cs = map.get(ts);
+                if (cs != null && !cs.isEmpty()) {
+                    // 当前节：本周 + 今天列 + 现在时刻落在该槽任一门课的时间区间内
                     boolean current = false;
                     if (thisWeek && d == today) {
-                        int[] m = CourseCache.minutes(c.time);
-                        if (m != null) {
-                            int now = CourseCache.nowMinutes();
-                            current = now >= m[0] && now < m[1];
+                        int now = CourseCache.nowMinutes();
+                        for (CourseCache.Course c : cs) {
+                            int[] m = CourseCache.minutes(c.time);
+                            if (m != null && now >= m[0] && now < m[1]) {
+                                current = true;
+                                break;
+                            }
                         }
                     }
-                    dayCol.addView(courseBlockCompact(c, current));
+                    dayCol.addView(cs.size() == 1
+                            ? courseBlockCompact(cs.get(0), current)
+                            : courseBlockMulti(cs, current));
                 } else {
                     // empty slot
                     View empty = new View(this);
@@ -1205,6 +1232,60 @@ public class HomeActivity extends Activity {
             @Override public void onClick(View v) { showCourseDetail(c); }
         });
         return b;
+    }
+
+    /**
+     * 同一时间槽有多门课时的合并块：行高仍 = ROW_PITCH（与单课块一致，时间轴不错位），
+     * 首行显示第一门课名，次行显式标注「共 N 门 · 点开查看」，点开后可逐门进详情。
+     */
+    private View courseBlockMulti(final java.util.List<CourseCache.Course> cs, boolean current) {
+        LinearLayout b = new LinearLayout(this);
+        b.setOrientation(LinearLayout.VERTICAL);
+        b.setGravity(android.view.Gravity.CENTER);
+        b.setBackground(Ui.courseBlockBg(this, cs.get(0).name, current));
+        int blockH = shortModeHere() ? Ui.BLOCK_H_1CHAR : Ui.BLOCK_H_2LINE;
+        int vMargin = (Ui.ROW_PITCH - blockH) / 2;
+        b.setPadding(Ui.dp(this, 2), Ui.dp(this, Ui.GAP_XS),
+                Ui.dp(this, 2), Ui.dp(this, Ui.GAP_XS));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, blockH));
+        lp.setMargins(Ui.dp(this, Ui.BLOCK_MARGIN), Ui.dp(this, vMargin),
+                Ui.dp(this, Ui.BLOCK_MARGIN), Ui.dp(this, vMargin));
+        b.setLayoutParams(lp);
+        int fg = Ui.courseInk(cs.get(0).name);
+        TextView tv = Ui.textMediumLh(this,
+                CourseCache.displayName(cs.get(0).name, CourseCache.shortNameMode(this)),
+                Ui.SP_CAPTION, fg, Ui.LH_TIGHT);
+        tv.setGravity(android.view.Gravity.CENTER);
+        tv.setSingleLine(true);
+        b.addView(tv);
+        TextView hint = Ui.textLh(this, "共 " + cs.size() + " 门 · 点开查看", Ui.SP_MICRO,
+                (fg & 0x00FFFFFF) | 0xC8000000, false, Ui.LH_TIGHT);
+        hint.setGravity(android.view.Gravity.CENTER);
+        hint.setSingleLine(true);
+        b.addView(hint);
+        b.setClickable(true);
+        b.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { showCoursePicker(cs); }
+        });
+        return b;
+    }
+
+    /** 多课选择：不静默丢课，让每门课都能进详情/编辑。 */
+    private void showCoursePicker(final java.util.List<CourseCache.Course> cs) {
+        String[] names = new String[cs.size()];
+        for (int i = 0; i < cs.size(); i++) {
+            names[i] = cs.get(i).name == null ? "(未命名)" : cs.get(i).name;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("这一节有 " + cs.size() + " 门课")
+                .setItems(names, new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int which) {
+                        showCourseDetail(cs.get(which));
+                    }
+                })
+                .setNegativeButton("关闭", null)
+                .show();
     }
 
     private boolean shortModeHere() {
