@@ -357,27 +357,59 @@ public class DebugActivity extends Activity {
     // ---------- 就地恢复建议条 ----------
 
     private String hintText(int i) {
+        String d = details[i] == null ? "" : details[i];
         switch (i) {
             case 0: return "小米穿戴服务不可用 —— 确认已安装并更新到新版，再回来重试";
             case 1: return "小米运动健康与手环的 BLE 连接久了会自己断开 —— 把它拉到前台即可重连";
-            case 2: return "小米穿戴权限需在小米运动健康里重新授权 —— 打开它确认本 App 已被允许";
+            case 2:
+                // 第 3 步失败有四种完全不同的原因，给的建议也必须不同，
+                // 否则用户会照着错的方向去授权，越弄越乱
+                if (d.contains("未安装")) {
+                    return "手环上没有「EV 课程表」，所以谈不上授权 —— 请先把课程表安装到手环并打开一次，再重试本步。这一步与小米运动健康的授权无关，去那里授权也不会有用";
+                }
+                if (d.contains("签名")) {
+                    return "手机端与手环端的「EV 课程表」签名不一致，小米拒绝对接 —— 请安装与手环同一批签名的手机端版本";
+                }
+                if (d.contains("未在本机配对")) {
+                    return "这台手机还没和手环完成系统配对 —— 打开小米运动健康完成配对并保持连接后重试";
+                }
+                if (d.contains("权限被拒绝")) {
+                    return "手环端拒绝了这次权限申请 —— 请在手环上打开一次「EV 课程表」，让它处于前台后重试";
+                }
+                return "权限申请没有成功 —— 先确认手环已连接、手环上的「EV 课程表」已打开，再重试本步";
             default: return "手环上的 EV 课程表没响应 —— 先把它拉起来再重试";
         }
     }
 
     private String hintBtn(int i) {
+        String d = details[i] == null ? "" : details[i];
         switch (i) {
             case 0: return "打开小米运动健康";
             case 1: return "去重连";
-            case 2: return "去小米运动健康";
+            case 2:
+                // 手环上根本没装课程表时，「去小米运动健康」是个误导按钮
+                if (d.contains("未安装") || d.contains("签名")) {
+                    return "知道了";
+                }
+                return "去小米运动健康";
             default: return "拉起手环 EV";
         }
     }
 
     private View.OnClickListener hintAction(int i) {
+        String d = details[i] == null ? "" : details[i];
         if (i == 3) {
             return new View.OnClickListener() {
                 @Override public void onClick(View v) { launchEv(); }
+            };
+        }
+        if (i == 2 && (d.contains("未安装") || d.contains("签名"))) {
+            // 无需外部动作，收起提示即可
+            return new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    hintBox[2].removeAllViews();
+                    hintBox[2].setVisibility(View.GONE);
+                }
             };
         }
         // 步骤 1/2/3 的恢复手段都是把小米运动健康拉到前台（openMiFitness 已实现，零风险）
