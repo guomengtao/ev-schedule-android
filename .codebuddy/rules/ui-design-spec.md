@@ -1,6 +1,8 @@
-# UI 设计规范（项目规则 · 指针）
+# EV-UI·Android（`ev-ui-android`）· 项目规则指针
 
-**正文唯一真源**：`docs/EV同步器UI设计规范-v1.md`。
+**规范 ID**：`ev-ui-android`（EV-UI 家族 · **仅安卓同步器**；其他平台册见正文「命名法与防冲突约定」）。
+**正文唯一真源**：`docs/EV-UI-Android-v1.md`。
+**本文件只管安卓同步器**；手环快应用 / 网页 / iOS 的 UI 规范请用各自的 `ev-ui-<平台>` 册，不要往本文件加。
 按总纲 §3.5a「正文只写一份」，此处**不重复正文**，只留指针与最低限度的硬约束。
 适用：`apk/src/com/application/watch/classschedule/` 下所有页面与组件，含以后新增页面。
 

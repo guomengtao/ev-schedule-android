@@ -100,7 +100,7 @@ def main():
     mode = "full report" if args.all else "added lines"
     if found:
         print("[ui-spec] %d violation(s) / %d line(s) in %d file(s) (%s). "
-              "See docs/EV同步器UI设计规范-v1.md §6." %
+              "See docs/EV-UI-Android-v1.md (ev-ui-android) §6." %
               (len(found), checked, len(files), mode))
         return 0 if args.all else 1
     print("[ui-spec] OK: %d line(s) checked, 0 violation(s) (%s)." %

@@ -1,6 +1,32 @@
-# EV同步器 UI 设计规范 v1（唯一真源）
+# EV-UI·Android v1 · 安卓同步器 UI 设计规范（唯一真源）
+
+> **规范 ID：`ev-ui-android`** · 家族 `EV-UI` · 当前 `v1.1`
+> 适用范围：**仅 Android 原生同步器**（`ev-schedule-android` 仓，纯 Java View + 手工 `aapt2/javac/d8` 链，目标 Android 8 / EMUI 8）。
+> **不适用于**手环快应用（`.ux`）、网页 / 管理后台、iOS 与桌面端 —— 那些平台若有规范，各自独立成册。
+
+---
+
+## 命名法与防冲突约定（跨平台，先读）
+
+Tom 定的问题：各平台都有 UI 规范，名字会不会撞？答案：**家族 + 平台后缀，一册一 ID，正文各归各仓**。
+
+| 项 | 规则 |
+|---|---|
+| 家族名 | `EV-UI` —— 跨平台的规范族统称，只作品牌，**不指某一册** |
+| 册 ID | `ev-ui-<平台>`，全小写连字符，与仓库名（`ev-schedule-android`）一致 |
+| 本册 | `ev-ui-android`，正文 `docs/EV-UI-Android-v1.md`；升版另建 `v2` 文件，旧版留档不覆盖 |
+| 预留册 | `ev-ui-vela`（手环快应用 192×490 胶囊屏）、`ev-ui-web`（网页 / 后台）、`ev-ui-ios`；**现在都不建**，等各平台真有规范再按同格式建 |
+| 共性层 | 若以后确有跨平台共识（品牌色 / 可访问性底线 / 44dp 热区），另立 `ev-ui-core`，**需 Tom 明确拍板**；现在不建，避免空转 |
+| 防冲突 1 | 每册**只在自己仓库**放唯一正文，只在本仓 `.codebuddy/rules/` 挂指针；**不写进全局总纲**（单 App 项目级规范，总纲 §3.5a） |
+| 防冲突 2 | 用户级 `MEMORY.md` 只放一行「EV-UI 家族索引 + 各册路径」，**不复制任何册正文**；正文永远只有一份 |
+| 防冲突 3 | 版本号各册独立演进，`ev-ui-android v2` 不代表 `ev-ui-vela v2`；提交信息统一带 `ev-ui-android: vN` 标签便于追溯 |
+
+**日常用法**：说「按 `ev-ui-android` 走」＝ 打开本文 + 页面全程取 `Ui.java` token + 提交前跑 `tools/check-ui-spec.py`。改任何安卓页面、写任何新页面设计稿，先报这个 ID。
+
+---
 
 > 生效：2026-11-05 17:04 +0800 · 单号 `evtask-D-evev-schedul-261105-47k334`
+> 命名 + 首页 Pilot：2026-11-05 17:23 +0800 · 单号 `evtask-D-evev-schedul-261105-cvh8cu`
 > 适用：`apk/src/com/application/watch/classschedule/**/*.java` 的**所有页面与组件**，含以后新增的页面。
 > **本文是「以后设计各个页面」的唯一规范。** 任何新的「XX 页全新设计方案」不得另起炉灶，只能作为本文附录或修订。
 > 更高层规则优先：总纲 §3.14 Lucide 图标铁律、`.trae/rules/project_rules.md` 的 Icon Policy（禁止 emoji / Unicode 符号当图标）。本文只管视觉与结构。
@@ -104,11 +130,33 @@ Ui.text(c, "标题", 17f, Ui.TEXT, true); // ✗ 中文标题用 bold → Ui.tex
 | `BLOCK_H_2LINE / BLOCK_H_1CHAR` | 44 / 40 dp | 双行块 / 单字块 |
 | `BLOCK_MARGIN / COL_PAD` | 1 / 1 dp | 天列与课程块横向缝 |
 
-### 3.4 课程区分色（7 色，按课名 hash 稳定）
+### 3.4 课程区分色（v1.1 已落地 · 首页 Pilot）
 
-`#5B6CF9` `#33C77A` `#FF9E42` `#9C6BF7` `#35C4D6` `#FF7AA8` `#FF6B6B`
+**三组 token 由 `Ui.courseIndex(name)` 统一取下标，同一门课永远对齐；页面只调 `Ui.courseBlockBg()` / `Ui.courseInk()`，不许自己拼颜色。**
 
-> **v1 待改（P1）**：这组高饱和纯色块是「老土 / 花」的最大来源。改为降饱和 + 浅底深字，或统一色相只用明度区分；只改 `Ui.COURSE_COLORS` 一组常量，页面零改动。文字色必须走 `Ui.onCourseColor(bg)`。
+| 色系 | 身份色 `COURSE_COLORS`（色条 / 小组件 / 编辑网格） | 浅底 `COURSE_SURFACE_COLORS` | 深字 `COURSE_INK_COLORS` |
+|---|---|---|---|
+| 蓝 | `#5B6CF9` | `#EDF1FE` | `#3A55C8` |
+| 绿 | `#33C77A` | `#E7F7EE` | `#1E8A55` |
+| 橙 | `#FF9E42` | `#FFF1E2` | `#B2650F` |
+| 紫 | `#9C6BF7` | `#F3ECFE` | `#7444C4` |
+| 青 | `#35C4D6` | `#E5F6F9` | `#137A90` |
+| 粉 | `#FF7AA8` | `#FDEBF2` | `#B24570` |
+| 红 | `#FF6B6B` | `#FDECEC` | `#B24545` |
+
+| 用途 | 唯一入口 |
+|---|---|
+| 课程块底 | `Ui.courseBlockBg(c, name, current)`：浅底 + 左侧 `COURSE_BAR_DP = 4dp` 身份色条 + 今天 2dp `ACCENT` 描边 |
+| 课名 / 地点 | `Ui.courseInk(name)`；地点沿用其 alpha 变体 |
+| elevation | `Ui.E0 = 0 / E1 = 4 / E2 = 8`（新代码禁止直接 `setElevation`） |
+
+> **为什么是「加两组新 token」而不是改 `COURSE_COLORS`**：后者同时被 `TodayWidgetProvider` / `NextWidgetProvider` 的色条、`WeekEditGrid` 的填充使用，直接改成浅色会让小组件发灰、编辑网格失去区分度。保留旧常量的语义、只给课程块换底，才是零回归的改法 —— 这正是 §3.5「新增 token 先改 `Ui.java`」的示范。
+> **为什么留 4dp 色条**：全浅底会丢掉「一眼分辨哪门课」的能力；用极小面积保留识别度，把 7 色高饱和从约 90% 面积压到约 8%。
+> **深色主题**：另有 `COURSE_SURFACE_DARK_COLORS`（夜幕蓝系深底），`Ui.courseBlockBg()` 按 `isDark()` 自动选底，`Ui.courseInk()` 在深底上改用亮身份色 —— 不允许「一套浅底走天下」，那是规范要防的漂移。
+
+| 深色底（与浅色一一对应） |
+|---|
+| `#1B2545` `#16302A` `#332718` `#271C40` `#153038` `#331E29` `#331E1E` |
 
 ### 3.5 新增 token 的流程
 
@@ -121,7 +169,7 @@ Ui.text(c, "标题", 17f, Ui.TEXT, true); // ✗ 中文标题用 bold → Ui.tex
 | 层 | 现状 | v1 规则 |
 |---|---|---|
 | 字体 / 字重 | 无任何 `ttf/otf`，系统黑体；只有 NORMAL / BOLD / `sans-serif-medium` | 短期：`textMedium*` + 行高分层，标题加 `letterSpacing`；中期评估一份可变字重中文字体（先看包体） |
-| Elevation | 散落 3/4/6/8 dp，无层级语义 | 收敛三档：`E0` 平（0）/ `E1` 卡片（4dp）/ `E2` 浮层与吸底条（8dp）。页面禁止直接 `setElevation` |
+| Elevation | 散落 3/4/6/8 dp，无层级语义 | 收敛三档：`E0` 平（0）/ `E1` 卡片（4dp）/ `E2` 浮层与吸底条（8dp）。页面禁止直接 `setElevation`。**v1.1 已在 `Ui.java` 定义 `E0/E1/E2`** |
 | Motion / 状态 | 仅少数 `RippleDrawable` | 点击必须有按压态；统一时长 120 / 200 / 300ms；页面转场与数值变化用同一条曲线；禁止无反馈点击 |
 | 空状态 / 状态栏 / 反馈 | 裸文字空状态；EMUI 灰状态栏；结果条与触发控件分离 | 空状态统一「图标 24dp + 一句主文案 + 可选动作」；状态栏背景跟 `BG`，**不做透明状态栏**（EMUI 8 兼容坑）；反馈就地化：结果与触发控件同容器，禁止全局 `resultView`（设置页 v0.5.152 原则 / 高级版页方案 D6） |
 
@@ -202,7 +250,7 @@ python3 tools/check-ui-spec.py --all    # 全量报告，只看迁移进度，�
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | **P0** | 本文 + `.codebuddy/rules/ui-design-spec.md` 规则入口 + `tools/check-ui-spec.py`；**新代码立即强制** | ✅ 本次落地 |
-| **P1** | `COURSE_COLORS` 降饱和；字重分层；`E0/E1/E2` 三档写进 `Ui.java`；状态栏背景统一；把校验规则扩到 elevation | ⬜ 下次改版 |
+| **P1** | `COURSE_COLORS` 降饱和；字重分层；`E0/E1/E2` 三档写进 `Ui.java`；状态栏背景统一；把校验规则扩到 elevation | 🟢 **部分完成（v1.1 首页 Pilot）**：降饱和 + `E0/E1/E2` 已落地并编译通过；字重分层沿用 `textMedium*`；状态栏 / 校验扩规则仍待做 |
 | **P2** | 可变字重字体（先评估包体）、motion 规范、空状态组件化、`ev map` 登记 lint 字段 | ⬜ 可选 |
 
 **P0–P2 全程不引入第三方 UI 库**（§1 已定案）。
@@ -214,3 +262,6 @@ python3 tools/check-ui-spec.py --all    # 全量报告，只看迁移进度，�
 | 日期 (+0800) | 版本 | 改动 | 单号 |
 |---|---|---|---|
 | 2026-11-05 17:04 | v1 | 首版：确立 `Ui.java` 唯一真源、token 表、页面骨架、防回归硬约束、硬编码禁令 + 存量豁免、机器校验、AI 工作流、迁移路线 | `evtask-D-evev-schedul-261105-47k334` |
+| 2026-11-05 17:23 | v1.1 | 正式命名 `EV-UI·Android / ev-ui-android` + 跨平台命名法与防冲突约定；首页 Pilot 落地课表块降饱和（新增 `COURSE_SURFACE_COLORS` / `COURSE_INK_COLORS` / `COURSE_BAR_DP` / `E0/E1/E2` 与 `courseBlockBg` 工厂） | `evtask-D-evev-schedul-261105-cvh8cu` |
+
+**附录 A**：[首页 Pilot 设计图（前后对照）](EV-UI-Android-附录A-首页Pilot设计图.html) —— 规范的设计态验证，**不是**新的「XX 页全新设计方案」。
