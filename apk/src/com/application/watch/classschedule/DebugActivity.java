@@ -41,8 +41,8 @@ public class DebugActivity extends Activity {
     private static final String[] SUBS = {
             "装好并打开过一次「小米运动健康」就行",
             "手环上点「连接到新手机」，再在小米运动健康里配对好",
-            "在手环上呼起课程表，并申请通知权限",
-            "ping 一下手环上的课程表"
+            "在手环上打开课程表，让它能给你发提醒",
+            "看看手环上的课程表在不在"
     };
 
     private final int[] states = new int[STEPS];
@@ -385,7 +385,7 @@ public class DebugActivity extends Activity {
                     return "手环这次没同意申请 —— 在手环上点开一次「EV 课程表」，让它停在前台，再回来重试就好。";
                 }
                 return "这步还没成功 —— 确认手环已连接、手环上的「EV 课程表」已经点开，再重试一次试试～";
-            default: return "手环上的 EV 课程表没响应 —— 先把它拉起来再重试";
+            default: return "手环上的课程表没反应 —— 先在手环上打开它，再重试";
         }
     }
 
