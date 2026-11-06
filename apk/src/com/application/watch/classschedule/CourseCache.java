@@ -258,12 +258,79 @@ public final class CourseCache {
         TodayWidgetProvider.refreshAll(c);
     }
 
-    /** 按单字模式取显示名（关 = 原名；开 = 第一个字） */
-    public static String displayName(String name, boolean shortMode) {
-        if (shortMode && name != null && name.length() > 1) {
-            return name.substring(0, 1);
+    /**
+     * 语义缩写表：课程名关键字 → 单字。匹配时取「命中的最长关键字」，与声明顺序无关。
+     * 目的：替换原来的 name.substring(0,1) 首字截断——那样「大学英语」「大学物理」都变成「大」。
+     */
+    private static final String[][] SHORT_RULES = {
+            {"高等数学", "数"}, {"数学分析", "数"}, {"高数", "数"},
+            {"线性代数", "线"}, {"线代", "线"},
+            {"概率论", "概"}, {"数理统计", "统"},
+            {"大学英语", "英"}, {"综合英语", "英"}, {"英语", "英"},
+            {"大学物理", "物"}, {"物理", "物"},
+            {"计算机网络", "网"}, {"计网", "网"}, {"网络", "网"},
+            {"数据结构", "构"}, {"操作系统", "系"}, {"编译原理", "编"},
+            {"程序设计", "程"}, {"数据库", "库"}, {"组成原理", "组"},
+            {"电子电路", "电"}, {"电路", "电"}, {"力学", "力"},
+            {"体育", "体"}, {"语文", "语"}, {"化学", "化"}, {"生物", "生"},
+            {"历史", "史"}, {"地理", "地"}, {"政治", "政"}, {"哲学", "哲"},
+            {"音乐", "乐"}, {"美术", "美"}, {"心理", "心"},
+            {"经济", "经"}, {"管理", "管"}, {"会计", "会"}, {"金融", "金"},
+            {"新闻", "闻"}, {"法学", "法"}, {"医学", "医"},
+    };
+
+    /** 语义缩写：命中映射表取对应单字，未命中回退首字（与旧行为一致，不会更差） */
+    public static String semanticShort(String name) {
+        if (name == null || name.length() == 0) {
+            return "";
         }
-        return name == null ? "" : name;
+        if (name.length() == 1) {
+            return name;
+        }
+        String bestKey = null;
+        String bestChar = null;
+        for (String[] r : SHORT_RULES) {
+            if (name.contains(r[0]) && (bestKey == null || r[0].length() > bestKey.length())) {
+                bestKey = r[0];
+                bestChar = r[1];
+            }
+        }
+        return bestChar != null ? bestChar : name.substring(0, 1);
+    }
+
+    /** 按单字模式取显示名（关 = 原名；开 = 语义缩写） */
+    public static String displayName(String name, boolean shortMode) {
+        if (name == null) {
+            return "";
+        }
+        return shortMode ? semanticShort(name) : name;
+    }
+
+    /**
+     * 带同屏上下文的显示名：缩写与本屏其他课撞字时，该格回退全名（宁占空间，不丢信息）。
+     * 仅首页周网格等「知道同屏还有哪些课」的地方使用；插件等单格场景仍走两参版本。
+     */
+    public static String displayName(String name, boolean shortMode,
+                                     java.util.Collection<String> siblings) {
+        if (name == null) {
+            return "";
+        }
+        if (!shortMode) {
+            return name;
+        }
+        String s = semanticShort(name);
+        if (s.length() != 1 || siblings == null) {
+            return s;
+        }
+        for (String other : siblings) {
+            if (other == null || other.equals(name)) {
+                continue;
+            }
+            if (s.equals(semanticShort(other))) {
+                return name;
+            }
+        }
+        return s;
     }
 
     public static int todayIndex() {
