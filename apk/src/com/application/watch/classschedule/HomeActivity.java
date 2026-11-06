@@ -969,11 +969,38 @@ public class HomeActivity extends Activity {
         mon.add(java.util.Calendar.DAY_OF_MONTH, -CourseCache.todayIndex() + weekOffset * 7);
         java.util.Calendar sun = (java.util.Calendar) mon.clone();
         sun.add(java.util.Calendar.DAY_OF_MONTH, 6);
+        // 非本周整体降透明度：翻到别的周时视觉上明显不同于本周，避免误认（点击不受影响）
+        if (weekBox != null) {
+            weekBox.setAlpha(weekOffset == 0 ? 1f : 0.55f);
+        }
         if (weekLabelView != null) {
-            weekLabelView.setText((mon.get(java.util.Calendar.MONTH) + 1) + "."
+            String label = (mon.get(java.util.Calendar.MONTH) + 1) + "."
                     + mon.get(java.util.Calendar.DAY_OF_MONTH) + "-"
                     + (sun.get(java.util.Calendar.MONTH) + 1) + "."
-                    + sun.get(java.util.Calendar.DAY_OF_MONTH));
+                    + sun.get(java.util.Calendar.DAY_OF_MONTH);
+            // 周标签带假期痕迹：本屏 7 天里有假期打「休」、有调休打「班」，
+            // 不用翻到具体格子就知道这周值不值得看（假期功能关闭时不加标记）
+            if (Holiday.enabled(this)) {
+                int hdCnt = 0;
+                int wkCnt = 0;
+                for (int i = 0; i < 7; i++) {
+                    java.util.Calendar d = (java.util.Calendar) mon.clone();
+                    d.add(java.util.Calendar.DAY_OF_MONTH, i);
+                    int r = Holiday.resolveDay(this, d);
+                    if (r == Holiday.HOLIDAY) {
+                        hdCnt++;
+                    } else if (r >= 0) {
+                        wkCnt++;
+                    }
+                }
+                if (hdCnt > 0) {
+                    label += " · 休";
+                }
+                if (wkCnt > 0) {
+                    label += " · 班";
+                }
+            }
+            weekLabelView.setText(label);
         }
         renderFocusCard();
 
