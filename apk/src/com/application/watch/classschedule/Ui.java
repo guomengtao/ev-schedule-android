@@ -249,7 +249,9 @@ public final class Ui {
         WARN = p[10];
         ERR = p[11];
         // custom palette has no ON_ACCENT / OK_LIGHT / WARN_LIGHT → always use system palette
-        ON_ACCENT = p[12];
+        // ★ 但 onAccent 不能直接沿用系统白字：自定义主题的 ACCENT 多为浅色（浅青/暖阳米/#8FB4FF…），
+        //   白字压上去实测仅 1.87:1，10 套里 9 套不达标 → 按 ACCENT 亮度自动取深/浅字
+        ON_ACCENT = (custom != null) ? inkOn(ACCENT) : p[12];
         OK_LIGHT = p[13];
         WARN_LIGHT = p[14];
         // 系统控件（Switch / AlertDialog / EditText 光标等）也要跟着换：
@@ -268,6 +270,30 @@ public final class Ui {
             lastPaletteFp = fp;
             themeVersion++;
         }
+    }
+
+    /**
+     * 给定底色，返回对比度更高的前景色（深墨 #0F172A 或 纯白）。
+     * 自定义主题没有 onAccent，主按钮/选中态的字色必须跟着 ACCENT 亮度走，
+     * 否则浅色主题下就是白字压浅底（实测 1.87:1，远低于 4.5:1 门槛）。
+     */
+    static int inkOn(int bg) {
+        double l = relLuma(bg);
+        double white = 1.05 / (l + 0.05);
+        double black = (l + 0.05) / 0.05;
+        return white >= black ? 0xFFFFFFFF : 0xFF0F172A;
+    }
+
+    /** WCAG 相对亮度 */
+    private static double relLuma(int c) {
+        double r = srgb(((c >> 16) & 0xFF) / 255.0);
+        double g = srgb(((c >> 8) & 0xFF) / 255.0);
+        double b = srgb((c & 0xFF) / 255.0);
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+
+    private static double srgb(double v) {
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
     }
 
     /** 当前生效色板（含深浅模式）的指纹，用于判断主题是否真的发生变化 */
