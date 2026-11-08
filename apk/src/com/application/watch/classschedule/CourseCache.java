@@ -255,8 +255,9 @@ public final class CourseCache {
     /** 单字模式：课表/小插件里课程名只显示第一个字（语/数/英）。用户打开后记住。 */
     public static boolean shortNameMode(Context c) {
         try {
+            // 默认开：周网格列窄，全名一律两行截断，短名（单字/两字）才是能扫的默认态
             return c.getSharedPreferences(PREF, Context.MODE_PRIVATE)
-                    .getBoolean("short_name_mode", false);
+                    .getBoolean("short_name_mode", true);
         } catch (Throwable t) {
             return false;
         }

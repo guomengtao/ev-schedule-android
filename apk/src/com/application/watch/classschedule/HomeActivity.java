@@ -1544,8 +1544,8 @@ public class HomeActivity extends Activity {
         editBtn.setImageResource(R.drawable.ic_pencil);
         editBtn.setColorFilter(Ui.ACCENT);
         editBtn.setBackground(Ui.round(Ui.CARD2, Ui.R_CTRL, Ui.LINE, this));
-        // 热区 44dp：视觉图标 20dp + padding 12
-        editBtn.setPadding(Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12));
+        // 热区 44dp：视觉图标 22dp + padding 11（原 20dp 在网格旁偏小，铅笔看不清）
+        editBtn.setPadding(Ui.dp(this, 11), Ui.dp(this, 11), Ui.dp(this, 11), Ui.dp(this, 11));
         editBtn.setClickable(true);
         editBtn.setContentDescription("编辑课表");
         editBtn.setOnClickListener(new View.OnClickListener() {
