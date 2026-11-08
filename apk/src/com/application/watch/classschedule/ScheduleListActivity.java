@@ -136,7 +136,7 @@ public class ScheduleListActivity extends Activity {
         deviceBar = new LinearLayout(this);
         deviceBar.setOrientation(LinearLayout.HORIZONTAL);
         deviceBar.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        deviceBar.setBackground(Ui.round(Ui.CARD2, 14, Ui.LINE, this));
+        deviceBar.setBackground(Ui.round(Ui.CARD2, Ui.R_CARD, Ui.LINE, this));
         deviceBar.setPadding(Ui.dp(this, 12), Ui.dp(this, 9), Ui.dp(this, 12), Ui.dp(this, 9));
         deviceBar.setClickable(true);
         deviceBar.setOnClickListener(new View.OnClickListener() {
@@ -420,7 +420,48 @@ public class ScheduleListActivity extends Activity {
             listBox.addView(groupHeader("自己的课表", local.size(), "local"));
             addGroupBody("local", local, activeId);
         }
+        listBox.addView(newScheduleHint());
         refreshSyncView();
+    }
+
+    /**
+     * 列表尾部的「新建一套课表」引导卡。
+     *
+     * <p>只有一个班时，列表下面是大片空白，新建入口又只藏在右上角 ⊕ 里；这里给一条虚线感
+     * 的空白卡，既补上视觉收尾，也把「另一个班/另一学期各存一份，各自有晚课」讲清楚。
+     */
+    private View newScheduleHint() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(android.view.Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setColor(0x00000000);
+        g.setCornerRadius(Ui.dp(this, Ui.R_CARD));
+        g.setStroke(Math.max(1, Ui.dp(this, 1)), 0xFFD5D9E4,
+                Ui.dp(this, 6), Ui.dp(this, 6));   // 虚线：dashWidth / dashGap
+        card.setBackground(g);
+        card.setPadding(Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14));
+        card.setClickable(true);
+        card.setContentDescription("新建一套课表");
+
+        TextView t1 = Ui.textMediumLh(this, "＋ 新建一套课表", Ui.SP_SUBTITLE, Ui.ACCENT, Ui.LH_SUBTITLE);
+        t1.setGravity(android.view.Gravity.CENTER);
+        card.addView(t1);
+        TextView t2 = Ui.text(this, "另一个班、另一学期各存一份，晚课互不影响",
+                Ui.SP_MICRO, Ui.MUTED, false);
+        t2.setGravity(android.view.Gravity.CENTER);
+        t2.setPadding(0, Ui.dp(this, 4), 0, 0);
+        card.addView(t2);
+
+        card.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { createLocal(); }
+        });
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setPadding(0, Ui.dp(this, 2), 0, Ui.dp(this, 8));
+        wrap.addView(card, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        return wrap;
     }
 
     /** 渲染某分组的课程卡片：默认渲染（collapsedGroups 为空 = 全部展开，D2），
@@ -559,16 +600,22 @@ public class ScheduleListActivity extends Activity {
                 ? Ui.round(Ui.CARD, Ui.R_CARD, Ui.ACCENT, this)
                 : Ui.round(Ui.CARD, Ui.R_CARD, Ui.LINE, this));
 
-        // 当前课表：左缘 4dp 主色竖条（只圆左侧两角，与卡片左缘严丝合缝）
+        // 当前课表：左缘 4dp 主色竖条。
+        // 毛刺根因：竖条只有 4dp 宽，GradientDrawable 的圆角半径会被 clamp 到「半宽」(2dp)，
+        // 于是它比卡片 (R_CARD≈12dp) 的圆角更方 —— 左上/左下圆角处就顶出卡片轮廓，
+        // 露出一小截尖角 + 一道白缝。
+        // 修法：竖条画成纯色直角矩形，圆角交给父卡裁剪（setClipToOutline + 圆角 outline），
+        // 这样竖条的弧线必然与卡片外轮廓完全同心，不会再溢出。
         if (active) {
+            card.setClipToOutline(true);
+            card.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                @Override public void getOutline(View v, android.graphics.Outline o) {
+                    o.setRoundRect(0, 0, v.getWidth(), v.getHeight(),
+                            Ui.dp(ScheduleListActivity.this, Ui.R_CARD));
+                }
+            });
             View strip = new View(this);
-            android.graphics.drawable.GradientDrawable g =
-                    new android.graphics.drawable.GradientDrawable();
-            g.setColor(Ui.ACCENT);
-            float r = Ui.dp(this, Ui.R_CARD);
-            // 顺序：左上 右上 右下 左下
-            g.setCornerRadii(new float[]{r, r, 0, 0, 0, 0, r, r});
-            strip.setBackground(g);
+            strip.setBackgroundColor(Ui.ACCENT);
             card.addView(strip, new LinearLayout.LayoutParams(
                     Ui.dp(this, 4), LinearLayout.LayoutParams.MATCH_PARENT));
         }
@@ -584,8 +631,8 @@ public class ScheduleListActivity extends Activity {
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
-        TextView titleView = Ui.textMediumLh(this, s.name, Ui.SP_TITLE,
-                active ? Ui.ACCENT : Ui.TEXT, Ui.LH_TITLE);
+        // 标题一律深色：身份由「主色描边 + 左竖条 + 使用中」三处表达，标题再上蓝色只会削层级
+        TextView titleView = Ui.textMediumLh(this, s.name, Ui.SP_TITLE, Ui.TEXT, Ui.LH_TITLE);
         titleView.setSingleLine(true);
         titleView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         head.addView(titleView,
