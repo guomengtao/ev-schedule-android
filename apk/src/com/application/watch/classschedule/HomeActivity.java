@@ -51,6 +51,23 @@ public class HomeActivity extends Activity {
     // ---- EV 新首页视图 ----
     private TextView scheduleNameView, miniStatusView;
     private LinearLayout weekBox, errorCard, quickBox;
+    /** 今日课程列表容器（首页 = 当天视图；完整周课表在 EXTRA_VIEW=week 模式里） */
+    private LinearLayout todayBox;
+    /** 日期头：主行「11月8日 周日」/ 副行「今天 3 节课 · 第 10 周」 */
+    private TextView dateTitleView, dateSubView;
+
+    /**
+     * 视图模式（2026-11-08 首页改版，evtask-D-ev-schedule--261108-e8q4tv）。
+     *
+     * <p>为什么复用同一个 Activity 而不是新建 WeekActivity：周课表渲染（renderWeek /
+     * weekGridWithTime）与首页共享 20+ 个字段和 300+ 行逻辑，搬出去要么大量复制、
+     * 要么做大重构；而两者共用同一份数据源与主题，只是「显示哪一块」不同。
+     * 用启动参数切换渲染分支，零复制、零搬移，风险最小。
+     */
+    public static final String EXTRA_VIEW = "view";
+    public static final String VIEW_WEEK = "week";
+    /** true = 本次是「只看周课表」模式：不建首页块、不连蓝牙、不跑升级检查 */
+    private boolean weekOnly;
     private TextView hintView;
     private int phase = PHASE_CONNECT;
 
@@ -110,11 +127,17 @@ public class HomeActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         legacy = !Variant.isEv(this);
+        weekOnly = VIEW_WEEK.equals(getIntent().getStringExtra(EXTRA_VIEW));
         if (!legacy) {
             // 数据层兜底：旧缓存迁移 / 出厂默认课表（保证首页永远有课表可看）
             ScheduleStore.ensureInitialized(this);
         }
         buildUi();
+        // 周课表模式是纯只读视图：不注册状态回调、不拉前台服务、不检查升级、不连蓝牙。
+        // 这样从首页点进来不会触发一次连接（用户只是来看课表的）。
+        if (weekOnly) {
+            return;
+        }
         // 状态回调（onCreate 注册一次；onResume 不重复注册，多监听列表会堆积）：
         // 真实套数读到后 / 连接状态变化时，迷你条自动刷新
         if (!legacy) {
@@ -201,24 +224,34 @@ public class HomeActivity extends Activity {
             buildLegacyUi();
             return;
         }
+        if (weekOnly) {
+            buildWeekOnlyUi();
+            return;
+        }
         LinearLayout root = Ui.screen(this);
         // 首页专属边距：左右 16 / 上 8（Ui.screen 的 20/12 偏松；不动全局方法，只在此覆盖）
         root.setPadding(Ui.dp(this, Ui.GAP_LG), Ui.dp(this, Ui.GAP_SM),
                 Ui.dp(this, Ui.GAP_LG), Ui.dp(this, Ui.GAP_SM));
 
+        // ---- 日期头：一眼回答「今天几号、星期几、第几周、几节课」----
+        // 手环首页第一屏也是这三件事，同步器对齐它，用户不用在两台设备上换脑子。
+        buildDateHead(root);
+        root.addView(Ui.space(this, Ui.GAP_MD));
+
         // ---- §D2 焦点卡「接下来」：把「我现在该干嘛」从"两次定位"变"一次阅读" ----
         focusCardView = new LinearLayout(this);
         focusCardView.setOrientation(LinearLayout.VERTICAL);
         root.addView(focusCardView);
-        root.addView(Ui.space(this, Ui.GAP_LG));
+        root.addView(Ui.space(this, Ui.GAP_MD));
 
-        // ---- 头部：本周课表 + 周切换（周导航行，位于焦点卡之下）----
-        buildHeader(root);
+        // ---- 今日课程列表（首页只放当天；完整周课表走 EXTRA_VIEW=week 的独立页）----
+        todayBox = new LinearLayout(this);
+        todayBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(todayBox);
+        root.addView(Ui.space(this, Ui.GAP_MD));
 
-        // ---- 周课表网格（§D3 日期条已下沉为网格卡表头，删掉网格内重复星期行）----
-        weekBox = new LinearLayout(this);
-        weekBox.setOrientation(LinearLayout.VERTICAL);
-        root.addView(weekBox);
+        // ---- 周课表入口 ----
+        root.addView(buildWeekEntry());
         root.addView(Ui.space(this, Ui.GAP_LG));
 
         // ---- 快捷操作 2×2（呼叫手环 / 上课了 / 留言 / 下课了）----
@@ -333,6 +366,46 @@ public class HomeActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 44)));
         setContentView(Ui.wrapWithBottomBar(this, root, 0));
         bindStickyDateStrip(root);
+        renderToday();
+    }
+
+    /**
+     * 周课表独立页（EXTRA_VIEW=week）。
+     *
+     * <p>复用 buildHeader：那里建出 pageTitleView / weekLabelView / 周导航箭头，
+     * 而 renderWeek() 会无条件改写 pageTitleView（没有 null 检查），所以这里必须先把它们建好。
+     * 顶部额外加一行「‹ 首页」返回——它是页面级导航，和右侧周切换不是同一层。
+     */
+    private void buildWeekOnlyUi() {
+        LinearLayout root = Ui.screen(this);
+        root.setPadding(Ui.dp(this, Ui.GAP_LG), Ui.dp(this, Ui.GAP_SM),
+                Ui.dp(this, Ui.GAP_LG), Ui.dp(this, Ui.GAP_SM));
+
+        LinearLayout backRow = new LinearLayout(this);
+        backRow.setOrientation(LinearLayout.HORIZONTAL);
+        backRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView back = Ui.textMediumLh(this, "‹ 首页", Ui.SP_BODY, Ui.ACCENT, Ui.LH_BODY);
+        back.setPadding(Ui.dp(this, 0), Ui.dp(this, Ui.GAP_SM),
+                Ui.dp(this, Ui.GAP_LG), Ui.dp(this, Ui.GAP_SM));
+        back.setBackground(Ui.round(Ui.CARD2, Ui.R_CTRL, 0, this));
+        back.setClickable(true);
+        back.setContentDescription("返回首页");
+        back.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { finish(); }
+        });
+        backRow.addView(back, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        root.addView(backRow);
+
+        buildHeader(root);
+
+        weekBox = new LinearLayout(this);
+        weekBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(weekBox);
+        root.addView(Ui.space(this, Ui.GAP_LG));
+
+        setContentView(Ui.wrapWithBottomBar(this, root, 0));
+        bindStickyDateStrip(root);
         renderWeek();
     }
 
@@ -342,6 +415,219 @@ public class HomeActivity extends Activity {
      * 类注释里早就承诺过这一块，但 quickBox 字段声明后 buildUi 从未渲染 → 首页根本点不到。
      * 指令沿用 quickSend 已验证过的 action=call（手环侧收得到并弹通知），仅换文案。
      */
+    // ================= 首页「今天」视图 =================
+    // 为什么改（evtask-D-ev-schedule--261108-e8q4tv）：手环首页第一屏就是「今天几节课、
+    // 现在哪节」，同步器却在首屏平铺整周网格 —— 同一件事在两台设备上是两种看法。
+    // 改后首页=今天，完整周课表走 EXTRA_VIEW=week 的独立页，两边心智一致。
+
+    /** 日期头：主行「11月8日 周日」，副行「今天 3 节课」。 */
+    private void buildDateHead(LinearLayout root) {
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.VERTICAL);
+        dateTitleView = Ui.textMediumLh(this, "", Ui.SP_DISPLAY, Ui.TEXT, Ui.LH_DISPLAY);
+        head.addView(dateTitleView);
+        dateSubView = Ui.textLh(this, "", Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
+        dateSubView.setPadding(0, Ui.dp(this, 3), 0, 0);
+        head.addView(dateSubView);
+        root.addView(head);
+    }
+
+    /** 周课表入口：首页不放网格了，入口必须显眼，否则用户以为周课表被删了。 */
+    private View buildWeekEntry() {
+        LinearLayout btn = new LinearLayout(this);
+        btn.setOrientation(LinearLayout.HORIZONTAL);
+        btn.setGravity(android.view.Gravity.CENTER);
+        btn.setBackground(Ui.round(Ui.CARD, Ui.R_CTRL, Ui.LINE, this));
+        btn.setPadding(Ui.dp(this, Ui.GAP_MD), Ui.dp(this, 12),
+                Ui.dp(this, Ui.GAP_MD), Ui.dp(this, 12));
+        btn.setClickable(true);
+        btn.setContentDescription("查看完整周课表");
+        btn.addView(Ui.textMediumLh(this, "查看完整周课表", Ui.SP_BODY, Ui.ACCENT, Ui.LH_BODY));
+        btn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(HomeActivity.this, HomeActivity.class)
+                        .putExtra(EXTRA_VIEW, VIEW_WEEK));
+            }
+        });
+        return btn;
+    }
+
+    /** 首页首次渲染 + 每次数据变化后的刷新入口（周模式仍走 renderWeek）。 */
+    private void renderToday() {
+        if (legacy) {
+            return;
+        }
+        renderFocusCard();
+        renderTodayHead();
+        renderTodayList();
+        applyQuickBoxVisibility();
+    }
+
+    /**
+     * 数据变化后的统一刷新入口。
+     *
+     * <p>不能直接把各处的 renderWeek() 全换成 renderToday()：周模式那些调用来自
+     * 周导航箭头和短名开关，必须重绘网格；而导入课表 / onResume 回来这两种
+     * 在两种模式下都要刷新，只是刷的东西不同。
+     */
+    private void renderContent() {
+        if (weekOnly) {
+            renderWeek();
+        } else {
+            renderToday();
+        }
+    }
+
+    private void renderTodayHead() {
+        try {
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            String[] wk = {"周日", "周一", "周二", "周三", "周四", "周五", "周六"};
+            String main = (cal.get(java.util.Calendar.MONTH) + 1) + "月"
+                    + cal.get(java.util.Calendar.DAY_OF_MONTH) + "日 "
+                    + wk[cal.get(java.util.Calendar.DAY_OF_WEEK) - 1];
+            String sub;
+            if (Holiday.resolveToday(this) == Holiday.HOLIDAY) {
+                sub = "假期 · 今天没有课";
+            } else {
+                int n = todayCourses().size();
+                sub = n == 0 ? "今天没有课" : "今天 " + n + " 节课";
+            }
+            if (dateTitleView != null) {
+                dateTitleView.setText(main);
+            }
+            if (dateSubView != null) {
+                dateSubView.setText(sub);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 当天课程（按开始时间升序）。
+     *
+     * <p>调休重定向必须与 renderFocusCard / 周网格取课口径一致：调休日（如周日补周三课）
+     * 按「今天真实星期几」取会取到空，于是日期头说「今天没有课」而上方焦点卡说有课，
+     * 同屏自相矛盾。resolveToday() 返回 0..6 时以它为准。
+     */
+    private java.util.List<CourseCache.Course> todayCourses() {
+        java.util.List<CourseCache.Course> out = new java.util.ArrayList<CourseCache.Course>();
+        try {
+            ScheduleStore.Schedule s = ScheduleStore.active(this);
+            if (s == null) {
+                return out;
+            }
+            int dayIdx = CourseCache.todayIndex();
+            int overrideToday = Holiday.resolveToday(this);
+            if (overrideToday >= 0) {
+                dayIdx = overrideToday;
+            }
+            out = CourseCache.coursesOfDay(s.courses, dayIdx);
+            java.util.Collections.sort(out, new java.util.Comparator<CourseCache.Course>() {
+                @Override public int compare(CourseCache.Course a, CourseCache.Course b) {
+                    int[] ma = CourseCache.minutes(a.time);
+                    int[] mb = CourseCache.minutes(b.time);
+                    int sa = ma == null ? Integer.MAX_VALUE : ma[0];
+                    int sb = mb == null ? Integer.MAX_VALUE : mb[0];
+                    return (sa < sb) ? -1 : (sa > sb ? 1 : 0);
+                }
+            });
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    private void renderTodayList() {
+        if (todayBox == null) {
+            return;
+        }
+        todayBox.removeAllViews();
+        java.util.List<CourseCache.Course> list = todayCourses();
+        if (list.isEmpty()) {
+            LinearLayout card = Ui.card(this);
+            card.setBackground(Ui.round(Ui.CARD, Ui.R_CARD, Ui.LINE, this));
+            card.setPadding(Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 14), Ui.dp(this, 16));
+            card.addView(Ui.textLh(this, "今天没有课，好好休息", Ui.SP_BODY, Ui.MUTED, false, Ui.LH_BODY));
+            todayBox.addView(card);
+            return;
+        }
+        int now = CourseCache.nowMinutes();
+        for (int i = 0; i < list.size(); i++) {
+            todayBox.addView(todayRow(list.get(i), now));
+            if (i < list.size() - 1) {
+                todayBox.addView(Ui.space(this, Ui.GAP_SM));
+            }
+        }
+    }
+
+    /**
+     * 单节课行：时间块 | 课名 + 地点老师 | 状态徽标。
+     * 进行中的那节整行换淡蓝底（比左侧描边更稳：圆角卡片 + 描边在低端机上容易出锯齿）。
+     */
+    private View todayRow(CourseCache.Course c, int now) {
+        int[] m = CourseCache.minutes(c.time);
+        boolean doing = m != null && now >= m[0] && now < m[1];
+        boolean done = m != null && now >= m[1];
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setBackground(Ui.round(doing ? Ui.ACCENT_LIGHT : Ui.CARD, Ui.R_CARD, Ui.LINE, this));
+        row.setPadding(Ui.dp(this, 13), Ui.dp(this, 12), Ui.dp(this, 13), Ui.dp(this, 12));
+
+        // 时间块两行（08:00 / 09:35）：竖着扫比单行「08:00-09:35」快，且列宽固定不跳
+        TextView timeView = Ui.textLh(this, twoLineTime(c.time), Ui.SP_CAPTION,
+                doing ? Ui.ACCENT : Ui.MUTED, doing, Ui.LH_CAPTION);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                Ui.dp(this, 52), LinearLayout.LayoutParams.WRAP_CONTENT);
+        tlp.rightMargin = Ui.dp(this, Ui.GAP_MD);
+        row.addView(timeView, tlp);
+
+        LinearLayout mid = new LinearLayout(this);
+        mid.setOrientation(LinearLayout.VERTICAL);
+        TextView name = Ui.textMediumLh(this, c.name == null ? "" : c.name,
+                Ui.SP_BODY, (done && !doing) ? Ui.MUTED : Ui.TEXT, Ui.LH_BODY);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        mid.addView(name);
+        String sub = c.sub();
+        if (sub.length() > 0) {
+            TextView subView = Ui.textLh(this, sub, Ui.SP_MICRO, Ui.MUTED, false, Ui.LH_MICRO);
+            subView.setSingleLine(true);
+            subView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            subView.setPadding(0, Ui.dp(this, 2), 0, 0);
+            mid.addView(subView);
+        }
+        row.addView(mid, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        if (doing || done) {
+            TextView badge = Ui.textLh(this, doing ? "进行中" : "已上", Ui.SP_MICRO,
+                    doing ? Ui.ACCENT : Ui.MUTED, false, Ui.LH_MICRO);
+            badge.setBackground(Ui.round(doing ? Ui.ACCENT_LIGHT : Ui.CARD2, 6, 0, this));
+            badge.setPadding(Ui.dp(this, 6), Ui.dp(this, 2), Ui.dp(this, 6), Ui.dp(this, 2));
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            blp.leftMargin = Ui.dp(this, Ui.GAP_SM);
+            row.addView(badge, blp);
+        }
+        return row;
+    }
+
+    /** "08:00-09:35" → "08:00\n09:35"；解析不出就退回原样的开始时间。 */
+    private String twoLineTime(String t) {
+        int[] m = CourseCache.minutes(t);
+        if (m == null) {
+            return CourseCache.shortTime(t);
+        }
+        return hhmm(m[0]) + "\n" + hhmm(m[1]);
+    }
+
+    private String hhmm(int minutes) {
+        int h = minutes / 60;
+        int mi = minutes % 60;
+        return (h < 10 ? "0" : "") + h + ":" + (mi < 10 ? "0" : "") + mi;
+    }
+
     private LinearLayout buildQuickBox() {
         LinearLayout box = Ui.card(this);
         box.setBackground(Ui.round(Ui.CARD, Ui.R_CARD, Ui.LINE, this));
@@ -2006,19 +2292,19 @@ public class HomeActivity extends Activity {
                 ScheduleStore.upsertFromWatch(HomeActivity.this,
                         SyncEngine.get(HomeActivity.this).currentDeviceId(),
                         SyncEngine.get(HomeActivity.this).currentDeviceName(), name, sch);
-                renderWeek();
+                renderContent();
             }
             @Override public void onTimeout(String hint) {
                 ScheduleStore.upsertFromWatch(HomeActivity.this,
                         SyncEngine.get(HomeActivity.this).currentDeviceId(),
                         SyncEngine.get(HomeActivity.this).currentDeviceName(), "", sch);
-                renderWeek();
+                renderContent();
             }
             @Override public void onError(String msg) {
                 ScheduleStore.upsertFromWatch(HomeActivity.this,
                         SyncEngine.get(HomeActivity.this).currentDeviceId(),
                         SyncEngine.get(HomeActivity.this).currentDeviceName(), "", sch);
-                renderWeek();
+                renderContent();
             }
         });
     }
@@ -2223,8 +2509,8 @@ public class HomeActivity extends Activity {
         MessageActivity.installObserver(this);
         installNodeChooser();
         if (!legacy) {
-            // 从课程表管理页切换回来 → 刷新周视图
-            renderWeek();
+            // 从课程表管理页切换回来 → 按当前模式刷新（首页刷今天，周页刷网格）
+            renderContent();
             return;
         }
         SyncEngine e = SyncEngine.get(this);
