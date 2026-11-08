@@ -486,17 +486,21 @@ public class HomeActivity extends Activity {
                     + cal.get(java.util.Calendar.DAY_OF_MONTH) + "日 "
                     + wk[cal.get(java.util.Calendar.DAY_OF_WEEK) - 1];
             String sub;
+            boolean hideSub = false;
             if (Holiday.resolveToday(this) == Holiday.HOLIDAY) {
                 sub = "假期 · 今天没有课";
             } else {
                 int n = todayCourses().size();
-                sub = n == 0 ? "今天没有课" : "今天 " + n + " 节课";
+                // 空课日不再重复「今天没有课」：下面焦点卡已经说了，同一句话在同一屏说两遍是噪音
+                sub = n == 0 ? "" : "今天 " + n + " 节课";
+                hideSub = n == 0;
             }
             if (dateTitleView != null) {
                 dateTitleView.setText(main);
             }
             if (dateSubView != null) {
                 dateSubView.setText(sub);
+                dateSubView.setVisibility(hideSub ? View.GONE : View.VISIBLE);
             }
         } catch (Throwable ignored) {
         }
@@ -543,11 +547,7 @@ public class HomeActivity extends Activity {
         todayBox.removeAllViews();
         java.util.List<CourseCache.Course> list = todayCourses();
         if (list.isEmpty()) {
-            LinearLayout card = Ui.card(this);
-            card.setBackground(Ui.round(Ui.CARD, Ui.R_CARD, Ui.LINE, this));
-            card.setPadding(Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 14), Ui.dp(this, 16));
-            card.addView(Ui.textLh(this, "今天没有课，好好休息", Ui.SP_BODY, Ui.MUTED, false, Ui.LH_BODY));
-            todayBox.addView(card);
+            // 空课日：焦点卡已经写明「今天没有课 / 好好休息一下」，这里不再叠一张同义卡
             return;
         }
         int now = CourseCache.nowMinutes();
