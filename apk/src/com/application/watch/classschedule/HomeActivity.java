@@ -1594,6 +1594,18 @@ public class HomeActivity extends Activity {
      * 今天列背景加淡色蒙层，课程块按颜色语义区分。
      */
     private View weekGridWithTime(List<CourseCache.Course> all) {
+        // 周网格原来直接吃 ScheduleStore 的原始课表，绕过了折算层 → 换课和第9节晚课永远不出现。
+        // 这里补上同口径的两层折算，并按「正在看的那一周」算轮次（翻周时晚课跟着变）。
+        try {
+            all = ShiftStore.apply(this, all);
+        } catch (Throwable ignored) {
+        }
+        java.util.Calendar rotWhen = java.util.Calendar.getInstance();
+        rotWhen.add(java.util.Calendar.DAY_OF_MONTH, -CourseCache.todayIndex() + weekOffset * 7);
+        try {
+            all = RotationStore.inject(this, all, rotWhen);
+        } catch (Throwable ignored) {
+        }
         int today = CourseCache.todayIndex();
         String[] heads = {"一", "二", "三", "四", "五", "六", "日"};
 
@@ -1785,7 +1797,11 @@ public class HomeActivity extends Activity {
         b.setOrientation(LinearLayout.VERTICAL);
         b.setGravity(android.view.Gravity.CENTER);
         // ev-ui-android v1.1 · P1-①：浅底 + 4dp 身份色条，课名深字；底色与字色全由 Ui.java token 提供
-        b.setBackground(Ui.courseBlockBg(this, c.name, current));
+        // 晚自习（17:00 后）统一淡紫：轮转注入的科目名每周都不同，跟着课名上色会周周换色，
+        // 反而认不出「这一行是晚上那节」。整行一个色，比逐课配色更能表达「晚课」。
+        boolean night = isNight(c.time);
+        b.setBackground(night ? Ui.round(NIGHT_BG, Ui.R_BLOCK, NIGHT_LINE, this)
+                : Ui.courseBlockBg(this, c.name, current));
         // 2026-10-05 首页 UI 精细化：块高按模式收敛（单字近正方），上下均分补足 ROW_PITCH；
         // 左右外边距由 3 收口到 BLOCK_MARGIN → 相邻块横向缝 10→4dp、可用文字宽 +25%
         int blockH = shortModeHere() ? Ui.BLOCK_H_1CHAR : Ui.BLOCK_H_2LINE;
@@ -1797,7 +1813,7 @@ public class HomeActivity extends Activity {
         lp.setMargins(Ui.dp(this, Ui.BLOCK_MARGIN), Ui.dp(this, vMargin),
                 Ui.dp(this, Ui.BLOCK_MARGIN), Ui.dp(this, vMargin));
         b.setLayoutParams(lp);
-        int fg = Ui.courseInk(c.name);
+        int fg = night ? NIGHT_FG : Ui.courseInk(c.name);
         String disp = CourseCache.displayName(c.name, CourseCache.shortNameMode(this));
         // 10f → 11.5sp（原 10sp 偏小）；单字 16f → 15sp 与次标题档一致
         TextView tv = Ui.textMediumLh(this, disp,
