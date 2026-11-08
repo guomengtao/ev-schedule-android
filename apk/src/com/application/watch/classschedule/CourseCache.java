@@ -216,10 +216,19 @@ public final class CourseCache {
         }
         // 临时调课折算：周模板不动，只把「今天」被挪走/挪来的课在这里换掉。
         // 这是全端唯一接入点——首页、周视图、两个桌面插件、上课提醒都走 load，所以一处生效全端一致。
+        List<Course> merged;
         try {
-            return ShiftStore.apply(c, out);
+            merged = ShiftStore.apply(c, out);
         } catch (Throwable t) {
-            return out;
+            merged = out;
+        }
+        // 第9节（晚辅）六周轮转注入：与调课同一折算层。
+        // 白天 8 节仍是固定周模板，第9节按「本周第几周」查表合成，两者在渲染时合成本周课。
+        // 推手环的课表走 ScheduleStore，不经过这里 —— 所以第9节只在手机端显示（P0 约束）。
+        try {
+            return RotationStore.inject(c, merged);
+        } catch (Throwable t) {
+            return merged;
         }
     }
 

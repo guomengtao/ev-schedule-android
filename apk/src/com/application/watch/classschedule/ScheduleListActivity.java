@@ -266,6 +266,11 @@ public class ScheduleListActivity extends Activity {
                 startActivity(new Intent(ScheduleListActivity.this, CourseNameActivity.class));
             }
         });
+        addActionItem(panel, pw, "第9节晚课设置", new Runnable() {
+            @Override public void run() {
+                startActivity(new Intent(ScheduleListActivity.this, RotationActivity.class));
+            }
+        });
         if (Variant.isEv(this)) {
             panel.addView(menuDivider());
             addMenuItem(panel, pw, "导入课表", TransferActivity.MODE_IMPORT);
