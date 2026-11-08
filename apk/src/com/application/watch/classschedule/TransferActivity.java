@@ -124,6 +124,8 @@ public class TransferActivity extends Activity {
     private TextView previewInfo, previewSub;
     private final List<CheckBox> courseChecks = new ArrayList<>();
     private JSONArray parsedCourses;
+    /** 本次导入/导出携带的晚课模板（EV 格式才有）；null = 这次没涉及晚课 */
+    private JSONObject pendingRotation;
 
     // ---- 导入：课程表名称 + 同名检测 ----
     private EditText nameBox;
@@ -823,6 +825,16 @@ public class TransferActivity extends Activity {
         try {
             JSONObject o = new JSONObject();
             o.put("courses", flat);
+            // 晚课跟着同一份导出走。取的是「用户此刻在首页看到的那套」，
+            // 所以导出内容与手机端显示一致；从没配置过时不写这个字段。
+            try {
+                String sid = ScheduleStore.activeId(this);
+                JSONObject rot = rotationToJson(RotationStore.load(this, sid));
+                if (rot != null) {
+                    o.put("rotation", rot);
+                }
+            } catch (Throwable ignored) {
+            }
             exportBox.setText(o.toString(2));
             exportCard.setVisibility(View.VISIBLE);
         } catch (Throwable ignored) {
@@ -1019,6 +1031,8 @@ public class TransferActivity extends Activity {
             return;
         }
         parsedCourses = courses;
+        // 晚课不是课程，不能混进 courses —— 单独提出来，导入时一并写回
+        pendingRotation = extractRotation(text);
         hideNameErr();
         renderPreview();
         previewCard.setVisibility(View.VISIBLE);
@@ -1225,12 +1239,144 @@ public class TransferActivity extends Activity {
             if (scheduleName != null && scheduleName.length() > 0) {
                 body.put("scheduleName", scheduleName);
             }
+            // 手环端会把它存到 ev_rotation_<index>，导出时再原样带回
+            if (pendingRotation != null) {
+                body.put("rotation", pendingRotation);
+            }
             JSONObject o = new JSONObject();
             o.put("action", "import");
             o.put("payload", body);
             return o.toString();
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    // ======================= 晚课（rotation）=======================
+    /**
+     * 晚课是课表的附属内容，不进 courses —— 摊平会变成「6 周 × 7 天 = 42 条分不清周次」的课。
+     * 契约与手环端一致：{enabled, cycle, time, calibDate, calibWeek, cells[week][day]}。
+     */
+    private static JSONObject extractRotation(String text) {
+        if (TextUtils.isEmpty(text)) {
+            return null;
+        }
+        try {
+            return extractRotation(new JSONObject(text), 0);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static JSONObject extractRotation(Object parsed, int depth) {
+        if (!(parsed instanceof JSONObject) || depth > 4) {
+            return null;
+        }
+        JSONObject o = (JSONObject) parsed;
+        JSONObject rot = o.optJSONObject("rotation");
+        if (rot != null) {
+            return rot;
+        }
+        JSONArray schedules = o.optJSONArray("schedules");
+        if (schedules != null && schedules.length() > 0) {
+            JSONObject s0 = schedules.optJSONObject(0);
+            if (s0 != null && s0.optJSONObject("rotation") != null) {
+                return s0.optJSONObject("rotation");
+            }
+        }
+        for (String key : new String[]{"data", "payload"}) {
+            Object inner = o.opt(key);
+            if (inner instanceof JSONObject) {
+                JSONObject found = extractRotation(inner, depth + 1);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 晚课模板 → 导出 JSON（数组形态，跨端通用）；没配置返回 null，不留空字段 */
+    private JSONObject rotationToJson(RotationStore.Template t) {
+        if (t == null || (!t.enabled && t.isEmpty())) {
+            return null;
+        }
+        try {
+            t.ensureCycle();
+            JSONArray cells = new JSONArray();
+            for (int w = 0; w < t.cycle; w++) {
+                JSONArray row = new JSONArray();
+                String[] src = (w < t.cells.size()) ? t.cells.get(w) : null;
+                for (int d = 0; d < 7; d++) {
+                    row.put(src != null && d < src.length && src[d] != null ? src[d] : "");
+                }
+                cells.put(row);
+            }
+            JSONObject o = new JSONObject();
+            o.put("enabled", t.enabled);
+            o.put("cycle", t.cycle);
+            o.put("time", t.time);
+            o.put("calibDate", t.calibDate);
+            o.put("calibWeek", t.calibWeek);
+            o.put("cells", cells);
+            return o;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 导入带回来的晚课写回本地「当前激活课表」。
+     * 手环上可能写进的是另一套表（按名字新建/覆盖），本地没有一一对应关系，
+     * 所以落到激活课表并在结果条里说明，绝不静默丢弃。
+     */
+    private boolean applyImportedRotation(JSONObject rot) {
+        if (rot == null) {
+            return false;
+        }
+        try {
+            RotationStore.Template t = new RotationStore.Template();
+            t.enabled = rot.optBoolean("enabled", false);
+            t.cycle = Math.max(1, Math.min(12, rot.optInt("cycle", RotationStore.DEFAULT_CYCLE)));
+            String tm = rot.optString("time", "");
+            t.time = TextUtils.isEmpty(tm) ? RotationStore.DEFAULT_TIME : tm;
+            t.calibDate = rot.optString("calibDate", "");
+            t.calibWeek = Math.max(1, rot.optInt("calibWeek", 1));
+            t.ensureCycle();
+
+            Object cells = rot.opt("cells");
+            if (cells instanceof JSONArray) {
+                JSONArray rows = (JSONArray) cells;
+                for (int w = 0; w < t.cycle && w < rows.length(); w++) {
+                    JSONArray row = rows.optJSONArray(w);
+                    if (row == null) {
+                        continue;
+                    }
+                    String[] dst = t.cells.get(w);
+                    for (int d = 0; d < 7 && d < row.length(); d++) {
+                        String v = row.optString(d, "");
+                        dst[d] = (v == null) ? "" : v.trim();
+                    }
+                }
+            } else if (cells instanceof JSONObject) {
+                JSONObject obj = (JSONObject) cells;
+                for (int w = 1; w <= t.cycle; w++) {
+                    JSONObject row = obj.optJSONObject(String.valueOf(w));
+                    if (row == null) {
+                        continue;
+                    }
+                    String[] dst = t.cells.get(w - 1);
+                    for (int d = 0; d < 7; d++) {
+                        String v = row.optString(String.valueOf(d), "");
+                        if (!TextUtils.isEmpty(v)) {
+                            dst[d] = v.trim();
+                        }
+                    }
+                }
+            }
+            return RotationStore.save(this, t);
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -1242,8 +1388,11 @@ public class TransferActivity extends Activity {
                     JSONObject o = new JSONObject(json);
                     if (o.optBoolean("ok", false)) {
                         int count = o.optInt("count", -1);
+                        boolean rotOk = applyImportedRotation(pendingRotation);
                         setRes(previewRes, "导入成功"
-                                + (count >= 0 ? ("，共 " + count + " 门课") : ""), Ui.OK);
+                                + (count >= 0 ? ("，共 " + count + " 门课") : "")
+                                + (pendingRotation != null && rotOk ? "（含晚课，已写回当前课表）" : "")
+                                + (pendingRotation != null && !rotOk ? "（晚课写回本地失败）" : ""), Ui.OK);
                         // P3（§4.4）：导入成功 → 实时推送（每 kind 每分钟 ≤5 条节流在服务端）
                         ev("app_import_ok", Analytics.p("course_count", count >= 0 ? count : 0,
                                 "source", selectedName == null ? "" : selectedName));
