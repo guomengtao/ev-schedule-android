@@ -168,8 +168,15 @@ public final class RotationStore {
         t.ensureCycle();
         for (int w = 1; w <= t.cycle && w <= DEMO_CELLS.length; w++) {
             String[] row = t.cells.get(w - 1);
-            for (int d = 0; d < DAYS && d < row.length; d++) {
-                row[d] = DEMO_CELLS[w - 1][d];
+            String[] src = DEMO_CELLS[w - 1];
+            if (row == null || src == null) {
+                continue;
+            }
+            // 三个长度都要比：row 是 7 格（含周末），DEMO_CELLS 一行只有 5 格（周一到周五）。
+            // 之前只比 row.length，源数组 index=5 直接越界，整个 seed 静默失败。
+            int n = Math.min(Math.min(DAYS, row.length), src.length);
+            for (int d = 0; d < n; d++) {
+                row[d] = src[d];
             }
         }
         return t;
@@ -372,9 +379,6 @@ public final class RotationStore {
             return base;
         }
         if (t == null || !t.enabled || t.isEmpty()) {
-            android.util.Log.i("EV-ROT", "skip: null=" + (t == null)
-                    + " enabled=" + (t != null && t.enabled)
-                    + " empty=" + (t != null && t.isEmpty()));
             return base;
         }
         int week;
@@ -383,8 +387,6 @@ public final class RotationStore {
         } catch (Throwable e) {
             week = 1;
         }
-        android.util.Log.i("EV-ROT", "week=" + week + " time=" + t.time
-                + " calib=" + t.calibDate + "/" + t.calibWeek + " base=" + (base == null ? 0 : base.size()));
         List<CourseCache.Course> out = (base == null)
                 ? new ArrayList<CourseCache.Course>()
                 : new ArrayList<CourseCache.Course>(base);
