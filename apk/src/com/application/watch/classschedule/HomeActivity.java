@@ -323,14 +323,14 @@ public class HomeActivity extends Activity {
         LinearLayout pill = new LinearLayout(this);
         pill.setOrientation(LinearLayout.HORIZONTAL);
         pill.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        pill.setBackground(Ui.round(Ui.CARD2, 999, Ui.LINE, this));
-        pill.setPadding(Ui.dp(this, 9), Ui.dp(this, 4), Ui.dp(this, 9), Ui.dp(this, 4));
+        // 胶囊弱化成「圆点 + 弱字」：首页主角是今天的课，连接状态是背景信息，不该抢第一眼
+        pill.setPadding(0, 0, 0, 0);
         statusDotView = new View(this);
         statusDotView.setBackground(Ui.round(Ui.MUTED, 4, 0, this));
         LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(Ui.dp(this, 7), Ui.dp(this, 7));
-        dotLp.rightMargin = Ui.dp(this, 5);
+        dotLp.rightMargin = Ui.dp(this, 4);
         pill.addView(statusDotView, dotLp);
-        statusPillText = Ui.textMediumLh(this, "未连接", Ui.SP_CAPTION, Ui.MUTED, Ui.LH_MICRO);
+        statusPillText = Ui.textMediumLh(this, "未连接", Ui.SP_MICRO, Ui.MUTED, Ui.LH_MICRO);
         pill.addView(statusPillText);
         statusPillBtn.addView(pill, new android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -527,9 +527,10 @@ public class HomeActivity extends Activity {
             java.util.Calendar cal = java.util.Calendar.getInstance();
             cal.add(java.util.Calendar.DAY_OF_MONTH, dayOffset);
             String[] wk = {"周日", "周一", "周二", "周三", "周四", "周五", "周六"};
-            String main = (cal.get(java.util.Calendar.MONTH) + 1) + "月"
-                    + cal.get(java.util.Calendar.DAY_OF_MONTH) + "日 "
-                    + wk[cal.get(java.util.Calendar.DAY_OF_WEEK) - 1];
+            // 分段式：周几做主字（大字），日期退到副行（小字）——一天里最常被问的是「周几」
+            String main = wk[cal.get(java.util.Calendar.DAY_OF_WEEK) - 1];
+            String md = (cal.get(java.util.Calendar.MONTH) + 1) + "月"
+                    + cal.get(java.util.Calendar.DAY_OF_MONTH) + "日";
             String sub = "";
             boolean hideSub = false;
             int n = todayCourses().size();
@@ -555,6 +556,13 @@ public class HomeActivity extends Activity {
             }
             if (dateTitleView != null) {
                 dateTitleView.setText(main);
+            }
+            // 副行 = 「日期 · 状态」；状态为空（无课）时只留日期，副行不消失
+            if (sub.length() == 0) {
+                sub = md;
+                hideSub = false;
+            } else {
+                sub = md + " · " + sub;
             }
             if (dateSubView != null) {
                 dateSubView.setText(sub);
@@ -621,6 +629,14 @@ public class HomeActivity extends Activity {
         return out;
     }
 
+    private static final int SEC_AM = 1, SEC_PM = 2, SEC_NIGHT = 3;
+
+    /**
+     * 今日课程：按「早自习 / 上午 / 下午 / 晚课」分四段，每段一张整卡。
+     *
+     * <p>原来是一节一张描边小卡，10 张卡互相打断，读起来像 10 条通知而不是一张时间表；
+     * 现在段内只留 1px 细线，段间靠留白 + 小标签分段，扫视时先看到「上午 4 节」，再落到具体课。
+     */
     private void renderTodayList() {
         if (todayBox == null) {
             return;
@@ -632,29 +648,75 @@ public class HomeActivity extends Activity {
             return;
         }
         int now = (dayOffset == 0) ? CourseCache.nowMinutes() : -1;
-        int prevStart = -1;
-        for (int i = 0; i < list.size(); i++) {
-            CourseCache.Course c = list.get(i);
-            int[] m = CourseCache.minutes(c.time);
-            // 上午 → 下午（跨 12:00）插一条极淡分割线：比「上午」「下午」小标题省两行高度
-            if (prevStart >= 0 && prevStart < 12 * 60 && m != null && m[0] >= 12 * 60) {
-                todayBox.addView(noonDivider());
+        int i = 0;
+        while (i < list.size()) {
+            int sec = sectionOf(list.get(i).time);
+            int j = i;
+            while (j < list.size() && sectionOf(list.get(j).time) == sec) {
+                j++;
             }
-            todayBox.addView(todayRow(c, now));
-            if (i < list.size() - 1) {
-                todayBox.addView(Ui.space(this, Ui.GAP_XS));
+            if (i > 0) {
+                todayBox.addView(Ui.space(this, 8));
             }
-            if (m != null) {
-                prevStart = m[0];
+            todayBox.addView(sectionLabel(sec, j - i));
+            boolean night = sec == SEC_NIGHT;
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            // 晚课整段淡紫：轮转注入的科目名每周都换，跟课名上色会周周变色，认不出「晚上那节」
+            card.setBackground(Ui.round(night ? NIGHT_BG : Ui.CARD, Ui.R_CARD,
+                    night ? NIGHT_LINE : Ui.LINE, this));
+            card.setPadding(Ui.dp(this, 4), Ui.dp(this, 2), Ui.dp(this, 4), Ui.dp(this, 2));
+            for (int k = i; k < j; k++) {
+                if (k > i) {
+                    card.addView(hairline(night));
+                }
+                card.addView(todayRow(list.get(k), now));
             }
+            todayBox.addView(card);
+            i = j;
         }
     }
 
+    /** 分段判定：17:00 后算晚课；早自习（档位 0）单独一段，其余按 12:00 分上午/下午 */
+    private int sectionOf(String time) {
+        int[] m = CourseCache.minutes(time);
+        if (m == null) {
+            return SEC_AM;
+        }
+        if (m[0] >= 17 * 60) {
+            return SEC_NIGHT;
+        }
+        if (m[0] >= 12 * 60) {
+            return SEC_PM;
+        }
+        return SEC_AM;
+    }
+
+    /** 段标题带节数：「上午 · 5 节」比只写「上午」多一次信息，且不占额外高度 */
+    private View sectionLabel(int sec, int count) {
+        String t = sec == SEC_AM ? "上午" : sec == SEC_PM ? "下午" : "晚课";
+        TextView v = Ui.textMediumLh(this, t + " · " + count + " 节", Ui.SP_MICRO,
+                sec == SEC_NIGHT ? NIGHT_FG : Ui.MUTED, Ui.LH_MICRO);
+        v.setPadding(Ui.dp(this, 7), 0, 0, Ui.dp(this, 3));
+        return v;
+    }
+
+    /** 段内行间细线：左右缩进，避免和卡片圆角打架 */
+    private View hairline(boolean night) {
+        View line = new View(this);
+        line.setBackgroundColor(night ? NIGHT_LINE : Ui.LINE);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 1)));
+        lp.leftMargin = Ui.dp(this, 7);
+        lp.rightMargin = Ui.dp(this, 7);
+        line.setLayoutParams(lp);
+        return line;
+    }
+
     /**
-     * 单节课行：一行一条 —— 开始时间 | 课名（同色系小字追加教室/老师） | 状态徽标。
-     * <p>一行一条比原来的「时间竖两行 + 课名 + 副行」省约 14dp/节，9 节课少滚一屏；
-     * 教室/老师拼在课名后，两者都空就什么都不追加，行内不留空档（教室默认空即不显示）。
-     * 进行中的那节整行换淡蓝底（比左侧描边更稳：圆角卡片 + 描边在低端机上容易出锯齿）。
+     * 单节课行：一行一条 —— 序号 | 开始时间 | 课名（同色小字追加教室/老师） | 状态徽标。
+     * <p>行本身不再带描边（段卡负责边界），只在「进行中」时铺一层淡色圆角，
+     * 这样一屏 10 节读下去是连续的时间表，而不是 10 个各自为政的方块。
      */
     private View todayRow(CourseCache.Course c, int now) {
         int[] m = CourseCache.minutes(c.time);
@@ -665,12 +727,12 @@ public class HomeActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        // 晚自习（第9节）走另一套配色：白天课靠「序号+课名」扫，晚上课靠底色一眼认出来
-        row.setBackground(Ui.round(night ? NIGHT_BG : (doing ? Ui.ACCENT_LIGHT : Ui.CARD),
-                Ui.R_CARD, night ? NIGHT_LINE : Ui.LINE, this));
-        row.setPadding(Ui.dp(this, 8), Ui.dp(this, 7), Ui.dp(this, 12), Ui.dp(this, 7));
+        if (doing) {
+            row.setBackground(Ui.round(night ? 0xFFE7E1FF : Ui.ACCENT_LIGHT, 10, 0, this));
+        }
+        row.setPadding(Ui.dp(this, 7), Ui.dp(this, 5), Ui.dp(this, 7), Ui.dp(this, 5));
 
-        // 节次序号窄列：早自习「早」/ 第N节「N」/ 第9节「晚」，匹配不上作息档就不占位
+        // 节次序号窄列：早自习「早」/ 第N节「N」/ 最后一节「晚」，匹配不上作息档就不占位
         String seq = periodSeq(c.time);
         if (seq.length() > 0) {
             TextView seqView = Ui.textLh(this, seq, Ui.SP_MICRO,
@@ -703,7 +765,7 @@ public class HomeActivity extends Activity {
         if (doing || done) {
             TextView badge = Ui.textLh(this, doing ? "进行中" : "已上", Ui.SP_MICRO,
                     doing ? Ui.ACCENT : Ui.MUTED, false, Ui.LH_MICRO);
-            badge.setBackground(Ui.round(doing ? Ui.ACCENT_LIGHT : Ui.CARD2, 6, 0, this));
+            badge.setBackground(Ui.round(doing ? Ui.CARD : Ui.CARD2, 6, 0, this));
             badge.setPadding(Ui.dp(this, 6), Ui.dp(this, 2), Ui.dp(this, 6), Ui.dp(this, 2));
             LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -737,18 +799,6 @@ public class HomeActivity extends Activity {
             return "晚";
         }
         return String.valueOf(idx);
-    }
-
-    /** 上午 / 下午分界：1dp 淡线 + 极窄留白 */
-    private View noonDivider() {
-        LinearLayout wrap = new LinearLayout(this);
-        wrap.setOrientation(LinearLayout.VERTICAL);
-        wrap.setPadding(Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 4));
-        View line = new View(this);
-        line.setBackgroundColor(0xFFD8D8E2);
-        wrap.addView(line, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 1))));
-        return wrap;
     }
 
     /**
