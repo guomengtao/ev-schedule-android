@@ -194,6 +194,29 @@ public class CourseEditActivity extends Activity implements WeekEditGrid.Callbac
         root.addView(subView);
         root.addView(Ui.space(this, 8));
 
+        // ── 晚课入口：挂在每套课表自己的编辑页里，晚课也就跟着这套课表独立 ──
+        if (!newMode && scheduleId != null && scheduleId.length() > 0) {
+            LinearLayout nightRow = new LinearLayout(this);
+            nightRow.setOrientation(LinearLayout.HORIZONTAL);
+            nightRow.setGravity(Gravity.CENTER_VERTICAL);
+            nightRow.setBackground(Ui.round(Ui.CARD, Ui.R_CARD, Ui.LINE, this));
+            nightRow.setPadding(Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 12), Ui.dp(this, 10));
+            nightRow.addView(Ui.text(this, "晚课设置", 13f, Ui.TEXT, false),
+                    new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            nightRow.addView(Ui.text(this, "每天最后一节的轮换课 ›", 11.5f, Ui.MUTED, false));
+            nightRow.setClickable(true);
+            nightRow.setContentDescription("晚课设置");
+            nightRow.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    Intent it = new Intent(CourseEditActivity.this, RotationActivity.class);
+                    it.putExtra(RotationActivity.EXTRA_SCHEDULE_ID, scheduleId);
+                    startActivity(it);
+                }
+            });
+            root.addView(nightRow);
+            root.addView(Ui.space(this, 10));
+        }
+
         // ── 网格（可滚动）──
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);

@@ -266,7 +266,7 @@ public class ScheduleListActivity extends Activity {
                 startActivity(new Intent(ScheduleListActivity.this, CourseNameActivity.class));
             }
         });
-        addActionItem(panel, pw, "第9节晚课设置", new Runnable() {
+        addActionItem(panel, pw, "晚课设置", new Runnable() {
             @Override public void run() {
                 startActivity(new Intent(ScheduleListActivity.this, RotationActivity.class));
             }

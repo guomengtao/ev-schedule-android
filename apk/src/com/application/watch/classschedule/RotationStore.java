@@ -31,7 +31,28 @@ import java.util.Locale;
 public final class RotationStore {
 
     private static final String PREF = "ev_rotation";
+    /** 旧版：全局只有一份模板。保留仅用于首次迁移到按课表分仓。 */
     private static final String KEY = "template";
+
+    /** 每套课表一份模板：key = tpl_<scheduleId> */
+    private static String keyOf(String resolvedSid) {
+        return "tpl_" + (TextUtils.isEmpty(resolvedSid) ? "default" : resolvedSid);
+    }
+
+    /** 调用方没指定课表时，回落到「当前激活课表」，与首页/周网格看到的那份保持一致 */
+    private static String resolveSid(Context c, String sid) {
+        if (!TextUtils.isEmpty(sid)) {
+            return sid;
+        }
+        try {
+            ScheduleStore.Schedule s = ScheduleStore.active(c);
+            if (s != null && !TextUtils.isEmpty(s.id)) {
+                return s.id;
+            }
+        } catch (Throwable ignored) {
+        }
+        return "";
+    }
 
     /** 默认时段：晚辅一节 45 分钟 */
     public static final String DEFAULT_TIME = "17:10 - 18:00";
@@ -183,14 +204,43 @@ public final class RotationStore {
     }
 
     public static Template load(Context c) {
+        return load(c, null);
+    }
+
+    public static Template load(Context c, String sid0) {
         Template t = new Template();
         try {
             SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
-            String s = sp.getString(KEY, "");
+            String sid = resolveSid(c, sid0);
+            String key = keyOf(sid);
+            String s = sp.getString(key, "");
+            // 旧版单份模板 → 迁到「当前激活课表」名下（旧 key 不删，便于回滚）。
+            // 只在当前激活课表上迁一次，别把全局副本复制给每一套新建课表。
+            if (TextUtils.isEmpty(s) && sid.equals(resolveSid(c, null))) {
+                String legacy = sp.getString(KEY, "");
+                if (!TextUtils.isEmpty(legacy)) {
+                    sp.edit().putString(key, legacy).apply();
+                    s = legacy;
+                }
+            }
             if (TextUtils.isEmpty(s)) {
-                // 首次运行：写入官方演示数据（8.20 班六周轮转），用户之后改格即覆盖
+                // 整机从没配置过任何晚课 → 给官方演示数据；已有别的课表配过 → 这套留空
+                boolean anyConfig = sp.getAll().containsKey(KEY);
+                if (!anyConfig) {
+                    for (String k : sp.getAll().keySet()) {
+                        if (k != null && k.startsWith("tpl_")) {
+                            anyConfig = true;
+                            break;
+                        }
+                    }
+                }
+                Template blank = new Template();
+                blank.time = DEFAULT_TIME;
+                if (anyConfig) {
+                    return blank;
+                }
                 Template d = demo();
-                save(c, d);
+                save(c, sid, d);
                 return d;
             }
             JSONObject o = new JSONObject(s);
@@ -219,18 +269,22 @@ public final class RotationStore {
         } catch (Throwable ignored) {
             // 坏数据当成没配置：宁可少显示一节，也不能让首页崩
         }
-        // 历史上被写进去的空模板（enabled=false 且 30 格全空）等同于从没配置过：
-        // 这种状态下用户什么也看不到，补官方演示数据不覆盖任何真实内容。
-        // 反向保护：真配置过再关开关的用户，cells 非空，不会走到这里。
-        if (!t.enabled && t.isEmpty()) {
+        // 历史上被写进去的空模板（enabled=false 且格子全空）等同于从没配置过：
+        // 这种状态下用户什么也看不到，只有「就是当前这套课表」时才补演示数据，不覆盖任何真实内容。
+        String resolved = resolveSid(c, sid0);
+        if (!t.enabled && t.isEmpty() && resolved.length() > 0 && resolved.equals(resolveSid(c, null))) {
             Template d = demo();
-            save(c, d);
+            save(c, resolved, d);
             return d;
         }
         return t;
     }
 
     public static boolean save(Context c, Template t) {
+        return save(c, null, t);
+    }
+
+    public static boolean save(Context c, String sid0, Template t) {
         if (t == null) {
             return false;
         }
@@ -258,7 +312,7 @@ public final class RotationStore {
             o.put("calibWeek", t.calibWeek);
             o.put("cells", cs);
             SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
-            return sp.edit().putString(KEY, o.toString()).commit();
+            return sp.edit().putString(keyOf(resolveSid(c, sid0)), o.toString()).commit();
         } catch (Throwable ignored) {
             return false;
         }

@@ -42,6 +42,11 @@ public class RotationActivity extends Activity {
     private TextView countView;
     private TextView timeView;
     private TextView enableView;
+    private TextView cycleView;
+
+    /** 这套课表的 id：晚课按课表分开存，不再全局一份 */
+    public static final String EXTRA_SCHEDULE_ID = "schedule_id";
+    private String scheduleId = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,7 +58,11 @@ public class RotationActivity extends Activity {
             CourseNameStore.mergeFromSchedules(this);
         } catch (Throwable ignored) {
         }
-        tpl = RotationStore.load(this);
+        scheduleId = getIntent().getStringExtra(EXTRA_SCHEDULE_ID);
+        if (scheduleId == null) {
+            scheduleId = "";
+        }
+        tpl = RotationStore.load(this, scheduleId);
         buildUi();
         render();
     }
@@ -81,12 +90,12 @@ public class RotationActivity extends Activity {
         });
         head.addView(back, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
 
-        head.addView(Ui.text(this, "第9节 晚课", 16.5f, Ui.TEXT, true),
+        head.addView(Ui.text(this, "晚课设置", 16.5f, Ui.TEXT, true),
                 new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         root.addView(head);
 
         TextView sub = Ui.text(this,
-                "白天 8 节照旧，这里只填第9节。6 周一轮回，点格子选科目。只在本机显示，不同步手环。",
+                "给这套课表补一节「每天都有、内容按周期轮换」的课，默认排在白天的课之后。只在本机显示，不同步手环。",
                 11.5f, Ui.MUTED, false);
         sub.setPadding(Ui.dp(this, 4), Ui.dp(this, 2), 0, Ui.dp(this, 8));
         sub.setLineSpacing(Ui.dp(this, 2), 1f);
@@ -104,10 +113,18 @@ public class RotationActivity extends Activity {
 
         status.addView(divider());
 
-        status.addView(row("第9节时段", "", new View.OnClickListener() {
+        status.addView(row("上课时段", "", new View.OnClickListener() {
             @Override public void onClick(View v) { pickTime(); }
         }, new RowHolder() {
             @Override void bind(TextView value) { timeView = value; }
+        }));
+
+        status.addView(divider());
+
+        status.addView(row("轮换周期", "", new View.OnClickListener() {
+            @Override public void onClick(View v) { pickCycle(); }
+        }, new RowHolder() {
+            @Override void bind(TextView value) { cycleView = value; }
         }));
 
         status.addView(divider());
@@ -137,7 +154,7 @@ public class RotationActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
         TextView tip = Ui.text(this,
-                "填完自动保存，只在本机显示。两个班要看两份，就建两套课表分别设置。",
+                "填完自动保存。每套课表各有一份晚课，互不影响。",
                 11f, Ui.MUTED, false);
         tip.setPadding(Ui.dp(this, 4), Ui.dp(this, 6), 0, 0);
         tip.setSingleLine(true);
@@ -169,6 +186,26 @@ public class RotationActivity extends Activity {
         return r;
     }
 
+    /** 周期 1~6 周：不是每所学校都六周一轮，一周/三周同样常见 */
+    private void pickCycle() {
+        final int[] opts = {1, 2, 3, 4, 5, 6};
+        String[] labels = new String[opts.length];
+        for (int i = 0; i < opts.length; i++) {
+            labels[i] = opts[i] + " 周一轮";
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("轮换周期")
+                .setItems(labels, new android.content.DialogInterface.OnClickListener() {
+                    @Override public void onClick(android.content.DialogInterface d, int which) {
+                        tpl.cycle = opts[which];
+                        tpl.ensureCycle();
+                        RotationStore.save(RotationActivity.this, scheduleId, tpl);
+                        render();
+                    }
+                })
+                .show();
+    }
+
     private View divider() {
         View v = new View(this);
         v.setBackgroundColor(Ui.LINE);
@@ -183,6 +220,9 @@ public class RotationActivity extends Activity {
         int week = RotationStore.weekOf(tpl, Calendar.getInstance());
         if (weekView != null) {
             weekView.setText("第 " + week + " 周（" + tpl.cycle + " 周一轮）›");
+        }
+        if (cycleView != null) {
+            cycleView.setText(tpl.cycle + " 周一轮 ›");
         }
         if (timeView != null) {
             timeView.setText(tpl.time + " ›");
@@ -270,7 +310,7 @@ public class RotationActivity extends Activity {
 
     private void toggleEnabled() {
         tpl.enabled = !tpl.enabled;
-        RotationStore.save(this, tpl);
+        RotationStore.save(this, scheduleId, tpl);
         render();
     }
 
@@ -341,7 +381,7 @@ public class RotationActivity extends Activity {
         Button clear = Ui.button(this, "清除", false, new View.OnClickListener() {
             @Override public void onClick(View v) {
                 tpl.setCell(week, day, "");
-                RotationStore.save(RotationActivity.this, tpl);
+                RotationStore.save(RotationActivity.this, scheduleId, tpl);
                 dlg.dismiss();
                 render();
             }
@@ -359,7 +399,7 @@ public class RotationActivity extends Activity {
                 if (!v2.isEmpty()) {
                     tpl.enabled = true;   // 填了格子就默认开启，避免「设了没生效」
                 }
-                RotationStore.save(RotationActivity.this, tpl);
+                RotationStore.save(RotationActivity.this, scheduleId, tpl);
                 dlg.dismiss();
                 render();
             }
@@ -421,7 +461,7 @@ public class RotationActivity extends Activity {
                 }
                 tpl.calibWeek = w;
                 tpl.calibDate = RotationStore.mondayDateString(Calendar.getInstance());
-                RotationStore.save(RotationActivity.this, tpl);
+                RotationStore.save(RotationActivity.this, scheduleId, tpl);
                 dlg.dismiss();
                 render();
             }
@@ -465,7 +505,7 @@ public class RotationActivity extends Activity {
                             e = s + 45;
                         }
                         tpl.time = hm(s) + " - " + hm(Math.min(e, 24 * 60 - 1));
-                        RotationStore.save(RotationActivity.this, tpl);
+                        RotationStore.save(RotationActivity.this, scheduleId, tpl);
                         render();
                     }
                 }, (defEnd / 60) % 24, defEnd % 60, true).show();

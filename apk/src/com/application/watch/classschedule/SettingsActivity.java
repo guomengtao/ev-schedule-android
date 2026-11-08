@@ -150,16 +150,6 @@ public class SettingsActivity extends Activity {
         holidaySub = subLabel("");
         remindCard.addView(row("假期 / 调休", holidaySub, holidaySwitch, null));
 
-        // —— 第9节晚课（六周轮转）——
-        // 原先只藏在「课程表管理」的 ⊕ 菜单第二层，用户找不到；这里给一个点开即进的一级入口
-        addSep(remindCard, 16);
-        remindCard.addView(row("第9节晚课", subLabel("按周次轮转 · 每天一节"),
-                valueWithChevron(valueLabel("设置")),
-                new View.OnClickListener() {
-                    @Override public void onClick(View v) {
-                        startActivity(new Intent(SettingsActivity.this, RotationActivity.class));
-                    }
-                }));
 
         root.addView(remindCard);
 
