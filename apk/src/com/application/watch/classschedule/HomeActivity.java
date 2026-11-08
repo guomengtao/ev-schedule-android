@@ -238,19 +238,19 @@ public class HomeActivity extends Activity {
         // ---- 日期头：一眼回答「今天几号、星期几、第几周、几节课」----
         // 手环首页第一屏也是这三件事，同步器对齐它，用户不用在两台设备上换脑子。
         buildDateHead(root);
-        root.addView(Ui.space(this, Ui.GAP_MD));
+        root.addView(Ui.space(this, Ui.GAP_SM));
 
         // ---- §D2 焦点卡「接下来」：把「我现在该干嘛」从"两次定位"变"一次阅读" ----
         focusCardView = new LinearLayout(this);
         focusCardView.setOrientation(LinearLayout.VERTICAL);
         root.addView(focusCardView);
-        root.addView(Ui.space(this, Ui.GAP_MD));
+        root.addView(Ui.space(this, Ui.GAP_SM));
 
         // ---- 今日课程列表（首页只放当天；完整周课表走 EXTRA_VIEW=week 的独立页）----
         todayBox = new LinearLayout(this);
         todayBox.setOrientation(LinearLayout.VERTICAL);
         root.addView(todayBox);
-        root.addView(Ui.space(this, Ui.GAP_MD));
+        root.addView(Ui.space(this, Ui.GAP_SM));
 
         // ---- 手势：下拉回今天（日期头起手）/ 左滑进周课表 ----
         attachGestures(root);
@@ -784,7 +784,7 @@ public class HomeActivity extends Activity {
                 j++;
             }
             if (i > 0) {
-                todayBox.addView(Ui.space(this, 8));
+                todayBox.addView(Ui.space(this, 7));
             }
             todayBox.addView(sectionLabel(sec, j - i));
             boolean night = sec == SEC_NIGHT;
@@ -793,7 +793,7 @@ public class HomeActivity extends Activity {
             // 晚课整段淡紫：轮转注入的科目名每周都换，跟课名上色会周周变色，认不出「晚上那节」
             card.setBackground(Ui.round(night ? NIGHT_BG : Ui.CARD, Ui.R_CARD,
                     night ? NIGHT_LINE : Ui.LINE, this));
-            card.setPadding(Ui.dp(this, 4), Ui.dp(this, 2), Ui.dp(this, 4), Ui.dp(this, 2));
+            card.setPadding(Ui.dp(this, 4), Ui.dp(this, 1), Ui.dp(this, 4), Ui.dp(this, 1));
             for (int k = i; k < j; k++) {
                 if (k > i) {
                     card.addView(hairline(night));
@@ -858,7 +858,7 @@ public class HomeActivity extends Activity {
         if (doing) {
             row.setBackground(Ui.round(night ? 0xFFE7E1FF : Ui.ACCENT_LIGHT, 10, 0, this));
         }
-        row.setPadding(Ui.dp(this, 7), Ui.dp(this, 5), Ui.dp(this, 7), Ui.dp(this, 5));
+        row.setPadding(Ui.dp(this, 7), Ui.dp(this, 4), Ui.dp(this, 7), Ui.dp(this, 4));
 
         // 节次序号窄列：早自习「早」/ 第N节「N」/ 最后一节「晚」，匹配不上作息档就不占位
         String seq = periodSeq(c.time);
@@ -1510,6 +1510,11 @@ public class HomeActivity extends Activity {
         int start = sm == null ? -1 : sm[0];
         int end = sm == null ? -1 : sm[1];
 
+        // 进度原来是「进度条 + 一行今日 x/y 节」共两行，占掉 45dp —— 正好是首页能不能
+        // 放下 10 节课的那点余量。改成并入 kicker 行，信息不丢，高度省一行。
+        if (totalSlots > 1) {
+            kicker = kicker + "　今日 " + doneSlotCount + "/" + totalSlots + " 节";
+        }
         card.addView(Ui.textLh(this, kicker, Ui.SP_CAPTION,
                 running ? Ui.ACCENT : Ui.MUTED, false, Ui.LH_CAPTION));
 
@@ -1548,31 +1553,6 @@ public class HomeActivity extends Activity {
             TextView mv = Ui.textLh(this, meta.toString(), Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
             mv.setPadding(0, Ui.dp(this, 2), 0, 0);
             card.addView(mv);
-        }
-
-        // 今日进度条（已完成 / 今日总节数）：分子分母都按去重时间槽，和「第 N 节」同口径
-        if (totalSlots > 1) {
-            card.addView(Ui.space(this, Ui.GAP_SM));
-            LinearLayout track = new LinearLayout(this);
-            track.setOrientation(LinearLayout.HORIZONTAL);
-            track.setBackground(Ui.round(Ui.LINE, 2, 0, this));
-            float frac = (float) (doneSlotCount + (running ? 1 : 0)) / (float) totalSlots;
-            if (frac < 0f) frac = 0f;
-            if (frac > 1f) frac = 1f;
-            View rest = new View(this);
-            // 0% 时不画填充（否则留一小截「毛刺」像渲染故障）
-            if (frac > 0.001f) {
-                View fill = new View(this);
-                fill.setBackground(Ui.round(Ui.ACCENT, 2, 0, this));
-                track.addView(fill, new LinearLayout.LayoutParams(0, Ui.dp(this, 4), frac));
-            }
-            track.addView(rest, new LinearLayout.LayoutParams(0, Ui.dp(this, 4),
-                    Math.max(0.0001f, 1f - frac)));
-            card.addView(track);
-            TextView pv = Ui.textLh(this, "今日 " + doneSlotCount + "/" + totalSlots + " 节",
-                    Ui.SP_MICRO, Ui.MUTED, false, Ui.LH_CAPTION);
-            pv.setPadding(0, Ui.dp(this, 4), 0, 0);
-            card.addView(pv);
         }
 
         card.setClickable(true);
