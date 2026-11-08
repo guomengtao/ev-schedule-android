@@ -62,6 +62,17 @@ public class RotationActivity extends Activity {
         if (scheduleId == null) {
             scheduleId = "";
         }
+        // 没带 id（旧入口、或从别处误入）→ 明确绑定到「当前激活课表」，
+        // 后续 save 全部按这个 id 走。绝不允许出现「不知道在改哪套课」的状态。
+        if (scheduleId.length() == 0) {
+            try {
+                ScheduleStore.Schedule act = ScheduleStore.active(this);
+                if (act != null && act.id != null) {
+                    scheduleId = act.id;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
         tpl = RotationStore.load(this, scheduleId);
         buildUi();
         render();
@@ -94,9 +105,7 @@ public class RotationActivity extends Activity {
                 new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         root.addView(head);
 
-        TextView sub = Ui.text(this,
-                "给这套课表补一节「每天都有、内容按周期轮换」的课，默认排在白天的课之后。只在本机显示，不同步手环。",
-                11.5f, Ui.MUTED, false);
+        TextView sub = Ui.text(this, subtitle(), 11.5f, Ui.MUTED, false);
         sub.setPadding(Ui.dp(this, 4), Ui.dp(this, 2), 0, Ui.dp(this, 8));
         sub.setLineSpacing(Ui.dp(this, 2), 1f);
         root.addView(sub);
@@ -204,6 +213,30 @@ public class RotationActivity extends Activity {
                     }
                 })
                 .show();
+    }
+
+    /** 副标题把「哪套课表」写死进标题区：晚课是每套课表的附属内容，不看这句就不知道在改谁 */
+    private String subtitle() {
+        String name = "";
+        try {
+            java.util.List<ScheduleStore.Schedule> all = ScheduleStore.list(this);
+            if (all != null) {
+                for (ScheduleStore.Schedule sc : all) {
+                    if (sc != null && scheduleId.equals(sc.id)) {
+                        name = sc.name == null ? "" : sc.name;
+                        break;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        StringBuilder sb = new StringBuilder();
+        if (name.length() > 0) {
+            sb.append("正在设置：").append(name).append("\n");
+        }
+        sb.append("给这套课表补一节「每天都有、内容按周期轮换」的课，默认排在白天的课之后。")
+                .append("只在本机显示，不同步手环。");
+        return sb.toString();
     }
 
     private View divider() {

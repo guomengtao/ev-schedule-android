@@ -553,11 +553,11 @@ public class HomeActivity extends Activity {
     }
 
     /**
-     * 周课表页手势：左滑 → 首页，右滑 → 「课表」栏目。
+     * 周课表页手势：左滑 → 「课表」栏目，右滑 → 首页。
      *
-     * <p>和首页那对方向正好相反（首页左滑进周课表），这样「左滑往前翻、右滑往回退」在
-     * 两台设备上是一条线：首页 ⇄ 周课表 靠同一次滑动来回。右滑进「课表」是因为周课表
-     * 在这一栏之下（底栏第二个 tab），继续右滑等于退出这一栏。
+     * <p>手势方向统一成「左滑往前走、右滑往后退」：
+     * 首页 →（左滑）→ 周课表 →（左滑）→ 课表栏目；反向一路右滑退回首页。
+     * 这样两个方向在三个页面之间是一条直线，不用记「这一页左滑算什么」。
      */
     private void attachWeekGestures(final View root) {
         root.post(new Runnable() {
@@ -594,17 +594,17 @@ public class HomeActivity extends Activity {
                             view.performHapticFeedback(
                                     android.view.HapticFeedbackConstants.VIRTUAL_KEY);
                             if (dx < 0) {
-                                finish();                       // 左滑：回首页
-                            } else {
-                                // 右滑：进「课表」栏目。用 CLEAR_TOP 把它「弹回」到前台，
-                                // 而不是再压一层 —— 先前的 REORDER_TO_FRONT + finish() 有竞态：
-                                // finish 把栈顶弹掉后，前台落回首页，栏目根本没上来。
+                                // 左滑：往前进 —— 进「课表」栏目。用 CLEAR_TOP 把它「弹回」前台，
+                                // 而不是再压一层；REORDER_TO_FRONT + finish() 有竞态（finish 弹掉
+                                // 栈顶后前台落回首页，栏目根本没上来），实测过。
                                 Intent it = new Intent(HomeActivity.this, ScheduleListActivity.class);
                                 it.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
                                         | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                                 startActivity(it);
                                 finish();
                                 overridePendingTransition(0, 0);
+                            } else {
+                                finish();                       // 右滑：往后退 —— 回首页
                             }
                         }
                         break;

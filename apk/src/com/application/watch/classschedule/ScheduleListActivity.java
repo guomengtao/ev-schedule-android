@@ -266,11 +266,9 @@ public class ScheduleListActivity extends Activity {
                 startActivity(new Intent(ScheduleListActivity.this, CourseNameActivity.class));
             }
         });
-        addActionItem(panel, pw, "晚课设置", new Runnable() {
-            @Override public void run() {
-                startActivity(new Intent(ScheduleListActivity.this, RotationActivity.class));
-            }
-        });
+        // 「晚课设置」不放在这里：晚课是**每套课表自己的附属内容**，这里没有「改哪一套」的
+        // 上下文，点了只会让人以为是全局设置（甚至改错课表）。入口统一走
+        // 周课表 → 铅笔（编辑这套课表）→ 晚课设置。
         if (Variant.isEv(this)) {
             panel.addView(menuDivider());
             addMenuItem(panel, pw, "导入课表", TransferActivity.MODE_IMPORT);
