@@ -34,7 +34,7 @@ public final class RotationStore {
     private static final String KEY = "template";
 
     /** 默认时段：晚辅一节 45 分钟 */
-    public static final String DEFAULT_TIME = "19:00 - 19:45";
+    public static final String DEFAULT_TIME = "17:10 - 18:00";
     public static final int DEFAULT_CYCLE = 6;
     /** 星期下标上限：0=周一 … 6=周日 */
     private static final int DAYS = 7;
@@ -145,13 +145,46 @@ public final class RotationStore {
 
     // ======================= 存取 =======================
 
+    /** 官方演示数据：八年级 8.20 班晚课六周轮转（第一周..第六周 x 周一..周五） */
+    private static final String[][] DEMO_CELLS = {
+        {"语", "物", "体", "生", "英"},
+        {"语", "历", "数", "英", "道"},
+        {"语", "生", "英", "数", "地"},
+        {"语", "体", "物", "地", "英"},
+        {"道", "历", "体", "语", "英"},
+        {"生", "物", "英", "地", "数"},
+    };
+    /** 演示用校正基准：2026-11-09（周一）算第 3 周，之后自动外推 */
+    public static final String DEMO_CALIB_DATE = "2026-11-09";
+    public static final int DEMO_CALIB_WEEK = 3;
+
+    /** 构造演示模板：6 周 x 5 天，第9节 17:10-18:00，本周按第 3 周 */
+    private static Template demo() {
+        Template t = new Template();
+        t.enabled = true;
+        t.time = DEFAULT_TIME;
+        t.calibDate = DEMO_CALIB_DATE;
+        t.calibWeek = DEMO_CALIB_WEEK;
+        t.ensureCycle();
+        for (int w = 1; w <= t.cycle && w <= DEMO_CELLS.length; w++) {
+            String[] row = t.cells.get(w - 1);
+            for (int d = 0; d < DAYS && d < row.length; d++) {
+                row[d] = DEMO_CELLS[w - 1][d];
+            }
+        }
+        return t;
+    }
+
     public static Template load(Context c) {
         Template t = new Template();
         try {
             SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
             String s = sp.getString(KEY, "");
             if (TextUtils.isEmpty(s)) {
-                return t;
+                // 首次运行：写入官方演示数据（8.20 班六周轮转），用户之后改格即覆盖
+                Template d = demo();
+                save(c, d);
+                return d;
             }
             JSONObject o = new JSONObject(s);
             t.enabled = o.optBoolean("enabled", false);

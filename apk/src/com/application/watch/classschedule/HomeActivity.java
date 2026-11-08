@@ -55,6 +55,8 @@ public class HomeActivity extends Activity {
     private LinearLayout todayBox;
     /** 日期头：主行「11月8日 周日」/ 副行「今天 3 节课 · 第 10 周」 */
     private TextView dateTitleView, dateSubView;
+    /** 首页日期偏移：0=今天，-1=昨天，+1=明天（左右箭头切换，最多 ±14 天） */
+    private int dayOffset = 0;
 
     /**
      * 视图模式（2026-11-08 首页改版，evtask-D-ev-schedule--261108-e8q4tv）。
@@ -424,11 +426,30 @@ public class HomeActivity extends Activity {
     private void buildDateHead(LinearLayout root) {
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout dateRow = new LinearLayout(this);
+        dateRow.setOrientation(LinearLayout.HORIZONTAL);
+        dateRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView prevDay = Ui.text(this, "\u2039", 24f, Ui.ACCENT, false);
+        prevDay.setPadding(Ui.dp(this, 2), 0, Ui.dp(this, 12), 0);
+        prevDay.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { shiftDay(-1); }
+        });
+        dateRow.addView(prevDay);
+        LinearLayout dateCol = new LinearLayout(this);
+        dateCol.setOrientation(LinearLayout.VERTICAL);
         dateTitleView = Ui.textMediumLh(this, "", Ui.SP_DISPLAY, Ui.TEXT, Ui.LH_DISPLAY);
-        head.addView(dateTitleView);
+        dateCol.addView(dateTitleView);
         dateSubView = Ui.textLh(this, "", Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
         dateSubView.setPadding(0, Ui.dp(this, 3), 0, 0);
-        head.addView(dateSubView);
+        dateCol.addView(dateSubView);
+        dateRow.addView(dateCol, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView nextDay = Ui.text(this, "\u203a", 24f, Ui.ACCENT, false);
+        nextDay.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 2), 0);
+        nextDay.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { shiftDay(1); }
+        });
+        dateRow.addView(nextDay);
+        head.addView(dateRow);
         root.addView(head);
     }
 
@@ -457,7 +478,14 @@ public class HomeActivity extends Activity {
         if (legacy) {
             return;
         }
-        renderFocusCard();
+        if (dayOffset == 0) {
+            if (focusCardView != null) {
+                focusCardView.setVisibility(View.VISIBLE);
+            }
+            renderFocusCard();
+        } else if (focusCardView != null) {
+            focusCardView.setVisibility(View.GONE);
+        }
         renderTodayHead();
         renderTodayList();
         applyQuickBoxVisibility();
@@ -478,22 +506,52 @@ public class HomeActivity extends Activity {
         }
     }
 
+    /** 左右切天：-1 上一天 / +1 下一天，越界夹到 ±14 天 */
+    private void shiftDay(int delta) {
+        int v = dayOffset + delta;
+        if (v < -14) {
+            v = -14;
+        }
+        if (v > 14) {
+            v = 14;
+        }
+        if (v == dayOffset) {
+            return;
+        }
+        dayOffset = v;
+        renderToday();
+    }
+
     private void renderTodayHead() {
         try {
             java.util.Calendar cal = java.util.Calendar.getInstance();
+            cal.add(java.util.Calendar.DAY_OF_MONTH, dayOffset);
             String[] wk = {"周日", "周一", "周二", "周三", "周四", "周五", "周六"};
             String main = (cal.get(java.util.Calendar.MONTH) + 1) + "月"
                     + cal.get(java.util.Calendar.DAY_OF_MONTH) + "日 "
                     + wk[cal.get(java.util.Calendar.DAY_OF_WEEK) - 1];
-            String sub;
+            String sub = "";
             boolean hideSub = false;
-            if (Holiday.resolveToday(this) == Holiday.HOLIDAY) {
-                sub = "假期 · 今天没有课";
+            int n = todayCourses().size();
+            if (dayOffset == 0) {
+                if (Holiday.resolveToday(this) == Holiday.HOLIDAY) {
+                    sub = "假期 · 今天没有课";
+                } else {
+                    sub = n == 0 ? "" : "今天 " + n + " 节课";
+                    hideSub = n == 0;
+                }
             } else {
-                int n = todayCourses().size();
-                // 空课日不再重复「今天没有课」：下面焦点卡已经说了，同一句话在同一屏说两遍是噪音
-                sub = n == 0 ? "" : "今天 " + n + " 节课";
-                hideSub = n == 0;
+                String tag;
+                if (dayOffset == 1) {
+                    tag = "明天";
+                } else if (dayOffset == -1) {
+                    tag = "昨天";
+                } else if (dayOffset > 0) {
+                    tag = dayOffset + " 天后";
+                } else {
+                    tag = (-dayOffset) + " 天前";
+                }
+                sub = n == 0 ? tag + " · 没有课" : tag + " · " + n + " 节课";
             }
             if (dateTitleView != null) {
                 dateTitleView.setText(main);
@@ -520,10 +578,18 @@ public class HomeActivity extends Activity {
             if (s == null) {
                 return out;
             }
-            int dayIdx = CourseCache.todayIndex();
-            int overrideToday = Holiday.resolveToday(this);
-            if (overrideToday >= 0) {
-                dayIdx = overrideToday;
+            int dayIdx;
+            if (dayOffset == 0) {
+                dayIdx = CourseCache.todayIndex();
+                int overrideToday = Holiday.resolveToday(this);
+                if (overrideToday >= 0) {
+                    dayIdx = overrideToday;
+                }
+            } else {
+                java.util.Calendar dc = java.util.Calendar.getInstance();
+                dc.add(java.util.Calendar.DAY_OF_MONTH, dayOffset);
+                // Calendar 里周日=1、周一=2，而课表用 0=周一..6=周日，必须折算
+                dayIdx = (dc.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7;
             }
             out = CourseCache.coursesOfDay(s.courses, dayIdx);
             java.util.Collections.sort(out, new java.util.Comparator<CourseCache.Course>() {
@@ -550,7 +616,7 @@ public class HomeActivity extends Activity {
             // 空课日：焦点卡已经写明「今天没有课 / 好好休息一下」，这里不再叠一张同义卡
             return;
         }
-        int now = CourseCache.nowMinutes();
+        int now = (dayOffset == 0) ? CourseCache.nowMinutes() : -1;
         for (int i = 0; i < list.size(); i++) {
             todayBox.addView(todayRow(list.get(i), now));
             if (i < list.size() - 1) {
