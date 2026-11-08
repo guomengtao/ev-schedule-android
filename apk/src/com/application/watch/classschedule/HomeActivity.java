@@ -252,6 +252,9 @@ public class HomeActivity extends Activity {
         root.addView(todayBox);
         root.addView(Ui.space(this, Ui.GAP_MD));
 
+        // ---- 手势：下拉回今天（日期头起手）/ 左滑进周课表 ----
+        attachGestures(root);
+
         // ---- 周课表入口 ----
         root.addView(buildWeekEntry());
         root.addView(Ui.space(this, Ui.GAP_LG));
@@ -429,28 +432,153 @@ public class HomeActivity extends Activity {
         LinearLayout dateRow = new LinearLayout(this);
         dateRow.setOrientation(LinearLayout.HORIZONTAL);
         dateRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        TextView prevDay = Ui.text(this, "\u2039", 24f, Ui.ACCENT, false);
-        prevDay.setPadding(Ui.dp(this, 2), 0, Ui.dp(this, 12), 0);
-        prevDay.setOnClickListener(new View.OnClickListener() {
+        dateRow.addView(circleBtn("\u2039", "上一天", new View.OnClickListener() {
             @Override public void onClick(View v) { shiftDay(-1); }
-        });
-        dateRow.addView(prevDay);
+        }));
         LinearLayout dateCol = new LinearLayout(this);
         dateCol.setOrientation(LinearLayout.VERTICAL);
+        // 点日期 = 手环首页那颗「今」圆钮：不管翻到哪一天，一下就回今天
+        dateCol.setPadding(Ui.dp(this, 11), 0, Ui.dp(this, 6), 0);
+        dateCol.setClickable(true);
+        dateCol.setContentDescription("回到今天");
+        dateCol.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { goToday(v); }
+        });
         dateTitleView = Ui.textMediumLh(this, "", Ui.SP_DISPLAY, Ui.TEXT, Ui.LH_DISPLAY);
         dateCol.addView(dateTitleView);
         dateSubView = Ui.textLh(this, "", Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
+        dateSubView.setSingleLine(true);
+        dateSubView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         dateSubView.setPadding(0, Ui.dp(this, 3), 0, 0);
         dateCol.addView(dateSubView);
         dateRow.addView(dateCol, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        TextView nextDay = Ui.text(this, "\u203a", 24f, Ui.ACCENT, false);
-        nextDay.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 2), 0);
-        nextDay.setOnClickListener(new View.OnClickListener() {
+        dateRow.addView(circleBtn("\u203a", "下一天", new View.OnClickListener() {
             @Override public void onClick(View v) { shiftDay(1); }
+        }));
+
+        // 总课表：40dp 圆钮 + lucide calendar，位置和职能都对齐手环首页那颗「总」
+        android.widget.FrameLayout weekBtn = new android.widget.FrameLayout(this);
+        weekBtn.setBackground(Ui.round(Ui.CARD, 999, Ui.LINE, this));
+        weekBtn.setClickable(true);
+        weekBtn.setContentDescription("查看完整周课表");
+        ImageView calBtn = new ImageView(this);
+        calBtn.setImageResource(R.drawable.ic_calendar);
+        calBtn.setColorFilter(Ui.ACCENT);
+        weekBtn.addView(calBtn, new android.widget.FrameLayout.LayoutParams(
+                Ui.dp(this, 19), Ui.dp(this, 19), android.view.Gravity.CENTER));
+        weekBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { openWeek(v); }
         });
-        dateRow.addView(nextDay);
+        LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(
+                Ui.dp(this, 40), Ui.dp(this, 40));
+        wlp.leftMargin = Ui.dp(this, Ui.GAP_SM);
+        dateRow.addView(weekBtn, wlp);
         head.addView(dateRow);
         root.addView(head);
+    }
+
+    /** 圆形导航钮：40dp 白圆 + 主题色字形（手环首页同款），点击给一次轻震 */
+    private View circleBtn(String glyph, String desc, final View.OnClickListener l) {
+        TextView t = Ui.text(this, glyph, 20f, Ui.ACCENT, false);
+        t.setGravity(android.view.Gravity.CENTER);
+        t.setBackground(Ui.round(Ui.CARD, 999, Ui.LINE, this));
+        t.setClickable(true);
+        t.setContentDescription(desc);
+        t.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                v.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                l.onClick(v);
+            }
+        });
+        t.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, 40), Ui.dp(this, 40)));
+        return t;
+    }
+
+    /** 回到今天：点日期、下拉都走这里；已经是今天就不做事（避免无谓重绘） */
+    private void goToday(View src) {
+        if (src != null) {
+            src.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+        }
+        if (dayOffset == 0) {
+            return;
+        }
+        dayOffset = 0;
+        renderToday();
+    }
+
+    private void openWeek(View src) {
+        if (src != null) {
+            src.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+        }
+        startActivity(new Intent(HomeActivity.this, HomeActivity.class)
+                .putExtra(EXTRA_VIEW, VIEW_WEEK));
+    }
+
+    /**
+     * 首页手势（对齐手环首页里能在手机上成立的方向）：
+     * 下拉（起手必须在日期头区域）→ 回今天；左滑 → 周课表。
+     *
+     * <p>为什么限定起手区：列表要纵向滚动，全天候的下拉会把「往上翻找第一节课」
+     * 判成「回今天」。手环端也踩过同一个坑，最后同样是顶栏区起手才算数。
+     * 右滑留给系统返回、上滑留给滚动，不抢。
+     */
+    private void attachGestures(final View root) {
+        // 必须挂在 ScrollView 上，不能挂内容根：根只拿到 ACTION_DOWN（返回 false 就失去触摸目标），
+        // MOVE/UP 全被外层 ScrollView 接走 → 手势永远判不出来。
+        root.post(new Runnable() {
+            @Override public void run() {
+                View target = root;
+                android.view.ViewParent p = root.getParent();
+                while (p != null) {
+                    if (p instanceof android.widget.ScrollView) {
+                        target = (View) p;
+                        break;
+                    }
+                    p = (p instanceof View) ? ((View) p).getParent() : null;
+                }
+                installGestureListener(target);
+            }
+        });
+    }
+
+    private void installGestureListener(final View root) {
+        final int minDx = Ui.dp(this, 64);
+        final int minDy = Ui.dp(this, 56);
+        final int headLimit = Ui.dp(this, 200);
+        root.setOnTouchListener(new View.OnTouchListener() {
+            private float x0, y0;
+            private boolean fired;
+
+            @Override public boolean onTouch(View v, android.view.MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        x0 = e.getX();
+                        y0 = e.getY();
+                        fired = false;
+                        break;
+                    case android.view.MotionEvent.ACTION_UP:
+                    case android.view.MotionEvent.ACTION_CANCEL:
+                        if (fired) {
+                            break;
+                        }
+                        float dx = e.getX() - x0;
+                        float dy = e.getY() - y0;
+                        if (Math.abs(dy) > 2 * Math.abs(dx) && dy > minDy && y0 <= headLimit) {
+                            fired = true;
+                            v.performHapticFeedback(
+                                    android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                            goToday(null);
+                        } else if (Math.abs(dx) > 2 * Math.abs(dy) && dx < -minDx) {
+                            fired = true;
+                            v.performHapticFeedback(
+                                    android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                            openWeek(null);
+                        }
+                        break;
+                }
+                return false;
+            }
+        });
     }
 
     /** 周课表入口：首页不放网格了，入口必须显眼，否则用户以为周课表被删了。 */
