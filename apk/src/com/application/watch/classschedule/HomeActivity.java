@@ -579,6 +579,8 @@ public class HomeActivity extends Activity {
                 return out;
             }
             int dayIdx;
+            java.util.Calendar dc = java.util.Calendar.getInstance();
+            dc.add(java.util.Calendar.DAY_OF_MONTH, dayOffset);
             if (dayOffset == 0) {
                 dayIdx = CourseCache.todayIndex();
                 int overrideToday = Holiday.resolveToday(this);
@@ -586,12 +588,25 @@ public class HomeActivity extends Activity {
                     dayIdx = overrideToday;
                 }
             } else {
-                java.util.Calendar dc = java.util.Calendar.getInstance();
-                dc.add(java.util.Calendar.DAY_OF_MONTH, dayOffset);
                 // Calendar 里周日=1、周一=2，而课表用 0=周一..6=周日，必须折算
                 dayIdx = (dc.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7;
             }
-            out = CourseCache.coursesOfDay(s.courses, dayIdx);
+            // 取课必须与周视图/桌面插件同口径（都是 CourseCache.load 的那两层折算），
+            // 否则首页会漏掉换课和第 9 节晚课。区别只在「周次」：看今天按今天算，
+            // 左右切天按目标那天算（切到下周就该贴下周的晚课）。
+            java.util.List<CourseCache.Course> pool =
+                    new java.util.ArrayList<CourseCache.Course>(s.courses);
+            if (dayOffset == 0) {
+                try {
+                    pool = ShiftStore.apply(this, pool);
+                } catch (Throwable ignored) {
+                }
+            }
+            try {
+                pool = RotationStore.inject(this, pool, dc);
+            } catch (Throwable ignored) {
+            }
+            out = CourseCache.coursesOfDay(pool, dayIdx);
             java.util.Collections.sort(out, new java.util.Comparator<CourseCache.Course>() {
                 @Override public int compare(CourseCache.Course a, CourseCache.Course b) {
                     int[] ma = CourseCache.minutes(a.time);
@@ -626,7 +641,9 @@ public class HomeActivity extends Activity {
     }
 
     /**
-     * 单节课行：时间块 | 课名 + 地点老师 | 状态徽标。
+     * 单节课行：一行一条 —— 开始时间 | 课名（同色系小字追加教室/老师） | 状态徽标。
+     * <p>一行一条比原来的「时间竖两行 + 课名 + 副行」省约 14dp/节，9 节课少滚一屏；
+     * 教室/老师拼在课名后，两者都空就什么都不追加，行内不留空档（教室默认空即不显示）。
      * 进行中的那节整行换淡蓝底（比左侧描边更稳：圆角卡片 + 描边在低端机上容易出锯齿）。
      */
     private View todayRow(CourseCache.Course c, int now) {
@@ -638,32 +655,23 @@ public class HomeActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(android.view.Gravity.CENTER_VERTICAL);
         row.setBackground(Ui.round(doing ? Ui.ACCENT_LIGHT : Ui.CARD, Ui.R_CARD, Ui.LINE, this));
-        row.setPadding(Ui.dp(this, 13), Ui.dp(this, 12), Ui.dp(this, 13), Ui.dp(this, 12));
+        row.setPadding(Ui.dp(this, 12), Ui.dp(this, 9), Ui.dp(this, 12), Ui.dp(this, 9));
 
-        // 时间块两行（08:00 / 09:35）：竖着扫比单行「08:00-09:35」快，且列宽固定不跳
-        TextView timeView = Ui.textLh(this, twoLineTime(c.time), Ui.SP_CAPTION,
+        // 时间只留开始时刻：结束时间扫一眼用不上，省下的横向空间给课名
+        TextView timeView = Ui.textLh(this, CourseCache.shortTime(c.time), Ui.SP_CAPTION,
                 doing ? Ui.ACCENT : Ui.MUTED, doing, Ui.LH_CAPTION);
+        timeView.setSingleLine(true);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                Ui.dp(this, 52), LinearLayout.LayoutParams.WRAP_CONTENT);
-        tlp.rightMargin = Ui.dp(this, Ui.GAP_MD);
+                Ui.dp(this, 46), LinearLayout.LayoutParams.WRAP_CONTENT);
+        tlp.rightMargin = Ui.dp(this, Ui.GAP_SM);
         row.addView(timeView, tlp);
 
-        LinearLayout mid = new LinearLayout(this);
-        mid.setOrientation(LinearLayout.VERTICAL);
-        TextView name = Ui.textMediumLh(this, c.name == null ? "" : c.name,
-                Ui.SP_BODY, (done && !doing) ? Ui.MUTED : Ui.TEXT, Ui.LH_BODY);
+        TextView name = Ui.textMediumLh(this, "", Ui.SP_BODY,
+                (done && !doing) ? Ui.MUTED : Ui.TEXT, Ui.LH_BODY);
+        name.setText(titleWithSub(c));
         name.setSingleLine(true);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        mid.addView(name);
-        String sub = c.sub();
-        if (sub.length() > 0) {
-            TextView subView = Ui.textLh(this, sub, Ui.SP_MICRO, Ui.MUTED, false, Ui.LH_MICRO);
-            subView.setSingleLine(true);
-            subView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            subView.setPadding(0, Ui.dp(this, 2), 0, 0);
-            mid.addView(subView);
-        }
-        row.addView(mid, new LinearLayout.LayoutParams(0,
+        row.addView(name, new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         if (doing || done) {
@@ -679,19 +687,24 @@ public class HomeActivity extends Activity {
         return row;
     }
 
-    /** "08:00-09:35" → "08:00\n09:35"；解析不出就退回原样的开始时间。 */
-    private String twoLineTime(String t) {
-        int[] m = CourseCache.minutes(t);
-        if (m == null) {
-            return CourseCache.shortTime(t);
+    /**
+     * 课名 + 小字教室/老师：拼进同一个 TextView，单行省略号收尾。
+     * location / teacher 都空时 sub() 返回空串，这里原样只显示课名，不留分隔符。
+     */
+    private CharSequence titleWithSub(CourseCache.Course c) {
+        String title = c.name == null ? "" : c.name;
+        String sub = c.sub();
+        if (sub.length() == 0) {
+            return title;
         }
-        return hhmm(m[0]) + "\n" + hhmm(m[1]);
-    }
-
-    private String hhmm(int minutes) {
-        int h = minutes / 60;
-        int mi = minutes % 60;
-        return (h < 10 ? "0" : "") + h + ":" + (mi < 10 ? "0" : "") + mi;
+        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(title);
+        int start = sb.length();
+        sb.append("  ").append(sub);
+        sb.setSpan(new android.text.style.ForegroundColorSpan(Ui.MUTED),
+                start, sb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new android.text.style.RelativeSizeSpan(0.82f),
+                start, sb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return sb;
     }
 
     private LinearLayout buildQuickBox() {

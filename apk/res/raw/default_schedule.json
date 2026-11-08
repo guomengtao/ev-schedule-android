@@ -7,35 +7,35 @@
    "name": "早自习",
    "time": "07:00 - 08:00",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 0
   },
   {
    "name": "语文",
    "time": "08:00 - 08:40",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 0
   },
   {
    "name": "英语",
    "time": "08:55 - 09:35",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 0
   },
   {
    "name": "数学",
    "time": "10:15 - 10:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 0
   },
   {
    "name": "历史",
    "time": "11:10 - 11:50",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 0
   },
   {
@@ -56,42 +56,42 @@
    "name": "自习",
    "time": "15:20 - 16:00",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 0
   },
   {
    "name": "自习",
    "time": "16:15 - 16:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 0
   },
   {
    "name": "早自习",
    "time": "07:00 - 08:00",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 1
   },
   {
    "name": "英语",
    "time": "08:00 - 08:40",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 1
   },
   {
    "name": "语文",
    "time": "08:55 - 09:35",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 1
   },
   {
    "name": "道法",
    "time": "10:15 - 10:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 1
   },
   {
@@ -105,14 +105,14 @@
    "name": "地理",
    "time": "13:10 - 13:50",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 1
   },
   {
    "name": "数学",
    "time": "14:05 - 14:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 1
   },
   {
@@ -126,21 +126,21 @@
    "name": "自习",
    "time": "16:15 - 16:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 1
   },
   {
    "name": "早自习",
    "time": "07:00 - 08:00",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 2
   },
   {
    "name": "英语",
    "time": "08:00 - 08:40",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 2
   },
   {
@@ -154,14 +154,14 @@
    "name": "语文",
    "time": "10:15 - 10:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 2
   },
   {
    "name": "数学",
    "time": "11:10 - 11:50",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 2
   },
   {
@@ -175,7 +175,7 @@
    "name": "历史",
    "time": "14:05 - 14:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 2
   },
   {
@@ -189,42 +189,42 @@
    "name": "自习",
    "time": "16:15 - 16:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 2
   },
   {
    "name": "早自习",
    "time": "07:00 - 08:00",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 3
   },
   {
    "name": "数学",
    "time": "08:00 - 08:40",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 3
   },
   {
    "name": "道法",
    "time": "08:55 - 09:35",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 3
   },
   {
    "name": "英语",
    "time": "10:15 - 10:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 3
   },
   {
    "name": "语文",
    "time": "11:10 - 11:50",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 3
   },
   {
@@ -245,35 +245,35 @@
    "name": "劳动",
    "time": "15:20 - 16:00",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 3
   },
   {
    "name": "自习",
    "time": "16:15 - 16:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 3
   },
   {
    "name": "早自习",
    "time": "07:00 - 08:00",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 4
   },
   {
    "name": "语文",
    "time": "08:00 - 08:40",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 4
   },
   {
    "name": "地理",
    "time": "08:55 - 09:35",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 4
   },
   {
@@ -294,28 +294,28 @@
    "name": "英语",
    "time": "13:10 - 13:50",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 4
   },
   {
    "name": "数学",
    "time": "14:05 - 14:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 4
   },
   {
    "name": "综合/心理",
    "time": "15:20 - 16:00",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 4
   },
   {
    "name": "自习",
    "time": "16:15 - 16:55",
    "teacher": "",
-   "location": "本班教室",
+   "location": "",
    "day": 4
   }
  ]

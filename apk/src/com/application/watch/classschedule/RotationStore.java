@@ -212,6 +212,14 @@ public final class RotationStore {
         } catch (Throwable ignored) {
             // 坏数据当成没配置：宁可少显示一节，也不能让首页崩
         }
+        // 历史上被写进去的空模板（enabled=false 且 30 格全空）等同于从没配置过：
+        // 这种状态下用户什么也看不到，补官方演示数据不覆盖任何真实内容。
+        // 反向保护：真配置过再关开关的用户，cells 非空，不会走到这里。
+        if (!t.enabled && t.isEmpty()) {
+            Template d = demo();
+            save(c, d);
+            return d;
+        }
         return t;
     }
 
@@ -346,6 +354,17 @@ public final class RotationStore {
      * <p>若用户自己在同一时段排了课（比如第9节他手工建过），以他的为准，不注入。
      */
     public static List<CourseCache.Course> inject(Context c, List<CourseCache.Course> base) {
+        return inject(c, base, Calendar.getInstance());
+    }
+
+    /**
+     * 同上，但按「目标日期」算周次。
+     *
+     * <p>首页能左右切天，切到下一周时若仍按今天算周次，就会把本周的第9节贴到下周去。
+     * 传 null 则退回今天。
+     */
+    public static List<CourseCache.Course> inject(Context c, List<CourseCache.Course> base,
+                                                  Calendar when) {
         Template t;
         try {
             t = load(c);
@@ -353,14 +372,19 @@ public final class RotationStore {
             return base;
         }
         if (t == null || !t.enabled || t.isEmpty()) {
+            android.util.Log.i("EV-ROT", "skip: null=" + (t == null)
+                    + " enabled=" + (t != null && t.enabled)
+                    + " empty=" + (t != null && t.isEmpty()));
             return base;
         }
         int week;
         try {
-            week = weekOf(t, Calendar.getInstance());
+            week = weekOf(t, when == null ? Calendar.getInstance() : when);
         } catch (Throwable e) {
             week = 1;
         }
+        android.util.Log.i("EV-ROT", "week=" + week + " time=" + t.time
+                + " calib=" + t.calibDate + "/" + t.calibWeek + " base=" + (base == null ? 0 : base.size()));
         List<CourseCache.Course> out = (base == null)
                 ? new ArrayList<CourseCache.Course>()
                 : new ArrayList<CourseCache.Course>(base);
