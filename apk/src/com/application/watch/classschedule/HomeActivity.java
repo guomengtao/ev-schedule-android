@@ -745,12 +745,13 @@ public class HomeActivity extends Activity {
             row.addView(seqView, slp);
         }
 
-        // 时间只留开始时刻：结束时间扫一眼用不上，省下的横向空间给课名
-        TextView timeView = Ui.textLh(this, CourseCache.shortTime(c.time), Ui.SP_CAPTION,
-                night ? NIGHT_FG : (doing ? Ui.ACCENT : Ui.MUTED), false, Ui.LH_CAPTION);
+        // 起止时间同一行：「08:00-08:40」。竖排两行要多占 18dp 行高，10 节就挤出首屏，
+        // 所以压到 SP_MICRO + 70dp 定宽，横排一次读完。（解析不出区间就只显示开始时间）
+        TextView timeView = Ui.textLh(this, timeRange(c.time), Ui.SP_MICRO,
+                night ? NIGHT_FG : (doing ? Ui.ACCENT : Ui.MUTED), false, Ui.LH_MICRO);
         timeView.setSingleLine(true);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                Ui.dp(this, 42), LinearLayout.LayoutParams.WRAP_CONTENT);
+                Ui.dp(this, 70), LinearLayout.LayoutParams.WRAP_CONTENT);
         tlp.rightMargin = Ui.dp(this, Ui.GAP_SM);
         row.addView(timeView, tlp);
 
@@ -773,6 +774,22 @@ public class HomeActivity extends Activity {
             row.addView(badge, blp);
         }
         return row;
+    }
+
+    /** "08:00-08:40"：结束时间直接读作息档，解析不出就退回开始时刻单项。 */
+    private String timeRange(String t) {
+        int[] m = CourseCache.minutes(t);
+        String start = CourseCache.shortTime(t);
+        if (m == null) {
+            return start;
+        }
+        return start + "-" + hhmm(m[1]);
+    }
+
+    private String hhmm(int minutes) {
+        int h = minutes / 60;
+        int mi = minutes % 60;
+        return (h < 10 ? "0" : "") + h + ":" + (mi < 10 ? "0" : "") + mi;
     }
 
     /** 晚自习底色 / 描边 / 字色：淡紫，和白天的中性卡片拉开但不抢眼 */
