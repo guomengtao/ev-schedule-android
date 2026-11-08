@@ -214,7 +214,13 @@ public final class CourseCache {
             }
         } catch (Throwable ignored) {
         }
-        return out;
+        // 临时调课折算：周模板不动，只把「今天」被挪走/挪来的课在这里换掉。
+        // 这是全端唯一接入点——首页、周视图、两个桌面插件、上课提醒都走 load，所以一处生效全端一致。
+        try {
+            return ShiftStore.apply(c, out);
+        } catch (Throwable t) {
+            return out;
+        }
     }
 
     /** 缓存写入时间；0 = 没有缓存 */
