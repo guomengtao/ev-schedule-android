@@ -632,10 +632,20 @@ public class HomeActivity extends Activity {
             return;
         }
         int now = (dayOffset == 0) ? CourseCache.nowMinutes() : -1;
+        int prevStart = -1;
         for (int i = 0; i < list.size(); i++) {
-            todayBox.addView(todayRow(list.get(i), now));
+            CourseCache.Course c = list.get(i);
+            int[] m = CourseCache.minutes(c.time);
+            // 上午 → 下午（跨 12:00）插一条极淡分割线：比「上午」「下午」小标题省两行高度
+            if (prevStart >= 0 && prevStart < 12 * 60 && m != null && m[0] >= 12 * 60) {
+                todayBox.addView(noonDivider());
+            }
+            todayBox.addView(todayRow(c, now));
             if (i < list.size() - 1) {
-                todayBox.addView(Ui.space(this, Ui.GAP_SM));
+                todayBox.addView(Ui.space(this, Ui.GAP_XS));
+            }
+            if (m != null) {
+                prevStart = m[0];
             }
         }
     }
@@ -650,24 +660,40 @@ public class HomeActivity extends Activity {
         int[] m = CourseCache.minutes(c.time);
         boolean doing = m != null && now >= m[0] && now < m[1];
         boolean done = m != null && now >= m[1];
+        boolean night = isNight(c.time);
 
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        row.setBackground(Ui.round(doing ? Ui.ACCENT_LIGHT : Ui.CARD, Ui.R_CARD, Ui.LINE, this));
-        row.setPadding(Ui.dp(this, 12), Ui.dp(this, 9), Ui.dp(this, 12), Ui.dp(this, 9));
+        // 晚自习（第9节）走另一套配色：白天课靠「序号+课名」扫，晚上课靠底色一眼认出来
+        row.setBackground(Ui.round(night ? NIGHT_BG : (doing ? Ui.ACCENT_LIGHT : Ui.CARD),
+                Ui.R_CARD, night ? NIGHT_LINE : Ui.LINE, this));
+        row.setPadding(Ui.dp(this, 8), Ui.dp(this, 7), Ui.dp(this, 12), Ui.dp(this, 7));
+
+        // 节次序号窄列：早自习「早」/ 第N节「N」/ 第9节「晚」，匹配不上作息档就不占位
+        String seq = periodSeq(c.time);
+        if (seq.length() > 0) {
+            TextView seqView = Ui.textLh(this, seq, Ui.SP_MICRO,
+                    night ? NIGHT_FG : Ui.MUTED, !night && doing, Ui.LH_MICRO);
+            seqView.setGravity(android.view.Gravity.CENTER);
+            seqView.setSingleLine(true);
+            LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                    Ui.dp(this, 16), LinearLayout.LayoutParams.WRAP_CONTENT);
+            slp.rightMargin = Ui.dp(this, 5);
+            row.addView(seqView, slp);
+        }
 
         // 时间只留开始时刻：结束时间扫一眼用不上，省下的横向空间给课名
         TextView timeView = Ui.textLh(this, CourseCache.shortTime(c.time), Ui.SP_CAPTION,
-                doing ? Ui.ACCENT : Ui.MUTED, doing, Ui.LH_CAPTION);
+                night ? NIGHT_FG : (doing ? Ui.ACCENT : Ui.MUTED), false, Ui.LH_CAPTION);
         timeView.setSingleLine(true);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                Ui.dp(this, 46), LinearLayout.LayoutParams.WRAP_CONTENT);
+                Ui.dp(this, 42), LinearLayout.LayoutParams.WRAP_CONTENT);
         tlp.rightMargin = Ui.dp(this, Ui.GAP_SM);
         row.addView(timeView, tlp);
 
         TextView name = Ui.textMediumLh(this, "", Ui.SP_BODY,
-                (done && !doing) ? Ui.MUTED : Ui.TEXT, Ui.LH_BODY);
+                night ? NIGHT_FG : ((done && !doing) ? Ui.MUTED : Ui.TEXT), Ui.LH_BODY);
         name.setText(titleWithSub(c));
         name.setSingleLine(true);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -685,6 +711,44 @@ public class HomeActivity extends Activity {
             row.addView(badge, blp);
         }
         return row;
+    }
+
+    /** 晚自习底色 / 描边 / 字色：淡紫，和白天的中性卡片拉开但不抢眼 */
+    private static final int NIGHT_BG = 0xFFF3F0FF;
+    private static final int NIGHT_LINE = 0xFFDED6FE;
+    private static final int NIGHT_FG = 0xFF6C5BD4;
+
+    /** 晚辅/晚自习判定：17:00 之后开始的课 */
+    private boolean isNight(String time) {
+        int[] m = CourseCache.minutes(time);
+        return m != null && m[0] >= 17 * 60;
+    }
+
+    /** 节次序号：早自习「早」、第 N 节「N」、最后一节（第9节）「晚」 */
+    private String periodSeq(String time) {
+        int idx = CourseEditUtil.matchTemplate(time);
+        if (idx < 0) {
+            return "";
+        }
+        if (idx == 0) {
+            return "早";
+        }
+        if (idx >= CourseEditUtil.TEMPLATES.length - 1) {
+            return "晚";
+        }
+        return String.valueOf(idx);
+    }
+
+    /** 上午 / 下午分界：1dp 淡线 + 极窄留白 */
+    private View noonDivider() {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setPadding(Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 4));
+        View line = new View(this);
+        line.setBackgroundColor(0xFFD8D8E2);
+        wrap.addView(line, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 1))));
+        return wrap;
     }
 
     /**
@@ -2467,7 +2531,7 @@ public class HomeActivity extends Activity {
         } else {
             miniStatus("● 未连接手环", Ui.ERR);
             // 红 ⟺ 连接失败（与 refreshMiniFromEngine 的「错误卡在屏」判定同义），描述同步为「连接失败」
-            setStatusPill(Ui.ERR, "连接失败", "连接失败");
+            setStatusPill(Ui.ERR, "未连接", "连接失败");
         }
         hintView.setText(hint);
         errorCard.setVisibility(View.VISIBLE);
@@ -2538,7 +2602,7 @@ public class HomeActivity extends Activity {
             // 未连接：错误卡在屏（上次连接失败）→ 红；否则（从未连上/闲置）→ 灰。
             // 用错误卡的可见性而非调用顺序判定，避免「红 ↔ 灰」因谁最后执行而闪烁。
             boolean failed = (errorCard != null && errorCard.getVisibility() == View.VISIBLE);
-            setStatusPill(failed ? Ui.ERR : Ui.MUTED, failed ? "连接失败" : "未连接",
+            setStatusPill(failed ? Ui.ERR : Ui.MUTED, "未连接",
                     failed ? "连接失败" : "未连接手环");
         }
     }
