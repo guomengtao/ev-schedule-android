@@ -260,6 +260,12 @@ public class ScheduleListActivity extends Activity {
         pw.setOutsideTouchable(true);
 
         addMenuItem(panel, pw, "自己做一份课表", null);
+        panel.addView(menuDivider());
+        addActionItem(panel, pw, "课程名管理", new Runnable() {
+            @Override public void run() {
+                startActivity(new Intent(ScheduleListActivity.this, CourseNameActivity.class));
+            }
+        });
         if (Variant.isEv(this)) {
             panel.addView(menuDivider());
             addMenuItem(panel, pw, "导入课表", TransferActivity.MODE_IMPORT);
@@ -285,6 +291,25 @@ public class ScheduleListActivity extends Activity {
         p.rightMargin = Ui.dp(this, Ui.GAP_MD);
         v.setLayoutParams(p);
         return v;
+    }
+
+    /** 菜单里的一行（自定义动作版）：点击执行 Runnable，用于跳二级页这类非课表操作。 */
+    private void addActionItem(LinearLayout panel, final android.widget.PopupWindow pw,
+                               String label, final Runnable action) {
+        TextView tx = Ui.textLh(this, label, Ui.SP_SUBTITLE, Ui.TEXT, false, Ui.LH_SUBTITLE);
+        tx.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        tx.setPadding(Ui.dp(this, Ui.GAP_LG), 0, Ui.dp(this, Ui.GAP_LG), 0);
+        tx.setClickable(true);
+        panel.addView(tx, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, Ui.TOUCH_MIN)));
+        tx.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                pw.dismiss();
+                if (action != null) {
+                    action.run();
+                }
+            }
+        });
     }
 
     /** 菜单里的一行：只有文字，点击即执行。 */

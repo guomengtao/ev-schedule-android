@@ -103,6 +103,9 @@
         <activity android:name="com.application.watch.classschedule.CourseEditActivity"
             android:exported="false"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
+        <activity android:name="com.application.watch.classschedule.CourseNameActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
         <activity android:name="com.application.watch.classschedule.DebugActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />

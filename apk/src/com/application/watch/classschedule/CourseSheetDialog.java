@@ -53,8 +53,11 @@ public class CourseSheetDialog {
     private EditText nameInput;
     private EditText locInput;
     private EditText teacherInput;
-    private EditText startInput;
-    private EditText endInput;
+    /** 自定义时间：两个可点按钮（点开系统时间选择器），取代原来的手打输入框 */
+    private TextView startBtn;
+    private TextView endBtn;
+    private int startMin = 8 * 60;
+    private int endMin = 9 * 60 + 35;
     private TextView errorView;
     private LinearLayout customTimeRow;
 
@@ -63,6 +66,8 @@ public class CourseSheetDialog {
     private int selTemplate = 0;
     private final List<TextView> dayChips = new ArrayList<>();
     private final List<TextView> timeChips = new ArrayList<>();
+    /** 当前时段候选（内置 + 历史自定义），confirm 时按 selTemplate 取时间 */
+    private List<String[]> timeTemplates = new ArrayList<>();
 
     private Dialog dlg;
     private Dialog copyDlg;
@@ -84,7 +89,9 @@ public class CourseSheetDialog {
         this.prefill = prefill;
         this.draftAll = draftAll;
         this.listener = listener;
-        this.allNames = CourseEditUtil.allCourseNames(ctx);
+        // 课名候选改为读课名库（用户可增删改查）；首次会先把历史课名并进来，老用户升级后候选不丢
+        CourseNameStore.ensureSeeded(ctx);
+        this.allNames = CourseNameStore.names(ctx);
         build();
     }
 
@@ -205,12 +212,31 @@ public class CourseSheetDialog {
         errorView.setPadding(Ui.dp(c, 2), Ui.dp(c, 3), 0, 0);
         form.addView(errorView);
 
-        // ── 课程 chips（左右滑动选课）──
+        // ── 课程 chips（左右滑动选课）+ 管理入口 ──
+        form.addView(Ui.space(c, 2));
+        LinearLayout nameHead = new LinearLayout(c);
+        nameHead.setOrientation(LinearLayout.HORIZONTAL);
+        nameHead.setGravity(Gravity.CENTER_VERTICAL);
+        TextView recLabel = Ui.text(c, "课程", 10.5f, Ui.MUTED, false);
+        recLabel.setPadding(Ui.dp(c, 2), 0, 0, Ui.dp(c, 4));
+        nameHead.addView(recLabel, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView manage = Ui.text(c, "管理", 10.5f, Ui.ACCENT, false);
+        manage.setPadding(Ui.dp(c, 8), 0, Ui.dp(c, 2), Ui.dp(c, 4));
+        manage.setClickable(true);
+        manage.setContentDescription("管理课程名清单");
+        manage.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                // 课名库是本机数据，跳过去增删改查；面板保持不动，回来继续填
+                try {
+                    ctx.startActivity(new android.content.Intent(ctx, CourseNameActivity.class));
+                } catch (Throwable ignored) {
+                }
+            }
+        });
+        nameHead.addView(manage);
+        form.addView(nameHead);
         if (!allNames.isEmpty()) {
-            form.addView(Ui.space(c, 2));
-            TextView recLabel = Ui.text(c, "课程", 10.5f, Ui.MUTED, false);
-            recLabel.setPadding(Ui.dp(c, 2), 0, 0, Ui.dp(c, 4));
-            form.addView(recLabel);
             HorizontalScrollView hs = new HorizontalScrollView(c);
             hs.setHorizontalScrollBarEnabled(false);
             LinearLayout row = new LinearLayout(c);
@@ -244,20 +270,23 @@ public class CourseSheetDialog {
 
         // ── 时间（横向单行滚动，chip 不换行挤压）──
         form.addView(fieldLabel("时间"));
+        // 时段候选 = 内置 5 档 + 本机用过的自定义时段（用一次就沉进候选，下次点得到）
+        timeTemplates = CourseEditUtil.templates(c);
         HorizontalScrollView tScroll = new HorizontalScrollView(c);
         tScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout tRow = new LinearLayout(c);
         tRow.setOrientation(LinearLayout.HORIZONTAL);
-        for (int i = 0; i < CourseEditUtil.TEMPLATES.length; i++) {
+        for (int i = 0; i < timeTemplates.size(); i++) {
             final int idx = i;
-            String label = CourseEditUtil.TEMPLATES[i][0] + " " + CourseEditUtil.TEMPLATES[i][1];
+            String[] tpl = timeTemplates.get(i);
+            String label = tpl[0].length() == 0 ? tpl[1] : (tpl[0] + " " + tpl[1]);
             TextView ch = chipNoWrap(c, label, new View.OnClickListener() {
                 @Override public void onClick(View v) { selectTemplate(idx); }
             });
             timeChips.add(ch);
             tRow.addView(ch);
         }
-        TextView customChip = chipNoWrap(c, "自定义", new View.OnClickListener() {
+        TextView customChip = chipNoWrap(c, "自定义时间", new View.OnClickListener() {
             @Override public void onClick(View v) { selectTemplate(-1); }
         });
         timeChips.add(customChip);
@@ -266,29 +295,27 @@ public class CourseSheetDialog {
         form.addView(tScroll, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
+        // 自定义：两个可点按钮，点开系统时间选择器（原来要手打 "08:00"，键盘小、格式还得自己撞对）
         customTimeRow = new LinearLayout(c);
         customTimeRow.setOrientation(LinearLayout.HORIZONTAL);
         customTimeRow.setGravity(Gravity.CENTER_VERTICAL);
-        startInput = input(c, "");
-        startInput.setInputType(InputType.TYPE_CLASS_DATETIME);
-        startInput.setHint("08:00");
-        endInput = input(c, "");
-        endInput.setInputType(InputType.TYPE_CLASS_DATETIME);
-        endInput.setHint("09:35");
+        startBtn = timeButton(c, true);
+        endBtn = timeButton(c, false);
         TextView dash = Ui.text(c, "—", 13f, Ui.MUTED, false);
         LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         ip.topMargin = Ui.dp(c, 6);
         ip.rightMargin = Ui.dp(c, 8);
-        customTimeRow.addView(startInput, ip);
+        customTimeRow.addView(startBtn, ip);
         customTimeRow.addView(dash);
         LinearLayout.LayoutParams ip2 = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         ip2.topMargin = Ui.dp(c, 6);
         ip2.leftMargin = Ui.dp(c, 8);
-        customTimeRow.addView(endInput, ip2);
+        customTimeRow.addView(endBtn, ip2);
         customTimeRow.setVisibility(View.GONE);
         form.addView(customTimeRow);
+        refreshTimeBtns();
         form.addView(Ui.space(c, 8));
 
         // ── 教室 / 老师 ──
@@ -350,6 +377,79 @@ public class CourseSheetDialog {
         return t;
     }
 
+    // ======================= 自定义时间（系统选择器） =======================
+
+    /** 时间按钮：显示当前时间，点开系统时间选择器（24 小时制）。替代原来手打 "08:00" 的输入框 */
+    private TextView timeButton(Context c, final boolean isStart) {
+        TextView t = Ui.text(c, "", 14.5f, Ui.TEXT, true);
+        t.setGravity(Gravity.CENTER);
+        t.setSingleLine(true);
+        t.setBackground(Ui.round(Ui.CARD2, 12, Ui.LINE, c));
+        t.setPadding(0, Ui.dp(c, 10), 0, Ui.dp(c, 10));
+        t.setClickable(true);
+        t.setContentDescription(isStart ? "修改开始时间" : "修改结束时间");
+        t.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                pickTime(isStart);
+            }
+        });
+        return t;
+    }
+
+    private void refreshTimeBtns() {
+        if (startBtn != null) {
+            startBtn.setText(CourseCache.hm(startMin));
+        }
+        if (endBtn != null) {
+            endBtn.setText(CourseCache.hm(endMin));
+        }
+    }
+
+    private void pickTime(final boolean isStart) {
+        int base = isStart ? startMin : endMin;
+        new android.app.TimePickerDialog(ctx,
+                new android.app.TimePickerDialog.OnTimeSetListener() {
+                    @Override public void onTimeSet(android.widget.TimePicker view, int hour, int minute) {
+                        int m = hour * 60 + minute;
+                        if (isStart) {
+                            startMin = m;
+                            if (endMin <= startMin) {
+                                // 开始已经晚于结束 → 结束自动顺延 45 分钟，不让用户填完才被告知非法
+                                endMin = Math.min(23 * 60 + 59, startMin + 45);
+                            }
+                        } else {
+                            endMin = m;
+                        }
+                        refreshTimeBtns();
+                        syncTemplateFromCustom();
+                    }
+                }, base / 60, base % 60, true).show();
+    }
+
+    /** 自定义选出来的时间正好等于某个候选时段 → 高亮那个 chip，别出现「时间一样却显示自定义」 */
+    private void syncTemplateFromCustom() {
+        String time = CourseEditUtil.canon(CourseCache.hm(startMin) + " - " + CourseCache.hm(endMin));
+        if (time == null) {
+            return;
+        }
+        for (int i = 0; i < timeTemplates.size(); i++) {
+            if (time.equals(CourseEditUtil.canon(timeTemplates.get(i)[1]))) {
+                selectTemplate(i);
+                return;
+            }
+        }
+    }
+
+    /** 把课程里的时间字符串拆进两个按钮；解析失败保留默认 08:00-09:35 */
+    private void applyCustomTime(String time) {
+        int[] m = CourseCache.minutes(time == null ? "" : time);
+        if (m != null) {
+            startMin = m[0];
+            endMin = m[1];
+        }
+        refreshTimeBtns();
+    }
+
     private android.graphics.drawable.GradientDrawable topRounded() {
         android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
         g.setColor(Ui.CARD);
@@ -365,15 +465,12 @@ public class CourseSheetDialog {
             if (prefill != null) {
                 // 点空格添加：预填该列星期 + 该列下一常用时段（课程名留给用户/chips）
                 selectDay(Math.max(0, Math.min(6, prefill.day)));
-                int tpl = CourseEditUtil.matchTemplate(prefill.time);
+                int tpl = CourseEditUtil.matchTemplate(ctx, prefill.time);
                 if (tpl >= 0) {
                     selectTemplate(tpl);
                 } else {
                     selectTemplate(-1);
-                    String t = prefill.time == null ? "" : prefill.time;
-                    int i = t.indexOf('-');
-                    startInput.setText(i > 0 ? t.substring(0, i).trim() : t);
-                    endInput.setText(i > 0 ? t.substring(i + 1).trim() : "");
+                    applyCustomTime(prefill.time);
                 }
             } else {
                 selectDay(todayOrDefault());
@@ -385,16 +482,13 @@ public class CourseSheetDialog {
         locInput.setText(c.location);
         teacherInput.setText(c.teacher);
         selectDay(Math.max(0, Math.min(6, c.day)));
-        int tpl = CourseEditUtil.matchTemplate(c.time);
+        int tpl = CourseEditUtil.matchTemplate(ctx, c.time);
         if (tpl >= 0) {
             selectTemplate(tpl);
         } else {
             selectTemplate(-1);
-            // 非标时间拆进自定义输入框
-            String t = c.time == null ? "" : c.time;
-            int i = t.indexOf('-');
-            startInput.setText(i > 0 ? t.substring(0, i).trim() : t);
-            endInput.setText(i > 0 ? t.substring(i + 1).trim() : "");
+            // 非标时间拆进两个时间按钮
+            applyCustomTime(c.time);
         }
     }
 
@@ -462,14 +556,13 @@ public class CourseSheetDialog {
             return;
         }
         String time;
-        if (selTemplate >= 0) {
-            time = CourseEditUtil.TEMPLATES[selTemplate][1];
+        if (selTemplate >= 0 && selTemplate < timeTemplates.size()) {
+            time = timeTemplates.get(selTemplate)[1];
         } else {
             time = CourseEditUtil.normalizeRange(
-                    startInput.getText().toString().trim(),
-                    endInput.getText().toString().trim());
+                    CourseCache.hm(startMin), CourseCache.hm(endMin));
             if (time == null) {
-                errorView.setText("时间格式应为 HH:mm，且结束晚于开始");
+                errorView.setText("结束时间要晚于开始时间");
                 return;
             }
         }
@@ -509,6 +602,8 @@ public class CourseSheetDialog {
 
     private void finishSave(CourseCache.Course out) {
         CourseEditUtil.recordNameUse(ctx, out.name);
+        // 记进课名库：用户手打的课名从这里开始可被点选，下次不用再打
+        CourseNameStore.bump(ctx, out.name);
         dlg.dismiss();
         if (listener != null) {
             listener.onSaved(out, original);

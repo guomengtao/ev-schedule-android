@@ -43,27 +43,99 @@ public final class CourseEditUtil {
 
     /** 时间字符串匹配到第几个模板；不匹配任何模板（如手环同步来的 19:30）返回 -1 */
     public static int matchTemplate(String time) {
-        if (time == null) {
+        return matchTemplate(null, time);
+    }
+
+    /**
+     * 动态时段表：内置 5 档 + 本机课表里出现过的自定义时段（按出现频次取前 4 个）。
+     *
+     * <p>为什么不是纯常量表：用户自定义过一次 19:30-21:05，下次编辑就再也点不到了——
+     * 只能再手打一遍。把用过的时段收进候选，等于模板随用户习惯长出来，代码里那 5 档只是起步。
+     *
+     * @param c 传 null 时只返回内置档（后台/无 Context 场景）
+     * @return 每项为 {展示文案, 时间字符串}；自定义项的展示文案为空串（chip 只显示时间）
+     */
+    public static List<String[]> templates(Context c) {
+        List<String[]> out = new ArrayList<>();
+        for (String[] t : TEMPLATES) {
+            out.add(t);
+        }
+        if (c == null) {
+            return out;
+        }
+        final Map<String, Integer> freq = new HashMap<>();
+        try {
+            for (ScheduleStore.Schedule s : ScheduleStore.list(c)) {
+                for (CourseCache.Course co : s.courses) {
+                    String norm = canon(co == null ? null : co.time);
+                    if (norm == null || isBuiltin(norm)) {
+                        continue;
+                    }
+                    Integer f = freq.get(norm);
+                    freq.put(norm, f == null ? 1 : f + 1);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (freq.isEmpty()) {
+            return out;
+        }
+        List<String> times = new ArrayList<>(freq.keySet());
+        java.util.Collections.sort(times, new java.util.Comparator<String>() {
+            @Override public int compare(String a, String b) {
+                int d = freq.get(b) - freq.get(a);
+                return d != 0 ? d : a.compareTo(b);
+            }
+        });
+        for (int i = 0; i < times.size() && i < 4; i++) {
+            out.add(new String[]{"", times.get(i)});
+        }
+        return out;
+    }
+
+    /** 在动态时段表里找下标；-1 = 需要自定义 */
+    public static int matchTemplate(Context c, String time) {
+        String norm = canon(time);
+        if (norm == null) {
             return -1;
         }
-        String norm = time.replace("－", "-").replace("—", "-")
-                .replaceAll("\\s*-\\s*", " - ").trim();
-        for (int i = 0; i < TEMPLATES.length; i++) {
-            if (TEMPLATES[i][1].equals(norm)) {
+        List<String[]> all = templates(c);
+        for (int i = 0; i < all.size(); i++) {
+            if (all.get(i)[1].equals(norm)) {
                 return i;
             }
         }
-        // 宽松一点：只比起止分钟
+        // 宽松一点：只比起止分钟（兼容 "08:00-09:35" 这类不完全规范写法）
         int[] m = CourseCache.minutes(time);
         if (m != null) {
-            for (int i = 0; i < TEMPLATES.length; i++) {
-                int[] t = CourseCache.minutes(TEMPLATES[i][1]);
+            for (int i = 0; i < all.size(); i++) {
+                int[] t = CourseCache.minutes(all.get(i)[1]);
                 if (t != null && t[0] == m[0] && t[1] == m[1]) {
                     return i;
                 }
             }
         }
         return -1;
+    }
+
+    /** 归一化为 "HH:mm - HH:mm"；无法解析返回 null */
+    public static String canon(String time) {
+        int[] m = CourseCache.minutes(time);
+        if (m == null) {
+            return null;
+        }
+        return CourseCache.hm(m[0]) + " - " + CourseCache.hm(m[1]);
+    }
+
+    /** 是否是内置那 5 档之一（内置的不重复进「常用」区） */
+    private static boolean isBuiltin(String norm) {
+        for (String[] t : TEMPLATES) {
+            String n = canon(t[1]);
+            if (n != null && n.equals(norm)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 两个 "HH:mm" → 归一化时间字符串 "08:00 - 09:35"；起止非法返回 null */
