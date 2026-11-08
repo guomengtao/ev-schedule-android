@@ -410,6 +410,8 @@ public class HomeActivity extends Activity {
         root.addView(Ui.space(this, Ui.GAP_LG));
 
         setContentView(Ui.wrapWithBottomBar(this, root, 0));
+        // 与首页手势同一套口径：左滑回首页、右滑进「课表」栏目（底栏第二个 tab）
+        attachWeekGestures(root);
         bindStickyDateStrip(root);
         renderWeek();
     }
@@ -432,7 +434,7 @@ public class HomeActivity extends Activity {
         LinearLayout dateRow = new LinearLayout(this);
         dateRow.setOrientation(LinearLayout.HORIZONTAL);
         dateRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        dateRow.addView(circleBtn("\u2039", "上一天", new View.OnClickListener() {
+        dateRow.addView(circleBtn(R.drawable.ic_chevron_left, "上一天", new View.OnClickListener() {
             @Override public void onClick(View v) { shiftDay(-1); }
         }));
         LinearLayout dateCol = new LinearLayout(this);
@@ -452,7 +454,7 @@ public class HomeActivity extends Activity {
         dateSubView.setPadding(0, Ui.dp(this, 3), 0, 0);
         dateCol.addView(dateSubView);
         dateRow.addView(dateCol, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        dateRow.addView(circleBtn("\u203a", "下一天", new View.OnClickListener() {
+        dateRow.addView(circleBtn(R.drawable.ic_chevron_right, "下一天", new View.OnClickListener() {
             @Override public void onClick(View v) { shiftDay(1); }
         }));
 
@@ -477,11 +479,20 @@ public class HomeActivity extends Activity {
         root.addView(head);
     }
 
-    /** 圆形导航钮：40dp 白圆 + 主题色字形（手环首页同款），点击给一次轻震 */
-    private View circleBtn(String glyph, String desc, final View.OnClickListener l) {
-        TextView t = Ui.text(this, glyph, 20f, Ui.ACCENT, false);
-        t.setGravity(android.view.Gravity.CENTER);
+    /**
+     * 圆形导航钮：40dp 白圆 + lucide chevron 图标（与手环首页圆钮同款），点击给一次轻震。
+     *
+     * <p>原来用字体字形 ‹ ›，20sp 时笔画细、上下不居中，在一排 40dp 圆里显得又小又飘；
+     * 换成 vector（res/drawable/ic_chevron_*.xml，lucide chevron 24×24 描边 2）画到 24dp。
+     */
+    private View circleBtn(int iconRes, String desc, final View.OnClickListener l) {
+        android.widget.FrameLayout t = new android.widget.FrameLayout(this);
         t.setBackground(Ui.round(Ui.CARD, 999, Ui.LINE, this));
+        ImageView ic = new ImageView(this);
+        ic.setImageResource(iconRes);
+        ic.setColorFilter(Ui.ACCENT);
+        t.addView(ic, new android.widget.FrameLayout.LayoutParams(
+                Ui.dp(this, 24), Ui.dp(this, 24), android.view.Gravity.CENTER));
         t.setClickable(true);
         t.setContentDescription(desc);
         t.setOnClickListener(new View.OnClickListener() {
@@ -537,6 +548,68 @@ public class HomeActivity extends Activity {
                     p = (p instanceof View) ? ((View) p).getParent() : null;
                 }
                 installGestureListener(target);
+            }
+        });
+    }
+
+    /**
+     * 周课表页手势：左滑 → 首页，右滑 → 「课表」栏目。
+     *
+     * <p>和首页那对方向正好相反（首页左滑进周课表），这样「左滑往前翻、右滑往回退」在
+     * 两台设备上是一条线：首页 ⇄ 周课表 靠同一次滑动来回。右滑进「课表」是因为周课表
+     * 在这一栏之下（底栏第二个 tab），继续右滑等于退出这一栏。
+     */
+    private void attachWeekGestures(final View root) {
+        root.post(new Runnable() {
+            @Override public void run() {
+                View target = root;
+                android.view.ViewParent p = root.getParent();
+                while (p != null) {
+                    if (p instanceof android.widget.ScrollView) {
+                        target = (View) p;
+                        break;
+                    }
+                    p = (p instanceof View) ? ((View) p).getParent() : null;
+                }
+                installWeekGestureListener(target);
+            }
+        });
+    }
+
+    private void installWeekGestureListener(final View v) {
+        final int minDx = Ui.dp(this, 64);
+        v.setOnTouchListener(new View.OnTouchListener() {
+            private float x0, y0;
+
+            @Override public boolean onTouch(View view, android.view.MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        x0 = e.getX();
+                        y0 = e.getY();
+                        break;
+                    case android.view.MotionEvent.ACTION_UP:
+                        float dx = e.getX() - x0;
+                        float dy = e.getY() - y0;
+                        if (Math.abs(dx) > 2 * Math.abs(dy) && Math.abs(dx) > minDx) {
+                            view.performHapticFeedback(
+                                    android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                            if (dx < 0) {
+                                finish();                       // 左滑：回首页
+                            } else {
+                                // 右滑：进「课表」栏目。用 CLEAR_TOP 把它「弹回」到前台，
+                                // 而不是再压一层 —— 先前的 REORDER_TO_FRONT + finish() 有竞态：
+                                // finish 把栈顶弹掉后，前台落回首页，栏目根本没上来。
+                                Intent it = new Intent(HomeActivity.this, ScheduleListActivity.class);
+                                it.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                                startActivity(it);
+                                finish();
+                                overridePendingTransition(0, 0);
+                            }
+                        }
+                        break;
+                }
+                return false;
             }
         });
     }
@@ -784,7 +857,7 @@ public class HomeActivity extends Activity {
                 j++;
             }
             if (i > 0) {
-                todayBox.addView(Ui.space(this, 7));
+                todayBox.addView(Ui.space(this, 6));
             }
             todayBox.addView(sectionLabel(sec, j - i));
             boolean night = sec == SEC_NIGHT;
@@ -858,7 +931,7 @@ public class HomeActivity extends Activity {
         if (doing) {
             row.setBackground(Ui.round(night ? 0xFFE7E1FF : Ui.ACCENT_LIGHT, 10, 0, this));
         }
-        row.setPadding(Ui.dp(this, 7), Ui.dp(this, 4), Ui.dp(this, 7), Ui.dp(this, 4));
+        row.setPadding(Ui.dp(this, 7), Ui.dp(this, 3), Ui.dp(this, 7), Ui.dp(this, 3));
 
         // 节次序号窄列：早自习「早」/ 第N节「N」/ 最后一节「晚」，匹配不上作息档就不占位
         String seq = periodSeq(c.time);
@@ -879,7 +952,7 @@ public class HomeActivity extends Activity {
                 night ? NIGHT_FG : (doing ? Ui.ACCENT : Ui.MUTED), false, Ui.LH_MICRO);
         timeView.setSingleLine(true);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                Ui.dp(this, 70), LinearLayout.LayoutParams.WRAP_CONTENT);
+                Ui.dp(this, 86), LinearLayout.LayoutParams.WRAP_CONTENT);
         tlp.rightMargin = Ui.dp(this, Ui.GAP_SM);
         row.addView(timeView, tlp);
 
@@ -901,6 +974,18 @@ public class HomeActivity extends Activity {
             blp.leftMargin = Ui.dp(this, Ui.GAP_SM);
             row.addView(badge, blp);
         }
+
+        // 行尾时长注释：「45分」。纯装饰——右对齐、最浅一档灰度，只为把课名右侧的空白填一下，
+        // 不参与扫读（要比「已上/进行中」徽标更弱，所以用 MUTED_DECOR 而不是 MUTED）。
+        String dur = durationOf(c.time);
+        if (dur.length() > 0) {
+            TextView durView = Ui.textLh(this, dur, Ui.SP_MICRO, MUTED_DECOR, false, Ui.LH_MICRO);
+            durView.setSingleLine(true);
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            dlp.leftMargin = Ui.dp(this, Ui.GAP_SM);
+            row.addView(durView, dlp);
+        }
         return row;
     }
 
@@ -911,7 +996,18 @@ public class HomeActivity extends Activity {
         if (m == null) {
             return start;
         }
-        return start + "-" + hhmm(m[1]);
+        // 起止之间用「两个空格 + en dash + 两个空格」拉开：原来一个半角连字符挤成 08:00-08:40，
+        // 一眼看过去像一串数字；拉开后能立刻分成「开始 | 结束」两段。
+        return start + "\u2002\u2013\u2002" + hhmm(m[1]);
+    }
+
+    /** 时长注释：「40分」。解析不出区间就返回空串（不占位）。 */
+    private String durationOf(String t) {
+        int[] m = CourseCache.minutes(t);
+        if (m == null || m[1] <= m[0]) {
+            return "";
+        }
+        return (m[1] - m[0]) + "分";
     }
 
     private String hhmm(int minutes) {
@@ -919,6 +1015,9 @@ public class HomeActivity extends Activity {
         int mi = minutes % 60;
         return (h < 10 ? "0" : "") + h + ":" + (mi < 10 ? "0" : "") + mi;
     }
+
+    /** 行尾装饰灰（时长注释用）：比 MUTED 再浅一档，只填空不抢读 */
+    private static final int MUTED_DECOR = 0xFFB8B8C6;
 
     /** 晚自习底色 / 描边 / 字色：淡紫，和白天的中性卡片拉开但不抢眼 */
     private static final int NIGHT_BG = 0xFFF3F0FF;
@@ -1083,8 +1182,8 @@ public class HomeActivity extends Activity {
         ImageView prevBtn = new ImageView(this);
         prevBtn.setImageResource(R.drawable.ic_chevron_left);
         prevBtn.setColorFilter(Ui.MUTED);
-        // 热区 32 → 44dp：视觉图标 20dp + padding 12；圆角 15 → 12（圆角三档化）
-        prevBtn.setPadding(Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12));
+        // 热区仍 44dp，视觉图标 20 → 24dp（用户反馈太小），padding 12 → 10 补回差额
+        prevBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
         prevBtn.setBackground(Ui.round(Ui.CARD2, Ui.R_CTRL, 0, this));
         prevBtn.setContentDescription("上一周");
         int btnSize = Ui.dp(this, Ui.TOUCH_MIN);
@@ -1104,7 +1203,7 @@ public class HomeActivity extends Activity {
         ImageView nextBtn = new ImageView(this);
         nextBtn.setImageResource(R.drawable.ic_chevron_right);
         nextBtn.setColorFilter(Ui.MUTED);
-        nextBtn.setPadding(Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12));
+        nextBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
         nextBtn.setBackground(Ui.round(Ui.CARD2, Ui.R_CTRL, 0, this));
         nextBtn.setContentDescription("下一周");
         nextBtn.setOnClickListener(new View.OnClickListener() {
