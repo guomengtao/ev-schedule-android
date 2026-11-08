@@ -130,6 +130,16 @@ public final class Stats {
     public static void fillWatch(Context c, JSONObject watch) {
         try {
             SharedPreferences p = sp(c);
+            // 📱 使用统计 P0：手环 BLE MAC = 跨重装/重置/换机不变的设备锚点（方案 §1）。
+            //    这里**只读缓存**，探测发生在 cacheWatchDeviceId（连接后的低频路径），
+            //    埋点路径不做任何蓝牙查询 —— 不增加耗时、不引入权限风险。
+            String mac = watchMac(c);
+            if (mac.length() > 0) {
+                watch.put("mac", mac);
+            }
+            if (p.getBoolean("watch_mac_random", false)) {
+                watch.put("mac_random", true);   // 占位/随机地址：服务端不得拿它当锚点
+            }
             watch.put("connect_total", p.getInt("connect_total", 0));
             watch.put("connect_ok", p.getInt("connect_ok", 0));
             watch.put("connect_fail", p.getInt("connect_fail", 0));
@@ -216,6 +226,9 @@ public final class Stats {
             e.apply();
             // A5（P4）：历史清单里对应节点的 device_id 同步补上
             updateHistoryDeviceId(c, nid, did);
+            // 使用统计 P0：MAC 锚点懒探测。选择这里是因为「手环刚连上、deviceId 刚拿到」，
+            // 属于低频路径；且探针只读系统 bonding 列表，不扫描、不弹窗、失败静默。
+            ensureWatchMac(c, nid);
         } catch (Throwable ignored) {
         }
     }
@@ -226,6 +239,53 @@ public final class Stats {
             return clip(sp(c).getString("watch_device_id", ""), 128);
         } catch (Throwable t) {
             return "";
+        }
+    }
+
+    // ================= 使用统计 P0：设备身份锚点（MAC） =================
+    // 为什么需要（方案 §1）：install_id 每次重装都变、手环 deviceId 重置就变，
+    // 只有 BLE MAC / nodeId 跨重装、重置、换机稳定 —— 才有「这台手环装过几次、用了多久」。
+    // 保守约束（用户 2026-11-08 定：不能成为累赘）：
+    //   ① 埋点路径只读缓存，零蓝牙查询；
+    //   ② 探测只发生在 cacheWatchDeviceId（手环连上取到 deviceId 时）；
+    //   ③ 复用 DeviceProbe.collect（只读系统 bonding 列表，不扫描、不弹窗）；
+    //   ④ 全程 try/catch 吞异常，统计坏掉不影响连接与激活。
+
+    /** 已缓存的手环 BLE MAC（12 位大写 hex）;取不到返回空串。埋点路径专用，零探测。 */
+    public static String watchMac(Context c) {
+        try {
+            String v = sp(c).getString("watch_mac", "");
+            return v == null ? "" : clip(v, 32);
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    /**
+     * 懒探测并缓存 MAC。唯一的调用点是 {@link #cacheWatchDeviceId}（手环已连上、deviceId 刚取到）。
+     *
+     * <p>命中即返回：已有缓存且记录的 nodeId 与当前一致 → 完全不碰蓝牙。
+     * 换手环（nodeId 变了）会重新探测并覆盖旧值，避免把上一只手环的 MAC 挂到新设备上。
+     */
+    private static void ensureWatchMac(Context c, String nodeId) {
+        try {
+            SharedPreferences p = sp(c);
+            String nid = clip(nodeId, 64);
+            String cached = p.getString("watch_mac", "");
+            String cachedNode = p.getString("watch_mac_node", "");
+            if (cached != null && cached.length() > 0
+                    && (nid.length() == 0 || nid.equals(cachedNode))) {
+                return;                                   // 已有且同一只手环：零成本
+            }
+            DeviceProbe.Result r = DeviceProbe.collect(c);
+            SharedPreferences.Editor e = p.edit()
+                    .putLong("watch_mac_at", System.currentTimeMillis())
+                    .putBoolean("watch_mac_random", r.macRandom);
+            if (r.mac.length() > 0) {
+                e.putString("watch_mac", r.mac).putString("watch_mac_node", nid);
+            }
+            e.apply();
+        } catch (Throwable ignored) {
         }
     }
 
