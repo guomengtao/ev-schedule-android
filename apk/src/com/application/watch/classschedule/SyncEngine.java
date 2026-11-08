@@ -416,6 +416,11 @@ public final class SyncEngine {
             api.addListener(nodeId, rx).addOnSuccessListener(new OnSuccessListener<Void>() {
                 @Override public void onSuccess(Void v) {
                     listening = true;
+                    // 使用统计 P0：连接一就绪就异步探一次 MAC。
+                    // 放在这里而不是只放 cacheDeviceId 里，是因为后者在 get_device_id
+                    // 回包失败/超时时会提前 return，MAC 探测永远轮不到（线上 0 命中根因）。
+                    // 异步 + 只读系统 bonding 列表，不扫描、不弹窗、不拖慢连接流程。
+                    Stats.probeWatchMacAsync(ctx, nodeId);
                     cacheDeviceId(); // 监听就绪后再取真实设备 ID，保证回包能收到
                 }
             });

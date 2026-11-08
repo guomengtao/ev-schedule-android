@@ -247,9 +247,14 @@ public final class Stats {
     // 只有 BLE MAC / nodeId 跨重装、重置、换机稳定 —— 才有「这台手环装过几次、用了多久」。
     // 保守约束（用户 2026-11-08 定：不能成为累赘）：
     //   ① 埋点路径只读缓存，零蓝牙查询；
-    //   ② 探测只发生在 cacheWatchDeviceId（手环连上取到 deviceId 时）；
+    //   ② 探测发生在「连接就绪」与「取到 deviceId」两个点（都是低频路径）；
     //   ③ 复用 DeviceProbe.collect（只读系统 bonding 列表，不扫描、不弹窗）；
     //   ④ 全程 try/catch 吞异常，统计坏掉不影响连接与激活。
+    //
+    // ⚠️ 2026-11-08 线上实测修正（本单 evtask-D-ev-schedule--261108-zsw3ef）：
+    //   原先只在 cacheWatchDeviceId 内探测，而该方法在 get_device_id 回包 ok=false / 空
+    //   deviceId / 超时时会**提前 return**，探测从未执行 —— 线上 7 天 1657 条访问里
+    //   watch_mac 非空 0 条。现改为「连接一就绪就探一次」，与 get_device_id 成败解耦。
 
     /** 已缓存的手环 BLE MAC（12 位大写 hex）;取不到返回空串。埋点路径专用，零探测。 */
     public static String watchMac(Context c) {
@@ -262,7 +267,8 @@ public final class Stats {
     }
 
     /**
-     * 懒探测并缓存 MAC。唯一的调用点是 {@link #cacheWatchDeviceId}（手环已连上、deviceId 刚取到）。
+     * 懒探测并缓存 MAC。两个调用点：
+     * {@link #cacheWatchDeviceId}（手环回 deviceId 时）与 {@link #probeWatchMacAsync}（连接就绪时）。
      *
      * <p>命中即返回：已有缓存且记录的 nodeId 与当前一致 → 完全不碰蓝牙。
      * 换手环（nodeId 变了）会重新探测并覆盖旧值，避免把上一只手环的 MAC 挂到新设备上。
@@ -286,6 +292,36 @@ public final class Stats {
             }
             e.apply();
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 在后台线程探测并缓存 MAC，供「连接就绪」这类**与 get_device_id 成败无关**的时机调用。
+     *
+     * <p>为什么必须异步：{@code DeviceProbe.collect} 会读系统 bonding 列表
+     * （{@code BluetoothAdapter.getBondedDevices()}），虽然通常只有几十毫秒，但它跑在主线程上
+     * 会卡住刚连上蓝牙的 UI，属于「统计拖累体验」——明令禁止。
+     *
+     * <p>为什么不能只在 cacheWatchDeviceId 里探测：该函数在回包 ok=false / deviceId 为空 /
+     * 超时时会提前 return，探测就永远轮不到（2026-11-08 线上实测的根因）。
+     *
+     * <p>安全约束与 {@link #ensureWatchMac} 一致：不扫描、不弹窗、不加权限、异常全吞。
+     * nodeId 允许为空串（此时探测照跑，只是不写 node 关联）。
+     */
+    public static void probeWatchMacAsync(final Context c, final String nodeId) {
+        try {
+            if (c == null) {
+                return;
+            }
+            final Context app = c.getApplicationContext() != null ? c.getApplicationContext() : c;
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    ensureWatchMac(app, nodeId);
+                }
+            }, "ev-watch-mac-probe").start();
+        } catch (Throwable ignored) {
+            // 统计坏了绝不影响连接与激活
         }
     }
 
