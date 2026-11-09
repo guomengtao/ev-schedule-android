@@ -249,7 +249,8 @@ public final class RotationStore {
             String tm = o.optString("time", "");
             t.time = TextUtils.isEmpty(tm) ? DEFAULT_TIME : tm;
             t.calibDate = o.optString("calibDate", "");
-            t.calibWeek = Math.max(1, o.optInt("calibWeek", 1));
+            // 周期缩短后老数据的校准周可能越界，夹回 1..cycle（三端口径一致）
+            t.calibWeek = Math.min(t.cycle, Math.max(1, o.optInt("calibWeek", 1)));
             t.cells.clear();
             JSONObject cs = o.optJSONObject("cells");
             t.ensureCycle();
