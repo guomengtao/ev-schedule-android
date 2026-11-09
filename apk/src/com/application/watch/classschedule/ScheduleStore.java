@@ -247,15 +247,37 @@ public final class ScheduleStore {
                 setActive(c, s.id);
                 return true;
             }
-            Schedule def = defaultSchedule(c);
-            if (def != null) {
-                upsert(c, def);
-                setActive(c, def.id);
+            // 空库：写入出厂的两套课表，激活第一套（八年级二班）
+            List<Schedule> defs = defaultSchedules(c);
+            if (!defs.isEmpty()) {
+                for (int i = 0; i < defs.size(); i++) {
+                    upsert(c, defs.get(i));
+                }
+                setActive(c, defs.get(0).id);
                 return true;
             }
         } catch (Throwable ignored) {
         }
         return false;
+    }
+
+    /**
+     * 出厂默认课表（可多套，2026-11-09 起两套）：
+     *   1. default_schedule.json     → 八年级二班（默认激活）
+     *   2. default_schedule_901.json → 九年级一班（真实课表，49 条，不配晚课）
+     * 单套读失败只跳过该套；两套都读不到返回空列表。
+     */
+    public static List<Schedule> defaultSchedules(Context c) {
+        List<Schedule> out = new ArrayList<>();
+        Schedule a = defaultSchedule(c);
+        if (a != null) {
+            out.add(a);
+        }
+        Schedule b = defaultSchedule901(c);
+        if (b != null) {
+            out.add(b);
+        }
+        return out;
     }
 
     /** 新增一套本地课表，返回新 id */
@@ -500,14 +522,16 @@ public final class ScheduleStore {
             String activeId = root.optString("activeId", "");
             if (id.equals(activeId)) {
                 if (kept.length() == 0) {
-                    // 全删光：默认课表兜底
-                    Schedule def = defaultSchedule(c);
-                    if (def != null) {
-                        kept.put(toJson(def));
+                    // 全删光：出厂默认课表兜底（两套都写回，激活第一套）
+                    List<Schedule> defs = defaultSchedules(c);
+                    if (!defs.isEmpty()) {
+                        for (int d = 0; d < defs.size(); d++) {
+                            kept.put(toJson(defs.get(d)));
+                        }
                         root.put("schedules", kept);
-                        root.put("activeId", def.id);
+                        root.put("activeId", defs.get(0).id);
                         saveRoot(c, root);
-                        CourseCache.saveFlat(c, def.courses, def.name);
+                        CourseCache.saveFlat(c, defs.get(0).courses, defs.get(0).name);
                         return;
                     }
                     root.put("activeId", "");
@@ -634,11 +658,21 @@ public final class ScheduleStore {
         }
     }
 
-    /** 读 res/raw/default_schedule.json（出厂默认课表） */
+    /** 读 res/raw/default_schedule.json（第 1 套：八年级二班） */
     private static Schedule defaultSchedule(Context c) {
+        return readRawSchedule(c, R.raw.default_schedule, "ev_local_default");
+    }
+
+    /** 读 res/raw/default_schedule_901.json（第 2 套：九年级一班，真实课表 49 条） */
+    private static Schedule defaultSchedule901(Context c) {
+        return readRawSchedule(c, R.raw.default_schedule_901, "ev_local_default_901");
+    }
+
+    /** 从 res/raw 读一份课表 JSON；解析失败或没有课程时返回 null（单套缺失不影响另一套） */
+    private static Schedule readRawSchedule(Context c, int resId, String fallbackId) {
         InputStream in = null;
         try {
-            in = c.getResources().openRawResource(R.raw.default_schedule);
+            in = c.getResources().openRawResource(resId);
             java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
             byte[] buf = new byte[4096];
             int n;
@@ -648,7 +682,7 @@ public final class ScheduleStore {
             JSONObject o = new JSONObject(new String(bos.toByteArray(), Charset.forName("UTF-8")));
             Schedule s = fromJson(o);
             if (s.id.length() == 0) {
-                s.id = "ev_local_default";
+                s.id = fallbackId;
             }
             if (s.createdAt == 0) {
                 s.createdAt = System.currentTimeMillis();

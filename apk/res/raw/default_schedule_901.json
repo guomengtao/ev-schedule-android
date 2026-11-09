@@ -1,0 +1,350 @@
+{
+ "id": "ev_local_default_901",
+ "name": "示例课表（九年级一班）",
+ "source": "local",
+ "courses": [
+  {
+   "name": "政治",
+   "time": "08:00 - 08:45",
+   "teacher": "",
+   "location": "",
+   "day": 0
+  },
+  {
+   "name": "数学",
+   "time": "09:10 - 09:55",
+   "teacher": "",
+   "location": "",
+   "day": 0
+  },
+  {
+   "name": "语文",
+   "time": "10:05 - 10:50",
+   "teacher": "",
+   "location": "",
+   "day": 0
+  },
+  {
+   "name": "体育",
+   "time": "11:00 - 11:45",
+   "teacher": "",
+   "location": "",
+   "day": 0
+  },
+  {
+   "name": "历史",
+   "time": "14:00 - 14:45",
+   "teacher": "",
+   "location": "",
+   "day": 0
+  },
+  {
+   "name": "英语",
+   "time": "15:10 - 15:55",
+   "teacher": "",
+   "location": "",
+   "day": 0
+  },
+  {
+   "name": "物理",
+   "time": "16:05 - 16:50",
+   "teacher": "",
+   "location": "",
+   "day": 0
+  },
+  {
+   "name": "化学",
+   "time": "17:00 - 17:45",
+   "teacher": "",
+   "location": "",
+   "day": 0
+  },
+  {
+   "name": "语文",
+   "time": "18:30 - 19:15",
+   "teacher": "",
+   "location": "",
+   "day": 0
+  },
+  {
+   "name": "历史",
+   "time": "19:30 - 20:15",
+   "teacher": "",
+   "location": "",
+   "day": 0
+  },
+  {
+   "name": "英语",
+   "time": "08:00 - 08:45",
+   "teacher": "",
+   "location": "",
+   "day": 1
+  },
+  {
+   "name": "物理",
+   "time": "09:10 - 09:55",
+   "teacher": "",
+   "location": "",
+   "day": 1
+  },
+  {
+   "name": "数学",
+   "time": "10:05 - 10:50",
+   "teacher": "",
+   "location": "",
+   "day": 1
+  },
+  {
+   "name": "语文",
+   "time": "11:00 - 11:45",
+   "teacher": "",
+   "location": "",
+   "day": 1
+  },
+  {
+   "name": "语文",
+   "time": "14:00 - 14:45",
+   "teacher": "",
+   "location": "",
+   "day": 1
+  },
+  {
+   "name": "体育",
+   "time": "15:10 - 15:55",
+   "teacher": "",
+   "location": "",
+   "day": 1
+  },
+  {
+   "name": "化学",
+   "time": "16:05 - 16:50",
+   "teacher": "",
+   "location": "",
+   "day": 1
+  },
+  {
+   "name": "政治",
+   "time": "17:00 - 17:45",
+   "teacher": "",
+   "location": "",
+   "day": 1
+  },
+  {
+   "name": "数学",
+   "time": "18:30 - 19:15",
+   "teacher": "",
+   "location": "",
+   "day": 1
+  },
+  {
+   "name": "化学",
+   "time": "19:30 - 20:15",
+   "teacher": "",
+   "location": "",
+   "day": 1
+  },
+  {
+   "name": "英语",
+   "time": "08:00 - 08:45",
+   "teacher": "",
+   "location": "",
+   "day": 2
+  },
+  {
+   "name": "语文",
+   "time": "09:10 - 09:55",
+   "teacher": "",
+   "location": "",
+   "day": 2
+  },
+  {
+   "name": "物理",
+   "time": "10:05 - 10:50",
+   "teacher": "",
+   "location": "",
+   "day": 2
+  },
+  {
+   "name": "化学",
+   "time": "11:00 - 11:45",
+   "teacher": "",
+   "location": "",
+   "day": 2
+  },
+  {
+   "name": "数学",
+   "time": "14:00 - 14:45",
+   "teacher": "",
+   "location": "",
+   "day": 2
+  },
+  {
+   "name": "数学",
+   "time": "15:10 - 15:55",
+   "teacher": "",
+   "location": "",
+   "day": 2
+  },
+  {
+   "name": "历史",
+   "time": "16:05 - 16:50",
+   "teacher": "",
+   "location": "",
+   "day": 2
+  },
+  {
+   "name": "物理",
+   "time": "17:00 - 17:45",
+   "teacher": "",
+   "location": "",
+   "day": 2
+  },
+  {
+   "name": "英语",
+   "time": "18:30 - 19:15",
+   "teacher": "",
+   "location": "",
+   "day": 2
+  },
+  {
+   "name": "政治",
+   "time": "19:30 - 20:15",
+   "teacher": "",
+   "location": "",
+   "day": 2
+  },
+  {
+   "name": "英语",
+   "time": "08:00 - 08:45",
+   "teacher": "",
+   "location": "",
+   "day": 3
+  },
+  {
+   "name": "政治",
+   "time": "09:10 - 09:55",
+   "teacher": "",
+   "location": "",
+   "day": 3
+  },
+  {
+   "name": "数学",
+   "time": "10:05 - 10:50",
+   "teacher": "",
+   "location": "",
+   "day": 3
+  },
+  {
+   "name": "体育",
+   "time": "11:00 - 11:45",
+   "teacher": "",
+   "location": "",
+   "day": 3
+  },
+  {
+   "name": "语文",
+   "time": "14:00 - 14:45",
+   "teacher": "",
+   "location": "",
+   "day": 3
+  },
+  {
+   "name": "语文",
+   "time": "15:10 - 15:55",
+   "teacher": "",
+   "location": "",
+   "day": 3
+  },
+  {
+   "name": "化学",
+   "time": "16:05 - 16:50",
+   "teacher": "",
+   "location": "",
+   "day": 3
+  },
+  {
+   "name": "历史",
+   "time": "17:00 - 17:45",
+   "teacher": "",
+   "location": "",
+   "day": 3
+  },
+  {
+   "name": "数学",
+   "time": "18:30 - 19:15",
+   "teacher": "",
+   "location": "",
+   "day": 3
+  },
+  {
+   "name": "物理",
+   "time": "19:30 - 20:15",
+   "teacher": "",
+   "location": "",
+   "day": 3
+  },
+  {
+   "name": "化学",
+   "time": "08:00 - 08:45",
+   "teacher": "",
+   "location": "",
+   "day": 4
+  },
+  {
+   "name": "数学",
+   "time": "09:10 - 09:55",
+   "teacher": "",
+   "location": "",
+   "day": 4
+  },
+  {
+   "name": "物理",
+   "time": "10:05 - 10:50",
+   "teacher": "",
+   "location": "",
+   "day": 4
+  },
+  {
+   "name": "英语",
+   "time": "11:00 - 11:45",
+   "teacher": "",
+   "location": "",
+   "day": 4
+  },
+  {
+   "name": "历史",
+   "time": "14:00 - 14:45",
+   "teacher": "",
+   "location": "",
+   "day": 4
+  },
+  {
+   "name": "政治",
+   "time": "15:10 - 15:55",
+   "teacher": "",
+   "location": "",
+   "day": 4
+  },
+  {
+   "name": "英语",
+   "time": "16:05 - 16:50",
+   "teacher": "",
+   "location": "",
+   "day": 4
+  },
+  {
+   "name": "班会",
+   "time": "17:00 - 17:45",
+   "teacher": "",
+   "location": "",
+   "day": 4
+  },
+  {
+   "name": "周考",
+   "time": "18:20 - 20:20",
+   "teacher": "",
+   "location": "",
+   "day": 4
+  }
+ ]
+}
