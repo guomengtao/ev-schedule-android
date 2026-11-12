@@ -593,37 +593,22 @@ public class ScheduleListActivity extends Activity {
     private View scheduleCard(final ScheduleStore.Schedule s, final String activeId) {
         final boolean active = s.id.equals(activeId);
 
-        // 外层横向容器承载「卡片底色 + 描边」；当前卡描边走主色
+        // 外层横向容器承载「卡片底色 + 描边」；当前卡描边走主色。
+        // 当前卡的 4dp 主色竖条由背景 Drawable 自己画（Ui.stripCardBg）：
+        // 色条矩形 ∩ 卡片圆角轮廓，端头严格沿 R_CARD 收口。
+        // 旧实现把竖条做成独立子 View + setClipToOutline 裁剪，父卡轮廓裁剪不保证作用于子 View，
+        // 真机上左上/左下各顶出一个直角尖角（见 docs/课表页当前课表卡左色条圆角毛刺-缺陷记录.md）。
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setBackground(active
-                ? Ui.round(Ui.CARD, Ui.R_CARD, Ui.ACCENT, this)
+                ? Ui.stripCardBg(this, Ui.CARD, Ui.ACCENT, Ui.ACCENT,
+                        Ui.R_CARD, Ui.COURSE_BAR_DP, 1)
                 : Ui.round(Ui.CARD, Ui.R_CARD, Ui.LINE, this));
-
-        // 当前课表：左缘 4dp 主色竖条。
-        // 毛刺根因：竖条只有 4dp 宽，GradientDrawable 的圆角半径会被 clamp 到「半宽」(2dp)，
-        // 于是它比卡片 (R_CARD≈12dp) 的圆角更方 —— 左上/左下圆角处就顶出卡片轮廓，
-        // 露出一小截尖角 + 一道白缝。
-        // 修法：竖条画成纯色直角矩形，圆角交给父卡裁剪（setClipToOutline + 圆角 outline），
-        // 这样竖条的弧线必然与卡片外轮廓完全同心，不会再溢出。
-        if (active) {
-            card.setClipToOutline(true);
-            card.setOutlineProvider(new android.view.ViewOutlineProvider() {
-                @Override public void getOutline(View v, android.graphics.Outline o) {
-                    o.setRoundRect(0, 0, v.getWidth(), v.getHeight(),
-                            Ui.dp(ScheduleListActivity.this, Ui.R_CARD));
-                }
-            });
-            View strip = new View(this);
-            strip.setBackgroundColor(Ui.ACCENT);
-            card.addView(strip, new LinearLayout.LayoutParams(
-                    Ui.dp(this, 4), LinearLayout.LayoutParams.MATCH_PARENT));
-        }
 
         LinearLayout inner = new LinearLayout(this);
         inner.setOrientation(LinearLayout.VERTICAL);
-        // 左内边距扣掉竖条宽度，保证两种卡的「标题左缘」严格对齐
-        inner.setPadding(Ui.dp(this, active ? Ui.GAP_MD - 4 : Ui.GAP_MD), Ui.dp(this, 4),
+        // 色条改由背景绘制后不再占布局宽度；两种卡统一 GAP_MD，标题左缘严格对齐
+        inner.setPadding(Ui.dp(this, Ui.GAP_MD), Ui.dp(this, 4),
                 Ui.dp(this, Ui.GAP_MD), Ui.dp(this, 8));
 
         // ── 行 1：课表名（SP_TITLE 17sp，做页内视觉锚点）+ ⋯ 溢出菜单

@@ -413,6 +413,21 @@ public final class Ui {
                 COURSE_COLORS[i], current ? ACCENT : 0, 2);
     }
 
+    /**
+     * 带左侧身份色条的圆角卡片背景 —— v1.3 硬约束的通用唯一入口。
+     *
+     * <p>任何「圆角卡 + 左色条」都必须走这里，不许页面自己 addView 一个纯色竖条再靠
+     * setClipToOutline 裁剪：子 View 是直角矩形，端头会在卡片圆角处顶出两个尖角
+     * （2026-11-12 课表栏目主卡复现，详见 docs/课表页当前课表卡左色条圆角毛刺-缺陷记录.md）。
+     * 色条与卡片在同一个 Drawable 里求 Path 交集，端头必然沿圆角收口。
+     */
+    public static android.graphics.drawable.Drawable stripCardBg(Context c,
+            int fill, int barColor, int strokeColor,
+            int radiusDp, int barDp, int strokeDp) {
+        return new CourseBlockDrawable(c, fill, barColor, strokeColor,
+                strokeDp, radiusDp, barDp);
+    }
+
     /** 课程块专用 Drawable：圆角面 + 沿轮廓精确裁剪的身份色条 + 可选当前节描边。 */
     private static final class CourseBlockDrawable extends android.graphics.drawable.Drawable {
         private final float radius, barW, strokeW;
@@ -424,11 +439,17 @@ public final class Ui {
 
         CourseBlockDrawable(Context c, int faceColor, int barColor,
                             int strokeColor, int strokeDp) {
+            this(c, faceColor, barColor, strokeColor, strokeDp, R_BLOCK, COURSE_BAR_DP);
+        }
+
+        /** 通用形态：圆角半径 / 色条宽度 / 描边宽度由调用方按卡片 token 指定。 */
+        CourseBlockDrawable(Context c, int faceColor, int barColor,
+                            int strokeColor, int strokeDp, int radiusDp, int barDp) {
             this.faceColor = faceColor;
             this.barColor = barColor;
             this.strokeColor = strokeColor;
-            radius = dp(c, R_BLOCK);
-            barW = dp(c, COURSE_BAR_DP);
+            radius = dp(c, radiusDp);
+            barW = dp(c, barDp);
             strokeW = strokeColor == 0 ? 0f : dp(c, strokeDp);
         }
 

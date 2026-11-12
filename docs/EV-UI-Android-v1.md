@@ -225,7 +225,7 @@ Ui.text(c, "标题", 17f, Ui.TEXT, true); // ✗ 中文标题用 bold → Ui.tex
 | 用途 | 唯一入口 |
 |---|---|
 | 课程块底 | `Ui.courseBlockBg(c, name, current)`：浅底 + 左侧 `COURSE_BAR_DP = 4dp` 身份色条 + 今天 2dp `ACCENT` 描边 |
-| **色条实现（v1.3 硬约束）** | 必须走 `Ui.CourseBlockDrawable`：`色条矩形 ∩ 卡片圆角轮廓`（`Path.op(INTERSECT)`），端头严格沿圆角收口。**禁止**用 `LayerDrawable` 叠两张各自带四角圆角的 `GradientDrawable` 再 `setLayerInset` —— 真机会在色条上下两端产生斜切刺头（v1.3 已修，见附录 D） |
+| **色条实现（v1.3 硬约束 / v1.3.1 扩围）** | **所有「圆角卡 + 左侧色条」**（课程块、课表主卡、后续任何新增卡片）一律走 `Ui.courseBlockBg()` / `Ui.stripCardBg()`：`色条矩形 ∩ 卡片圆角轮廓`（`Path.op(INTERSECT)`），端头严格沿圆角收口，且色条与卡片必须在**同一个 Drawable、同一次绘制**里完成。**禁止**两类拼法：① `LayerDrawable` 叠两张各自带四角圆角的 `GradientDrawable` 再 `setLayerInset`；② 页面 `addView` 一个纯色竖条子 View 再靠父卡 `setClipToOutline` 裁剪（父轮廓裁剪不保证作用于子 View，且 `setClipToOutline` 早于 `setOutlineProvider` 时更不可靠）。两者真机表现都是色条上下两端各一个刺头（v1.3 首页课程块、v1.3.1 课表主卡各复发一次，见附录 D 与 [缺陷记录](课表页当前课表卡左色条圆角毛刺-缺陷记录.md)） |
 | 课名 / 地点 | `Ui.courseInk(name)`；地点沿用其 alpha 变体 |
 | elevation | `Ui.E0 = 0 / E1 = 4 / E2 = 8`（新代码禁止直接 `setElevation`） |
 
@@ -358,6 +358,7 @@ python3 tools/check-ui-spec.py --all    # 全量报告，只看迁移进度，�
 | 2026-11-05 18:42 | v1.2 试点 | 附录 B：连接检查页文案人话化落地 —— `SyncEngine` 诊断源头 24 处 + `DebugActivity` 学生可见文案 15 处 + 建议条整块重写；新增「诊断词双兼容」第 4 条硬规则；校验 85 行新增 0 硬违规（3 处功能名软提醒）、`build.sh` 编译通过；未发布 | `evtask-D-evev-schedul-261105-vrss7g` |
 | 2026-11-05 19:12 | v1.2 试点二 | 附录 C：激活页文案人话化 —— `FastActivateActivity` 22 条 + `ZeroActivateActivity` 14 条替换，两页学生可见硬禁词清零；原始 `json` / `reason` / 设备号不再显示、转入日志；词表补「设备 ID / 设备号 / 设备标识」并进校验脚本；设计图含 4 场景交互 + 浅深双主题 + 实测 WCAG 对比度与 48dp 热区；未发布 | `evtask-D-evev-schedul-261105-m46vrv` |
 | 2026-11-05 19:27 | v1.3 | **视觉层为主**：真机实测发现并修复课程块色条「上下两端刺头」（`LayerDrawable` 双圆角叠加 → `CourseBlockDrawable` 路径交集）；配色 7 色 ink + 浅色 OK/WARN/ERR 全压到 WCAG AA；卡片 1dp 描边 → E1 轻阴影；圆角 14/12/4 → 18/14/8；`SP_DISPLAY/TITLE` 22/17 → 24/18；`Ui.text` 统一 medium 字重与默认行高；新增「真机截图比对铁律」与 elevation 机器校验；两轮真机前后截图归档（附录 D） | `evtask-D-evev-schedul-261105-8bysct` |
+| 2026-11-12 17:2x | v1.3.1 | **色条硬约束扩围**：课表栏目「当前课表」主卡左 4dp 主色竖条在左上 / 左下圆角处顶出两个尖角；根因是该卡绕过 v1.3 唯一入口，自拼纯色竖条子 View + `setClipToOutline`。改为 `Ui.stripCardBg` 的 Path 交集背景（色条并入卡片 Drawable），删除竖条子 View 与轮廓裁剪，`inner` 左内边距统一 `GAP_MD` 保证两卡标题左缘对齐；新增缺陷记录 MD，修订记录与真机前后比对状态见该文档 | `evtask-D-ev-schedule--261112-sjjmpy` |
 
 **附录 A**：[首页 Pilot 设计图（前后对照）](EV-UI-Android-附录A-首页Pilot设计图.html) —— 规范的设计态验证，**不是**新的「XX 页全新设计方案」。
 **附录 B**：[连接检查页文案人话化前后对照](EV-UI-Android-附录B-连接失败页文案对照.html) —— 按「设计宪法 B」做的 K12 文案试点，含真实源码反例对照、词表验收与「诊断词双兼容」坑；同样是规范的验证材料，不是新设计方案。
