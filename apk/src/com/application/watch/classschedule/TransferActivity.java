@@ -26,6 +26,8 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import org.json.JSONArray;
@@ -475,6 +477,32 @@ public class TransferActivity extends Activity {
                 Ui.button(this, "选择文件", false, new View.OnClickListener() {
                     @Override public void onClick(View v) { pickFile(); }
                 })));
+
+        // ---- 示例数据：选格式 → 一键载入该平台原生格式 demo，真实验证导入链路 ----
+        LinearLayout demoRow = new LinearLayout(this);
+        demoRow.setOrientation(LinearLayout.HORIZONTAL);
+        demoRow.setGravity(Gravity.CENTER_VERTICAL);
+        demoRow.addView(Ui.text(this, "示例数据：", Ui.SP_CAPTION, Ui.MUTED, false));
+        final String[] DEMO_LABELS = {
+                "EV Schedule", "拾光 sgschedule", "WakeUp", "星链 Starlink", "CSES", "iCalendar (ICS)"};
+        final int[] DEMO_RES = {R.raw.demo_ev, R.raw.demo_shiguang, R.raw.demo_wakeup,
+                R.raw.demo_starlink, R.raw.demo_cses, R.raw.demo_ics};
+        final Spinner demoSpin = new Spinner(this);
+        ArrayAdapter<String> demoAd = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, DEMO_LABELS);
+        demoAd.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        demoSpin.setAdapter(demoAd);
+        demoRow.addView(demoSpin);
+        demoRow.addView(Ui.button(this, "载入示例", false, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                int i = demoSpin.getSelectedItemPosition();
+                if (i >= 0 && i < DEMO_RES.length) {
+                    loadDemo(DEMO_RES[i], DEMO_LABELS[i]);
+                }
+            }
+        }));
+        paste.addView(demoRow);
+
         root.addView(paste);
         root.addView(Ui.space(this, Ui.GAP_SM));
 
@@ -1039,6 +1067,35 @@ public class TransferActivity extends Activity {
         renderPreview();
         previewCard.setVisibility(View.VISIBLE);
         setRes(pasteRes, "已解析出 " + courses.length() + " 门课程", Ui.OK);
+    }
+
+    /** 载入某平台的示例 demo（打包在 res/raw），解析并预览，真实验证「选格式→导入 demo」链路 */
+    private void loadDemo(int resId, String srcName) {
+        try {
+            InputStream in = getResources().openRawResource(resId);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                bos.write(buf, 0, n);
+            }
+            in.close();
+            String text = new String(bos.toByteArray(), UTF8);
+            importEditor.setJson(text);
+            JSONArray courses = ScheduleImporter.parse(text);
+            if (courses == null || courses.length() == 0) {
+                setRes(pasteRes, "示例「" + srcName + "」未能解析出课程", Ui.ERR);
+                return;
+            }
+            parsedCourses = courses;
+            pendingRotation = extractRotation(text);
+            hideNameErr();
+            renderPreview();
+            previewCard.setVisibility(View.VISIBLE);
+            setRes(pasteRes, "已载入示例「" + srcName + "」并解析出 " + courses.length() + " 门课程", Ui.OK);
+        } catch (Throwable t) {
+            setRes(pasteRes, "载入示例失败：" + t, Ui.ERR);
+        }
     }
 
     private void renderPreview() {
