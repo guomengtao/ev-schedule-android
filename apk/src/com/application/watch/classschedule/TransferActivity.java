@@ -980,7 +980,9 @@ public class TransferActivity extends Activity {
             Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             i.addCategory(Intent.CATEGORY_OPENABLE);
             i.setType("*/*");
-            i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/json", "text/plain"});
+            // 放开 .ics 白名单：iCalendar 标准 MIME 为 text/calendar；
+            // 解析由 ev-schedule-sync 按文件内容(BEGIN:VCALENDAR)判定，与扩展名无关。
+            i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/json", "text/plain", "text/calendar"});
             startActivityForResult(i, REQ_PICK);
         } catch (Throwable t) {
             setRes(pasteRes, "无法打开文件选择器：" + t, Ui.ERR);
