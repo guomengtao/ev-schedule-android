@@ -162,6 +162,11 @@
         <activity android:name="com.application.watch.classschedule.ThemePickerActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
+        <!-- 帮助与反馈 / 留言板：原生页（替代浏览器打开 feedback.html）。
+             exported=true 便于 adb shell am start 直达做回归验证。 -->
+        <activity android:name="com.application.watch.classschedule.GuestbookActivity"
+            android:exported="true"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
 
         <service
             android:name="com.application.watch.classschedule.SyncService"
