@@ -162,6 +162,10 @@
         <activity android:name="com.application.watch.classschedule.ThemePickerActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
+        <!-- 表盘外观：换背景色 / 背景图。独立页，从设置进入；操作全在手机端，手环只负责接收。 -->
+        <activity android:name="com.application.watch.classschedule.FaceAppearanceActivity"
+            android:exported="true"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <!-- 帮助与反馈 / 留言板：原生页（替代浏览器打开 feedback.html）。
              exported=true 便于 adb shell am start 直达做回归验证。 -->
         <activity android:name="com.application.watch.classschedule.GuestbookActivity"

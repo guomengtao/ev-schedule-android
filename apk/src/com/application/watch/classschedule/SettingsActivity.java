@@ -163,6 +163,13 @@ public class SettingsActivity extends Activity {
                         startActivity(new Intent(SettingsActivity.this, ThemePickerActivity.class));
                     }
                 }));
+        // 表盘外观：换背景色/背景图。低频功能，放二级页；操作只能发生在手机端（手环没有相册）。
+        addRow(lookCard, row("表盘外观", subLabel("背景色 · 背景图"),
+                chevronOnly(), new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        startActivity(new Intent(SettingsActivity.this, FaceAppearanceActivity.class));
+                    }
+                }));
         root.addView(lookCard);
 
         // ==================== 分组 3 · 支持与关于 ====================
