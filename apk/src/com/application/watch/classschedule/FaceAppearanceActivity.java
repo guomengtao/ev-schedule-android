@@ -182,8 +182,10 @@ public class FaceAppearanceActivity extends Activity {
                     try {
                         JSONObject o = new JSONObject(json);
                         if (o.optBoolean("ok", false)) {
-                            result("背景色已写入：" + o.optString("color")
-                                    + "  ·  在手环上切一次表盘即可看到", Ui.OK);
+                            result("背景色已写入：" + o.optString("color") + "。下一步：切一次表盘", Ui.OK);
+                            popup("背景色已写入", "【还差最后一步】\n"
+                                    + "请按侧键回到手环表盘列表，切到别的表盘再切回来，颜色才会变。\n\n"
+                                    + "表盘只在启动时读一次配置，所以现在屏幕上还不会变。", true);
                         } else {
                             result("手环拒绝：" + o.optString("reason"), Ui.ERR);
                         }
@@ -413,23 +415,37 @@ public class FaceAppearanceActivity extends Activity {
                         @Override public void onReply(String json) {
                             try {
                                 JSONObject o = new JSONObject(json);
+                                // 以 ok 为准：手环侧写入成功即视为成功。
+                                // bytes/sizeMatch 是辅助字段，不同版本可能缺失或为 0，
+                                // 不能因为「读不到字节数」就误报成传输失败（真机上已复现过误报）。
                                 if (!o.optBoolean("ok", false)) {
                                     String miss = o.optString("missing", "");
-                                    result("写入失败：" + o.optString("reason")
-                                            + (miss.length() > 0 ? "（缺片 " + miss + "）" : "")
-                                            + "，请重试", Ui.ERR);
+                                    String reason = o.optString("reason", "未知原因");
+                                    result("写入失败：" + reason, Ui.ERR);
+                                    popup("写入未成功", "手环回复：" + reason
+                                            + (miss.length() > 0 ? "\n缺少分片：" + miss : "")
+                                            + "\n\n请确认：① 手环表盘是「EV 课程表」；"
+                                            + "② 快应用 ≥ 1.9.222；③ 传图期间停在本应用界面。"
+                                            + "\n\n可以直接再试一次。", false);
                                     return;
                                 }
-                                boolean match = o.optBoolean("sizeMatch", false);
                                 int bytes = o.optInt("bytes", 0);
-                                if (match) {
-                                    result("已写入手环 · " + bytes + " 字节 · 校验一致\n"
-                                            + "现在到手环上切一次表盘，就能看到新背景", Ui.OK);
-                                } else {
-                                    result("已写入 " + bytes + " 字节，但和发送字节数不一致，建议重传", Ui.WARN);
-                                }
+                                boolean match = o.optBoolean("sizeMatch", true);
+                                String size = bytes > 0 ? (" · " + bytes + " 字节") : "";
+                                result("已写入手环" + size + "。下一步：切一次表盘", Ui.OK);
+                                popup("已写入手环" + size, match
+                                        ? "背景已完整写入。\n\n【还差最后一步】\n"
+                                          + "请按侧键回到手环表盘列表，切到别的表盘再切回来 —— "
+                                          + "背景就会变成你刚选的样子。\n\n"
+                                          + "不做这一步，手环上不会发生任何变化，"
+                                          + "因为表盘只在启动时读一次配置。"
+                                        : "背景已写入，但字节数与发送值略有出入，若显示异常请重传一次。\n\n"
+                                          + "【还差最后一步】切到别的表盘再切回来，才会看到新背景。", true);
                             } catch (Throwable t) {
                                 result("回包无法解析：" + json, Ui.ERR);
+                                popup("已发送，但回执无法解析",
+                                        "图片可能已经写入。\n\n请直接到手环上切一次表盘看看效果；"
+                                                + "如果没变化，再重传一次。\n\n原始回执：" + json, true);
                             }
                         }
                         @Override public void onTimeout(String hint) { result("手环没响应：" + hint, Ui.WARN); }
@@ -473,6 +489,26 @@ public class FaceAppearanceActivity extends Activity {
                 if (resultView != null) {
                     resultView.setText(text);
                     resultView.setTextColor(color);
+                }
+            }
+        });
+    }
+
+    /**
+     * 结果弹窗。
+     * 页面底部的 resultView 在滚动后基本看不到，关键结论必须用弹窗送达，
+     * 否则「传成功了但提示看不见 / 看到的是没变化的屏幕」会被误判成功能坏了。
+     */
+    private void popup(String title, String msg, boolean ok) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                try {
+                    new android.app.AlertDialog.Builder(FaceAppearanceActivity.this)
+                            .setTitle((ok ? "✅ " : "⚠️ ") + title)
+                            .setMessage(msg)
+                            .setPositiveButton("知道了", null)
+                            .show();
+                } catch (Throwable ignored) {
                 }
             }
         });
