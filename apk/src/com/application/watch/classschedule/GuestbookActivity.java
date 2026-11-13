@@ -1,6 +1,7 @@
 package com.application.watch.classschedule;
 
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
