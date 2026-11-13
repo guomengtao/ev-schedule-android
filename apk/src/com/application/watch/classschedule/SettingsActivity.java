@@ -169,10 +169,10 @@ public class SettingsActivity extends Activity {
         root.addView(Ui.space(this, 24));
         root.addView(groupLabel("支持与关于"));
         LinearLayout helpCard = card();
-        addRow(helpCard, row("帮助与反馈", subLabel("常见问题 · QQ 群 · 提交截图反馈"),
+        addRow(helpCard, row("帮助与反馈", subLabel("常见问题 · QQ 群 · 写留言"),
                 chevronOnly(), new View.OnClickListener() {
                     @Override public void onClick(View v) {
-                        openFeedbackPage();
+                        startActivity(new Intent(SettingsActivity.this, GuestbookActivity.class));
                     }
                 }));
         addRow(helpCard, row("检查更新", null, chevronOnly(), new View.OnClickListener() {
