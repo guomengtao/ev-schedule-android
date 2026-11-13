@@ -4,9 +4,18 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.DashPathEffect;
+import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -64,6 +73,11 @@ public class FaceAppearanceActivity extends Activity {
     private TextView sizeView;
     private ProgressBar bar;
 
+    /** 取景层：选图后先调整裁剪范围，确认后才发送（编码与 BLE 链路不变） */
+    private Bitmap cropSrc;
+    private View cropOverlay;
+    private CropView cropView;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -102,7 +116,7 @@ public class FaceAppearanceActivity extends Activity {
         LinearLayout imgCard = Ui.card(this);
         imgCard.addView(Ui.text(this, "背景图", 13f, Ui.TEXT, true));
         imgCard.addView(Ui.space(this, 4));
-        imgCard.addView(Ui.text(this, "从相册选一张图，会自动裁成 192×490 并压成小体积，确认后发送到手表。",
+        imgCard.addView(Ui.text(this, "从相册选图后可拖动、缩放调整取景范围，确认后才压缩发送到手表。",
                 11f, Ui.MUTED, false));
         imgCard.addView(Ui.space(this, 8));
         sizeView = Ui.text(this, "", 11f, Ui.MUTED, false);
@@ -205,9 +219,7 @@ public class FaceAppearanceActivity extends Activity {
     // ======================= 选图 =======================
 
     private void pickImage() {
-        if (!ensureConnected()) {
-            return;
-        }
+        // 选图与取景是纯本地操作，不该被「手环没连上」挡住；连接检查放到发送前。
         try {
             Intent it = new Intent(Intent.ACTION_GET_CONTENT);
             it.setType("image/*");
@@ -225,40 +237,401 @@ public class FaceAppearanceActivity extends Activity {
             return;
         }
         Uri uri = data.getData();
-        result("正在处理图片…", Ui.MUTED);
+        result("正在读取图片…", Ui.MUTED);
         try {
-            Bitmap src;
-            InputStream in = getContentResolver().openInputStream(uri);
-            src = BitmapFactory.decodeStream(in);
-            if (in != null) {
-                in.close();
-            }
+            Bitmap src = decodeSampled(uri);
             if (src == null) {
                 result("这张图读不出来，换一张试试", Ui.ERR);
                 return;
             }
-            Bitmap fitted = fit(src);
-            int[] pal = new int[64];
-            byte[] idx = quantize(fitted, pal);
-            byte[] png = encodeIndexedPng(OW, OH, idx, pal);
-
-            int chunks = (png.length + CHUNK_BYTES - 1) / CHUNK_BYTES;
-            sizeView.setText("已压缩：" + png.length + " 字节 · " + chunks + " 个分片 · " + OW + "×" + OH);
-            sendImage(png, chunks);
+            showCrop(src);
         } catch (Throwable t) {
-            result("处理失败：" + t, Ui.ERR);
+            result("读取失败：" + t, Ui.ERR);
         }
     }
 
-    /** 等比缩放后居中裁剪到 192×490（绝不拉伸变形） */
-    private Bitmap fit(Bitmap src) {
-        float s = Math.max(OW / (float) src.getWidth(), OH / (float) src.getHeight());
-        int nw = Math.max(OW, Math.round(src.getWidth() * s));
-        int nh = Math.max(OH, Math.round(src.getHeight() * s));
-        Bitmap scaled = Bitmap.createScaledBitmap(src, nw, nh, true);
-        int x = Math.max(0, (nw - OW) / 2);
-        int y = Math.max(0, (nh - OH) / 2);
-        return Bitmap.createBitmap(scaled, x, y, OW, OH);
+    /** 降采样解码：4000×3000 原图直接进内存会 OOM；1600px 足够输出 192×490。 */
+    private Bitmap decodeSampled(Uri uri) throws Exception {
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        InputStream in = getContentResolver().openInputStream(uri);
+        BitmapFactory.decodeStream(in, null, o);
+        if (in != null) {
+            in.close();
+        }
+        int max = Math.max(o.outWidth, o.outHeight);
+        int sample = 1;
+        while (max / (sample * 2) >= 1600) {
+            sample *= 2;
+        }
+        BitmapFactory.Options o2 = new BitmapFactory.Options();
+        o2.inSampleSize = sample;
+        InputStream in2 = getContentResolver().openInputStream(uri);
+        Bitmap b = BitmapFactory.decodeStream(in2, null, o2);
+        if (in2 != null) {
+            in2.close();
+        }
+        return b;
+    }
+
+    // ======================= 取景裁剪 =======================
+
+    /**
+     * 选图后不直接发送：先给一个可拖动 / 缩放的取景层。
+     * 虚线框内是最终写入手环的部分；框外模糊压暗；右下角实时显示 1:1 实际效果。
+     * 这样用户不用先单独截图，也不需要接受固定的居中裁剪。
+     */
+    private void showCrop(Bitmap src) {
+        cropSrc = src;
+        if (cropOverlay != null) {
+            closeCrop();
+            cropSrc = src;
+        }
+
+        LinearLayout layer = new LinearLayout(this);
+        layer.setOrientation(LinearLayout.VERTICAL);
+        layer.setBackgroundColor(0xFF0B0F14);
+        layer.setPadding(dp(14), dp(10), dp(14), dp(12));
+
+        // 不用 Ui.header：它的返回箭头会直接 finish 掉整个页面，而不是关闭取景层。
+        layer.addView(Ui.text(this, "调整取景范围", 16f, Ui.TEXT, true));
+        layer.addView(Ui.space(this, 4));
+        layer.addView(Ui.text(this, "拖动图片、双指缩放。虚线框里就是最终传到手环的部分；"
+                + "框外是模糊的，右下角是实际效果。", 11f, Ui.MUTED, false));
+        layer.addView(Ui.space(this, 6));
+
+        cropView = new CropView(this);
+        layer.addView(cropView, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        layer.addView(Ui.space(this, 8));
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.addView(wideButton("重置", new View.OnClickListener() {
+            @Override public void onClick(View v) { cropView.resetTransform(); }
+        }));
+        row.addView(wideButton("旋转 90°", new View.OnClickListener() {
+            @Override public void onClick(View v) { rotateSrc(); }
+        }));
+        row.addView(wideButton("取消", new View.OnClickListener() {
+            @Override public void onClick(View v) { closeCrop(); }
+        }));
+        layer.addView(row);
+        layer.addView(Ui.space(this, 6));
+        layer.addView(Ui.button(this, "使用这张 → 发送到手环", true, new View.OnClickListener() {
+            @Override public void onClick(View v) { commitCrop(); }
+        }));
+
+        ViewGroup content = (ViewGroup) getWindow().getDecorView()
+                .findViewById(android.R.id.content);
+        content.addView(layer, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        cropOverlay = layer;
+        sizeView.setText("取景中：调整好范围后点「使用这张」");
+    }
+
+    private View wideButton(String label, View.OnClickListener l) {
+        View b = Ui.button(this, label, false, l);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        lp.setMargins(dp(3), 0, dp(3), 0);
+        b.setLayoutParams(lp);
+        return b;
+    }
+
+    private void closeCrop() {
+        if (cropOverlay != null) {
+            try {
+                ((ViewGroup) cropOverlay.getParent()).removeView(cropOverlay);
+            } catch (Throwable ignored) {
+            }
+        }
+        cropOverlay = null;
+        cropView = null;
+        cropSrc = null;
+    }
+
+    private void rotateSrc() {
+        try {
+            Bitmap s = cropSrc;
+            Matrix r = new Matrix();
+            r.postRotate(90);
+            cropSrc = Bitmap.createBitmap(s, 0, 0, s.getWidth(), s.getHeight(), r, true);
+            cropView.onSourceChanged();
+        } catch (Throwable t) {
+            result("旋转失败：" + t, Ui.ERR);
+        }
+    }
+
+    /** 确认后把当前取景矩阵映射成 192×490 位图，后续量化 / 编码 / 发送完全复用原链路。 */
+    private void commitCrop() {
+        if (cropSrc == null || cropView == null) {
+            return;
+        }
+        try {
+            RectF box = cropView.box();
+            Matrix fm = new Matrix(cropView.imageMatrix());
+            Matrix t = new Matrix();
+            t.setTranslate(-box.left, -box.top);
+            t.postScale(OW / box.width(), OH / box.height());
+            fm.postConcat(t);
+
+            Bitmap fitted = Bitmap.createBitmap(OW, OH, Bitmap.Config.ARGB_8888);
+            Canvas c = new Canvas(fitted);
+            Paint p = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
+            c.drawBitmap(cropSrc, fm, p);
+
+            int[] pal = new int[64];
+            byte[] idx = quantize(fitted, pal);
+            byte[] png = encodeIndexedPng(OW, OH, idx, pal);
+            int chunks = (png.length + CHUNK_BYTES - 1) / CHUNK_BYTES;
+            if (!ensureConnected()) {
+                popup("还没连上手环", "请先回首页完成连接，再回来点「使用这张」。\n\n"
+                        + "取景范围会保留，不会丢。", false);
+                return;
+            }
+            sizeView.setText("已压缩：" + png.length + " 字节 · " + chunks + " 个分片 · " + OW + "×" + OH);
+            closeCrop();
+            sendImage(png, chunks);
+        } catch (Throwable t) {
+            result("裁剪失败：" + t, Ui.ERR);
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (cropOverlay != null) {
+            closeCrop();
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    /** 取景 View：框内清晰、框外模糊压暗，支持单指拖动与双指缩放。 */
+    private final class CropView extends View {
+        private final Paint imgPaint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
+        private final Paint dim = new Paint();
+        private final Paint dash = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint solid = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF box = new RectF();
+        private final Matrix m = new Matrix();
+        private Bitmap blur;
+        private Bitmap blurOf;
+        private float baseScale = 1f;
+        private float scale = 1f;
+        private float offX = 0f;
+        private float offY = 0f;
+        private float lastX;
+        private float lastY;
+        private ScaleGestureDetector det;
+
+        CropView(android.content.Context c) {
+            super(c);
+            dim.setColor(0x99000000);
+            dash.setStyle(Paint.Style.STROKE);
+            dash.setStrokeWidth(dp(2));
+            dash.setColor(0xFF4ADE9B);
+            dash.setPathEffect(new DashPathEffect(new float[]{dp(9), dp(6)}, 0));
+            solid.setStyle(Paint.Style.STROKE);
+            solid.setStrokeWidth(dp(3));
+            solid.setColor(0xFF4ADE9B);
+            det = new ScaleGestureDetector(c, new ScaleGestureDetector.OnScaleGestureListener() {
+                @Override public boolean onScale(ScaleGestureDetector d) {
+                    scale = Math.max(1f, Math.min(4f, scale * d.getScaleFactor()));
+                    clampOffset();
+                    invalidate();
+                    return true;
+                }
+
+                @Override public boolean onScaleBegin(ScaleGestureDetector d) {
+                    return true;
+                }
+
+                @Override public void onScaleEnd(ScaleGestureDetector d) {
+                }
+            });
+        }
+
+        @Override
+        protected void onSizeChanged(int w, int h, int ow, int oh) {
+            float pad = dp(16);
+            float availW = w - pad * 2;
+            float availH = h - pad * 2;
+            float bw = Math.min(availW * 0.90f, availH * 0.90f * OW / (float) OH);
+            float bh = bw * OH / (float) OW;
+            box.set((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2);
+            computeBase();
+        }
+
+        void onSourceChanged() {
+            blur = null;
+            blurOf = null;
+            computeBase();
+            scale = 1f;
+            offX = 0f;
+            offY = 0f;
+            invalidate();
+        }
+
+        void resetTransform() {
+            scale = 1f;
+            offX = 0f;
+            offY = 0f;
+            invalidate();
+        }
+
+        private void computeBase() {
+            Bitmap s = cropSrc;
+            if (s == null || box.width() <= 0) {
+                return;
+            }
+            baseScale = Math.max(box.width() / s.getWidth(), box.height() / s.getHeight());
+        }
+
+        Matrix imageMatrix() {
+            computeMatrix();
+            return new Matrix(m);
+        }
+
+        RectF box() {
+            return new RectF(box);
+        }
+
+        private void computeMatrix() {
+            Bitmap s = cropSrc;
+            if (s == null) {
+                return;
+            }
+            float sc = baseScale * scale;
+            float iw = s.getWidth() * sc;
+            float ih = s.getHeight() * sc;
+            m.setScale(sc, sc);
+            m.postTranslate(box.centerX() - iw / 2 + offX, box.centerY() - ih / 2 + offY);
+        }
+
+        /** 钳制偏移，保证裁剪框内永远被图片填满，不会拖出黑边。 */
+        private void clampOffset() {
+            Bitmap s = cropSrc;
+            if (s == null) {
+                return;
+            }
+            float sc = baseScale * scale;
+            float mx = Math.max(0, (s.getWidth() * sc - box.width()) / 2);
+            float my = Math.max(0, (s.getHeight() * sc - box.height()) / 2);
+            offX = Math.max(-mx, Math.min(mx, offX));
+            offY = Math.max(-my, Math.min(my, offY));
+        }
+
+        /** 缩到 1/16 再按 filter 放大绘制 = 兼容所有 API 的低成本模糊，不用 RenderScript。 */
+        private Bitmap blurBitmap(Bitmap s) {
+            if (blur != null && blurOf == s) {
+                return blur;
+            }
+            int bw = Math.max(1, s.getWidth() / 16);
+            int bh = Math.max(1, s.getHeight() / 16);
+            blur = Bitmap.createScaledBitmap(s, bw, bh, true);
+            blurOf = s;
+            return blur;
+        }
+
+        @Override
+        protected void onDraw(Canvas c) {
+            Bitmap s = cropSrc;
+            if (s == null) {
+                return;
+            }
+            c.drawColor(0xFF11151B);
+            computeMatrix();
+
+            Bitmap bl = blurBitmap(s);
+            // 先铺一层固定 cover 的模糊底：图片被拖到边缘时框外不会露出黑块。
+            float bs = Math.max(getWidth() / (float) bl.getWidth(),
+                    getHeight() / (float) bl.getHeight());
+            Matrix cover = new Matrix();
+            cover.setScale(bs, bs);
+            cover.postTranslate((getWidth() - bl.getWidth() * bs) / 2,
+                    (getHeight() - bl.getHeight() * bs) / 2);
+            c.drawBitmap(bl, cover, imgPaint);
+            // 再叠一层跟随取景变换的模糊图，让框外与框内的位置尽量对应。
+            Matrix bm = new Matrix(m);
+            bm.preScale(s.getWidth() / (float) bl.getWidth(),
+                    s.getHeight() / (float) bl.getHeight());
+            c.drawBitmap(bl, bm, imgPaint);
+
+            int save = c.save();
+            c.clipRect(box);
+            c.drawBitmap(s, m, imgPaint);
+            c.restoreToCount(save);
+
+            c.drawRect(0, 0, getWidth(), box.top, dim);
+            c.drawRect(0, box.bottom, getWidth(), getHeight(), dim);
+            c.drawRect(0, box.top, box.left, box.bottom, dim);
+            c.drawRect(box.right, box.top, getWidth(), box.bottom, dim);
+
+            c.drawRect(box, dash);
+            float k = dp(16);
+            c.drawLine(box.left, box.top, box.left + k, box.top, solid);
+            c.drawLine(box.left, box.top, box.left, box.top + k, solid);
+            c.drawLine(box.right, box.top, box.right - k, box.top, solid);
+            c.drawLine(box.right, box.top, box.right, box.top + k, solid);
+            c.drawLine(box.left, box.bottom, box.left + k, box.bottom, solid);
+            c.drawLine(box.left, box.bottom, box.left, box.bottom - k, solid);
+            c.drawLine(box.right, box.bottom, box.right - k, box.bottom, solid);
+            c.drawLine(box.right, box.bottom, box.right, box.bottom - k, solid);
+
+            drawPreview(c, s);
+        }
+
+        /** 右下角 1:1 预览：与最终 192×490 输出用同一个取景矩阵，所见即所得。 */
+        private void drawPreview(Canvas c, Bitmap s) {
+            float ph = Math.min(getHeight() * 0.24f, dp(170));
+            float pw = ph * OW / (float) OH;
+            float px = getWidth() - pw - dp(12);
+            float py = getHeight() - ph - dp(12);
+            RectF dst = new RectF(px, py, px + pw, py + ph);
+
+            Matrix pm = new Matrix(m);
+            Matrix t = new Matrix();
+            t.setTranslate(-box.left, -box.top);
+            t.postScale(pw / box.width(), ph / box.height());
+            t.postTranslate(px, py);
+            pm.postConcat(t);
+
+            c.save();
+            c.clipRect(dst);
+            c.drawColor(0xFF000000);
+            c.drawBitmap(s, pm, imgPaint);
+            c.restoreToCount(c.getSaveCount() - 1);
+
+            Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
+            edge.setStyle(Paint.Style.STROKE);
+            edge.setStrokeWidth(dp(2));
+            edge.setColor(0xFFFFFFFF);
+            c.drawRect(dst, edge);
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent e) {
+            det.onTouchEvent(e);
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    lastX = e.getX();
+                    lastY = e.getY();
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (!det.isInProgress() && e.getPointerCount() == 1) {
+                        offX += e.getX() - lastX;
+                        offY += e.getY() - lastY;
+                        lastX = e.getX();
+                        lastY = e.getY();
+                        clampOffset();
+                        invalidate();
+                    }
+                    return true;
+                default:
+                    return true;
+            }
+        }
     }
 
     /**
