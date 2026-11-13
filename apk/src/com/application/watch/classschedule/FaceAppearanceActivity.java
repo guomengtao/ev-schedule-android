@@ -122,6 +122,26 @@ public class FaceAppearanceActivity extends Activity {
         root.addView(Ui.mono(this, "建议用简洁、大色块的图。照片细节越多，分片越多、传得越久。"));
         root.addView(Ui.space(this, 8));
         root.addView(Ui.mono(this, "传图期间请停在手环本应用界面，息屏或切走会被系统回收。"));
+        root.addView(Ui.space(this, 10));
+
+        // ======================= 使用前提（两个条件必须同时满足） =======================
+        LinearLayout reqCard = Ui.card(this);
+        reqCard.addView(Ui.text(this, "使用前提", 13f, Ui.TEXT, true));
+        reqCard.addView(Ui.space(this, 6));
+        reqCard.addView(Ui.text(this, "两个条件必须同时满足，缺一个都不会生效。", 11f, Ui.MUTED, false));
+        reqCard.addView(Ui.space(this, 8));
+        reqCard.addView(Ui.text(this, "① 手环表盘必须选「EV 课程表」", 12f, Ui.TEXT, false));
+        reqCard.addView(Ui.text(this, "手环里表盘有很多，但只有「EV 课程表」这一款能读本功能写入的背景。"
+                + "选成其他表盘，背景不会出现任何变化。", 11f, Ui.MUTED, false));
+        reqCard.addView(Ui.space(this, 8));
+        reqCard.addView(Ui.text(this, "② 课程表快应用需 1.9.222 及以上", 12f, Ui.TEXT, false));
+        reqCard.addView(Ui.text(this, "背景图能力从 1.9.222 起才可用（1.9.220/221 写入会失败）。"
+                + "本机安装的同步器版本不低于 v0.6.57。", 11f, Ui.MUTED, false));
+        reqCard.addView(Ui.space(this, 8));
+        reqCard.addView(Ui.text(this, "③ 写完之后：切一次表盘才生效", 12f, Ui.WARN, true));
+        reqCard.addView(Ui.text(this, "表盘只在启动时读一次配置，所以写完当时屏幕不会变化，"
+                + "按侧键回到表盘列表、切到别的表盘再切回来即可。", 11f, Ui.MUTED, false));
+        root.addView(reqCard);
         root.addView(Ui.space(this, 8));
 
         resultView = Ui.text(this, "", 12.5f, Ui.MUTED, false);
