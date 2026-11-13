@@ -1,23 +1,31 @@
 package com.application.watch.classschedule;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.DashPathEffect;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import org.json.JSONObject;
@@ -856,6 +864,8 @@ public class FaceAppearanceActivity extends Activity {
         return true;
     }
 
+    private Dialog popupDlg;
+
     private void result(final String text, final int color) {
         runOnUiThread(new Runnable() {
             @Override public void run() {
@@ -863,28 +873,90 @@ public class FaceAppearanceActivity extends Activity {
                     resultView.setText(text);
                     resultView.setTextColor(color);
                 }
+                // 失败 / 警告不能只留在页面底部（页面滚动后基本看不见），一律弹窗送达。
+                // 已有详细文案 popup 的路径会覆盖这个通用弹窗，不会叠两层。
+                if (color == Ui.ERR || color == Ui.WARN) {
+                    String title = "操作未完成";
+                    int p = text.indexOf("：");
+                    if (p > 0 && p <= 14) title = text.substring(0, p);
+                    showPopup(title, text
+                            + "\n\n请确认：① 手环已连接；② 表盘为 EV 课程提醒 / EV Class；"
+                            + "③ 快应用 ≥ 1.9.222。\n\n可以直接再试一次。", false);
+                }
             }
         });
     }
 
-    /**
-     * 结果弹窗。
-     * 页面底部的 resultView 在滚动后基本看不到，关键结论必须用弹窗送达，
-     * 否则「传成功了但提示看不见 / 看到的是没变化的屏幕」会被误判成功能坏了。
-     */
+    /** 结果弹窗：与「发现新版本」升级卡同一视觉语言（圆角卡 + 图标章 + 滚动正文 + 主按钮）。 */
     private void popup(String title, String msg, boolean ok) {
         runOnUiThread(new Runnable() {
             @Override public void run() {
-                try {
-                    new android.app.AlertDialog.Builder(FaceAppearanceActivity.this)
-                            .setTitle((ok ? "✅ " : "⚠️ ") + title)
-                            .setMessage(msg)
-                            .setPositiveButton("知道了", null)
-                            .show();
-                } catch (Throwable ignored) {
-                }
+                showPopup(title, msg, ok);
             }
         });
+    }
+
+    /** 必须在 UI 线程调用；单实例，后一次结果覆盖前一次，避免连续回调弹出多层窗口。 */
+    private void showPopup(String title, String msg, boolean ok) {
+        try {
+            if (isFinishing() || isDestroyed()) return;
+            if (popupDlg != null) {
+                try { popupDlg.dismiss(); } catch (Throwable ignored) { }
+            }
+            final Activity a = FaceAppearanceActivity.this;
+            final int accent = ok ? Ui.ACCENT : Ui.ERR;
+            LinearLayout box = new LinearLayout(a);
+            box.setOrientation(LinearLayout.VERTICAL);
+            box.setGravity(Gravity.CENTER_HORIZONTAL);
+            int pad = dp(22);
+            box.setBackground(Ui.round(Ui.CARD, 22, 0, a));
+            box.setPadding(pad, pad, pad, pad);
+
+            ImageView iv = new ImageView(a);
+            iv.setImageResource(ok ? R.drawable.ic_upload : R.drawable.ic_unlink);
+            iv.setColorFilter(accent);
+            iv.setBackground(Ui.round((accent & 0x00FFFFFF) | 0x2E000000, 26, 0, a));
+            iv.setPadding(dp(13), dp(13), dp(13), dp(13));
+            box.addView(iv, new LinearLayout.LayoutParams(dp(52), dp(52)));
+            box.addView(Ui.space(a, 12));
+            box.addView(Ui.text(a, title, 16.5f, Ui.TEXT, true));
+            box.addView(Ui.space(a, 10));
+
+            ScrollView sv = new ScrollView(a);
+            sv.setVerticalScrollBarEnabled(false);
+            TextView body = Ui.text(a, msg, 13.5f, Ui.TEXT, false);
+            body.setLineSpacing(dp(3), 1f);
+            body.setGravity(Gravity.CENTER);
+            sv.addView(body, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT));
+            box.addView(sv, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    msg.length() > 90 ? dp(175) : LinearLayout.LayoutParams.WRAP_CONTENT));
+            box.addView(Ui.space(a, 16));
+
+            final Dialog[] holder = new Dialog[1];
+            Button go = Ui.button(a, "知道了", false, new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (holder[0] != null) holder[0].dismiss();
+                }
+            });
+            go.setBackground(Ui.round(accent, 12, 0, a));
+            go.setTextColor(0xFFFFFFFF);
+            box.addView(go, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(42)));
+
+            Dialog dlg = new Dialog(a);
+            dlg.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+            dlg.setContentView(box);
+            dlg.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dlg.getWindow().setDimAmount(0.55f);
+            dlg.getWindow().setLayout(dp(310), WindowManager.LayoutParams.WRAP_CONTENT);
+            holder[0] = dlg;
+            popupDlg = dlg;
+            dlg.show();
+        } catch (Throwable ignored) {
+        }
     }
 
     private int dp(int v) {
