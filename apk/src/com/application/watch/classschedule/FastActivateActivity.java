@@ -339,7 +339,12 @@ public class FastActivateActivity extends Activity {
                 devSub.setVisibility(View.VISIBLE);
             }
         }
-        // 设备动作仅在有连接时有意义（见 showDevMenu 注释）
+        // 手环连上且已握手才有版本可比：低于 1.9.143 的旧包激活后不显示成功页，
+        // 用户会误判失败而重复下单（2026-11-14 工单）。幂等，重复调用无副作用。
+        if (state == ST_OK) {
+            RpkCheck.attach(this, mainCard);
+        }
+        // 设备动作仅在有连接时才有意义（见 showDevMenu 注释）
         if (devMore != null) {
             devMore.setVisibility(SyncEngine.get(this).hasNode() ? View.VISIBLE : View.GONE);
         }
