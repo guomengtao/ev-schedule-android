@@ -392,22 +392,27 @@ public final class ScheduleStore {
             String newId = watchId(dev, s.name);
             s.deviceId = dev.isEmpty() ? "legacy-unknown" : dev;
             s.deviceName = (deviceName == null) ? "" : deviceName;
-            // 若同名 sync 课表已存在（同设备）：直接删掉本地记录（手环侧才是真源），避免重复 id
+            // 若同名 sync 课表已存在（同设备）：手环上那份刚刚被本次「存进手环」覆盖成
+            // 本地这份的内容，旧的同名镜像已经是过期快照 —— 正确做法是删掉旧镜像、
+            // 让本地卡接管 newId。
+            // 原实现反过来把【用户正在存的那张本地卡】删掉（注释写「手环侧才是真源」），
+            // 实测表现为：存完自己的课表凭空消失，列表里只剩一张内容过期的同名手环卡，
+            // 用户看到的就是「课表/课多冒出来一份」。
             Schedule dup = find(c, newId);
             if (dup != null && !localId.equals(dup.id)) {
                 JSONArray kept = new JSONArray();
                 for (int i = 0; i < arr.length(); i++) {
                     JSONObject o = arr.optJSONObject(i);
-                    if (o != null && !localId.equals(o.optString("id"))) {
+                    if (o != null && !dup.id.equals(o.optString("id"))) {
                         kept.put(o);
                     }
                 }
                 root.put("schedules", kept);
-                if (localId.equals(root.optString("activeId"))) {
-                    root.put("activeId", newId);
+                arr = kept;
+                if (dup.id.equals(root.optString("activeId"))) {
+                    root.put("activeId", localId);
                 }
-                saveRoot(c, root);
-                return;
+                // 不 return：继续走下面的「本地卡改 id → newId」流程
             }
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.optJSONObject(i);

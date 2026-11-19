@@ -1042,7 +1042,12 @@ public class ScheduleListActivity extends Activity {
         try {
             JSONArray courses = new JSONArray();
             for (CourseCache.Course c : s.courses) {
+                c.ensureId();
                 JSONObject o = new JSONObject();
+                // 带上稳定 id：与 SyncCoordinator.buildImport 保持同一口径。
+                // 少了这一条，手环回传时会重新生成 id，本地三方合并按 id 匹配就会
+                // 把「同一门课」判成两门，表现为同步后课程越变越多。
+                o.put("id", c.id);
                 o.put("name", c.name);
                 o.put("day", c.day + 1);
                 o.put("time", c.time);
@@ -1057,6 +1062,8 @@ public class ScheduleListActivity extends Activity {
             JSONObject body = new JSONObject();
             body.put("courses", courses);
             body.put("scheduleName", s.name);
+            // 带上本机课表 id：手环端可据此记录来源，后续若要「按 id 覆盖」也有依据
+            body.put("scheduleId", s.id);
             JSONObject msg = new JSONObject();
             msg.put("action", "import");
             msg.put("payload", body);
