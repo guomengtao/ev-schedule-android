@@ -115,6 +115,8 @@ public final class CourseCache {
         if (c == null || flat == null || flat.isEmpty()) {
             return 0;
         }
+        // 落盘前再去一次重：写进缓存的数据本身就是干净的，后续任何界面都不会再看到重复。
+        flat = dedupe(flat);
         try {
             JSONArray arr = new JSONArray();
             for (Course co : flat) {
@@ -216,6 +218,9 @@ public final class CourseCache {
         }
         // 临时调课折算：周模板不动，只把「今天」被挪走/挪来的课在这里换掉。
         // 这是全端唯一接入点——首页、周视图、两个桌面插件、上课提醒都走 load，所以一处生效全端一致。
+        // 存量去重：历史版本同步时可能已把重复课落进缓存，这里读出来先收一次口，
+        // 保证「同一门课」在任何界面都只显示一次（旧数据自愈，无需用户重装/重同步）。
+        out = dedupe(out);
         List<Course> merged;
         try {
             merged = ShiftStore.apply(c, out);
@@ -230,6 +235,39 @@ public final class CourseCache {
         } catch (Throwable t) {
             return merged;
         }
+    }
+
+    /**
+     * 课程去重：同一天 + 同课名 + 同一段时间 → 视为同一门课，只保留第一条。
+     *
+     * 判等键刻意用「业务字段」而不是 id：本 App 与手环各自生成 id，
+     * 同一门课在两侧可能是两个 id（这正是同步后多冒课的根因），
+     * 按 id 判重等于没判。时间做去空白归一，兼容 "08:00 - 09:40" / "08:00-09:40"。
+     * 键里含课名，所以同一天同一时段的两门不同课（合班）不会被误删。
+     * 课名为空的条目不去重（无处判定，保守放行）。
+     */
+    public static List<Course> dedupe(List<Course> list) {
+        if (list == null || list.size() < 2) {
+            return list;
+        }
+        List<Course> out = new ArrayList<>();
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+        for (Course co : list) {
+            if (co == null) {
+                continue;
+            }
+            String name = co.name == null ? "" : co.name.trim();
+            if (name.length() == 0) {
+                out.add(co);
+                continue;
+            }
+            String time = co.time == null ? "" : co.time.replaceAll("\\s+", "");
+            String key = co.day + "|" + name + "|" + time;
+            if (seen.add(key)) {
+                out.add(co);
+            }
+        }
+        return out;
     }
 
     /** 缓存写入时间；0 = 没有缓存 */

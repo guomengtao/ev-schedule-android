@@ -746,6 +746,14 @@ public final class ScheduleStore {
                     }
                 }
             }
+            // 存量去重：历史版本同步时可能已把「同一天/同一课名/同一时段」的重复课写进课表 JSON。
+            // 首页、周视图、晚课注入全都读 ScheduleStore，这里收一次口，旧数据自愈
+            // （用户不需要重装、也不需要重新同步一遍才会干净）。
+            java.util.List<CourseCache.Course> clean = CourseCache.dedupe(s.courses);
+            if (clean != s.courses && clean.size() != s.courses.size()) {
+                s.courses.clear();
+                s.courses.addAll(clean);
+            }
         } catch (Throwable ignored) {
         }
         return s;
