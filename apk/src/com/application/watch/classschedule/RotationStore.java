@@ -39,6 +39,23 @@ public final class RotationStore {
         return "tpl_" + (TextUtils.isEmpty(resolvedSid) ? "default" : resolvedSid);
     }
 
+    /** 模板 key 的稳定段：优先课表 guid，拿不到才退回 id。
+     *  2026-11-20：id 会在「改名」和「存入手环」时变化（ev_local_ → ev_watch_），
+     *  key 跟着变就等于晚课配置丢失（实测：存入后凭空冒出一节晚课）。
+     *  guid 创建后终身不变，所以模板一律按 guid 存。 */
+    private static String stableSid(Context c, String sid) {
+        try {
+            if (!TextUtils.isEmpty(sid)) {
+                ScheduleStore.Schedule s = ScheduleStore.find(c, sid);
+                if (s != null && !TextUtils.isEmpty(s.guid)) {
+                    return s.guid;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return sid;
+    }
+
     /** 调用方没指定课表时，回落到「当前激活课表」，与首页/周网格看到的那份保持一致 */
     private static String resolveSid(Context c, String sid) {
         if (!TextUtils.isEmpty(sid)) {
@@ -212,8 +229,17 @@ public final class RotationStore {
         try {
             SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
             String sid = resolveSid(c, sid0);
-            String key = keyOf(sid);
+            String key = keyOf(stableSid(c, sid));
             String s = sp.getString(key, "");
+            // 2026-11-20：按 id 存的旧 key → 复制到 guid key，避免升级后晚课配置「突然没了」。
+            // 旧 key 不删（回滚安全）：它已不再是读取路径，留着不占逻辑。
+            if (TextUtils.isEmpty(s) && !keyOf(sid).equals(key)) {
+                String byOldId = sp.getString(keyOf(sid), "");
+                if (!TextUtils.isEmpty(byOldId)) {
+                    sp.edit().putString(key, byOldId).apply();
+                    s = byOldId;
+                }
+            }
             // 旧版单份模板 → 迁到「当前激活课表」名下（旧 key 不删，便于回滚）。
             // 只在当前激活课表上迁一次，别把全局副本复制给每一套新建课表。
             if (TextUtils.isEmpty(s) && sid.equals(resolveSid(c, null))) {
@@ -344,7 +370,7 @@ public final class RotationStore {
             o.put("calibWeek", t.calibWeek);
             o.put("cells", cs);
             SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
-            return sp.edit().putString(keyOf(resolveSid(c, sid0)), o.toString()).commit();
+            return sp.edit().putString(keyOf(stableSid(c, resolveSid(c, sid0))), o.toString()).commit();
         } catch (Throwable ignored) {
             return false;
         }

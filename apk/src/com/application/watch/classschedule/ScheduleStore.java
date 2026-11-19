@@ -55,6 +55,11 @@ public final class ScheduleStore {
 
     public static final class Schedule {
         public String id = "";
+        /** 稳定主键（UUIDv4，创建时生成一次，此后永不修改）。
+         *  与 id 并存：id 继续承担本机内部路由（改名/存入会变，见 watchId），
+         *  guid 承担「跨设备/服务端/晚课模板 key」的稳定身份 —— 改名、存入、换手环都不变。
+         *  2026-11-20 加入，老数据由 ensureGuid() 在读取时幂等补齐。 */
+        public String guid = "";
         public String name = "";
         public String source = SOURCE_LOCAL; // local | sync
         /** 归属手环的设备 ID（sync 课表必有；local 课表为空）。强隔离路由键的「设备」维。
@@ -74,6 +79,19 @@ public final class ScheduleStore {
 
         public boolean isSync() {
             return SOURCE_SYNC.equals(source);
+        }
+
+        /** 生成一个稳定主键（UUIDv4，去横线，32 位小写十六进制） */
+        public static String newGuid() {
+            return java.util.UUID.randomUUID().toString().replace("-", "");
+        }
+
+        /** 无 guid 时补齐（读旧数据 / 新建课表时调用），幂等。
+         *  注意：只在本机内存补齐，落盘由任意一次 save 完成（见 toJson）。 */
+        public void ensureGuid() {
+            if (guid == null || guid.length() == 0) {
+                guid = newGuid();
+            }
         }
 
         /** 课表列表页的副行：「仅本机 · 6门课」「来自手环 · 小米手环10 Pro··3f2a · 8门课 · 最后同步 xxx」
@@ -720,6 +738,8 @@ public final class ScheduleStore {
     private static JSONObject toJson(Schedule s) {
         JSONObject o = new JSONObject();
         try {
+            s.ensureGuid(); // 老数据首次落盘时补上 guid（幂等）
+            o.put("guid", s.guid);
             o.put("id", s.id);
             o.put("name", s.name);
             o.put("source", s.source);
@@ -744,6 +764,8 @@ public final class ScheduleStore {
         Schedule s = new Schedule();
         try {
             s.id = o.optString("id");
+            s.guid = o.optString("guid", "");
+            s.ensureGuid();
             s.name = o.optString("name");
             s.source = o.optString("source", SOURCE_LOCAL);
             s.deviceId = o.optString("deviceId", "");
