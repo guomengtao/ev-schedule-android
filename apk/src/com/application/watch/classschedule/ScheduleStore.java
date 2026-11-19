@@ -652,13 +652,45 @@ public final class ScheduleStore {
         upsert(c, s);
     }
 
+    /** 给缺 guid 的课表补一个并立即落盘（幂等；没有任何缺失时不写盘）。
+     *  内部吞掉一切异常：它跑在 root() 的解析 try 里，一旦抛出会被当成「数据损坏」而清库。 */
+    private static void ensureGuids(Context c, JSONObject root) {
+        try {
+            JSONArray arr = root.optJSONArray("schedules");
+            if (arr == null) {
+                return;
+            }
+            boolean changed = false;
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.optJSONObject(i);
+                if (o == null) {
+                    continue;
+                }
+                if (o.optString("guid", "").length() == 0) {
+                    o.put("guid", Schedule.newGuid());
+                    changed = true;
+                }
+            }
+            if (changed) {
+                saveRoot(c, root);
+            }
+        } catch (Throwable ignored) {
+            // 补 guid 失败不影响读：内存侧 fromJson 仍会 ensureGuid，只是下次启动再试一次
+        }
+    }
+
     private static JSONObject root(Context c) {
         try {
             SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
             String raw = sp.getString(KEY_DATA, "");
             if (raw.length() > 0) {
                 try {
-                    return new JSONObject(raw);
+                    JSONObject parsed = new JSONObject(raw);
+                    // 2026-11-20：存量补 guid 必须在「读」时固化落盘。
+                    // 只在 toJson 里补不够：用户若一直不触发保存，每次 fromJson 都会现生成一个新 guid，
+                    // 晚课模板 key（tpl_<guid>）就每次启动漂一次——比原 bug 更隐蔽。
+                    ensureGuids(c, parsed);
+                    return parsed;
                 } catch (Throwable bad) {
                     // 数据损坏：不静默清空——先备份原始内容（只备份一次），再重建空库。
                     // 否则用户表现为「课表列表无故清空」，排查时连证据都没有。
