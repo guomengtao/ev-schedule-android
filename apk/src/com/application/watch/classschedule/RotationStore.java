@@ -261,14 +261,10 @@ public final class RotationStore {
         } catch (Throwable ignored) {
             // 坏数据当成没配置：宁可少显示一节，也不能让首页崩
         }
-        // 历史上被写进去的空模板（enabled=false 且格子全空）等同于从没配置过：
-        // 这种状态下用户什么也看不到，只有「就是当前这套课表」时才补演示数据，不覆盖任何真实内容。
-        String resolved = resolveSid(c, sid0);
-        if (!t.enabled && t.isEmpty() && resolved.length() > 0 && resolved.equals(resolveSid(c, null))) {
-            Template d = demo();
-            save(c, resolved, d);
-            return d;
-        }
+        // 2026-11-19 Tom 口径：这里原本还有一段「空模板 → 补 demo() 演示数据」的兜底，
+        // 与「新装/新建课表默认不带晚课、默认关闭」直接冲突：
+        // 新建课表会落一份空模板，下次 load 命中兜底 → 又灌回 demo 并把 enabled 置 true，
+        // 实测表现为「刚建的空课表，首页仍冒出一节晚课」。已删除，空就是空。
         return t;
     }
 
