@@ -224,24 +224,15 @@ public final class RotationStore {
                 }
             }
             if (TextUtils.isEmpty(s)) {
-                // 整机从没配置过任何晚课 → 给官方演示数据；已有别的课表配过 → 这套留空
-                boolean anyConfig = sp.getAll().containsKey(KEY);
-                if (!anyConfig) {
-                    for (String k : sp.getAll().keySet()) {
-                        if (k != null && k.startsWith("tpl_")) {
-                            anyConfig = true;
-                            break;
-                        }
-                    }
-                }
+                // 2026-11-19 Tom 口径：新装 / 新建课程表一律不带晚课数据、默认关闭。
+                // 原实现在「整机从未配置过晚课」时自动灌 demo() 并置 enabled=true，
+                // 用户没碰过晚课，首页也会多出一行，属于替用户做决定；新建的每一套
+                // 课表同样会走这里被灌一份演示数据。现在统一返回空模板
+                // （Template.enabled 默认 false），想看示例由用户自己进页面填写。
+                // 注意：只影响「没有已存数据」的分支，任何已落盘的 tpl_<sid> 原样保留。
                 Template blank = new Template();
                 blank.time = DEFAULT_TIME;
-                if (anyConfig) {
-                    return blank;
-                }
-                Template d = demo();
-                save(c, sid, d);
-                return d;
+                return blank;
             }
             JSONObject o = new JSONObject(s);
             t.enabled = o.optBoolean("enabled", false);
