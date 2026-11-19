@@ -246,6 +246,27 @@ public final class SyncCoordinator {
             }
             r.merged.add(mergeCourse(b, l, rem, r));
         }
+        // 2026-11-19 修复「点同步偶尔多冒出一门课」：
+        // 上面按 id 做三方合并，前提是同一门课在 base/local/remote 里 id 相同。
+        // 但 id 是两端各自生成的：本地加课一个 id，手环侧若重写/补发又会带另一个 id。
+        // 这种「同课不同 id」会同时命中 b==null 分支的两侧（一侧取 l、一侧取 rem），
+        // 合并结果就是两条一模一样的课，并被 commitSync 写回，越同步越多。
+        // 这里按业务键再收一次口：星期 + 课名 + 归一化起止时间（去空白）。
+        // 键含课名，所以「同天同时段两门不同课（合班）」不会被误删。
+        java.util.LinkedHashMap<String, CourseCache.Course> uniq = new java.util.LinkedHashMap<>();
+        for (CourseCache.Course c : r.merged) {
+            if (c == null) {
+                continue;
+            }
+            String nm = (c.name == null) ? "" : c.name.trim();
+            String tm = (c.time == null) ? "" : c.time.replaceAll("\\s+", "");
+            String key = c.day + "|" + nm + "|" + tm;
+            if (!uniq.containsKey(key)) {
+                uniq.put(key, c);
+            }
+        }
+        r.merged.clear();
+        r.merged.addAll(uniq.values());
         CourseCache.sortForWeek(r.merged);
         return r;
     }
