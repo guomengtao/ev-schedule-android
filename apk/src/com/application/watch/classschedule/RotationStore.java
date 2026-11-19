@@ -273,7 +273,43 @@ public final class RotationStore {
         // 与「新装/新建课表默认不带晚课、默认关闭」直接冲突：
         // 新建课表会落一份空模板，下次 load 命中兜底 → 又灌回 demo 并把 enabled 置 true，
         // 实测表现为「刚建的空课表，首页仍冒出一节晚课」。已删除，空就是空。
+        //
+        // 2026-11-19：存量自愈。历史版本会自动把 demo() 灌进 tpl_<sid>，这些数据
+        // 属于「用户从未编辑过的演示数据」，但代码无法区分「自动灌的」与「用户真配的」。
+        // 判据：整份模板与内置 demo 逐格完全一致 → 等同于没配置，按空模板返回。
+        // 只影响「和演示数据一字不差」的情况，用户只要改过任何一格就不成立。
+        if (isPristineDemo(t)) {
+            Template blank2 = new Template();
+            blank2.time = DEFAULT_TIME;
+            return blank2;
+        }
         return t;
+    }
+
+    /** 整份模板是否与内置演示数据完全一致（含周期/时段/校准周/每一格） */
+    private static boolean isPristineDemo(Template t) {
+        if (t == null || !t.enabled) {
+            return false;
+        }
+        if (!DEMO_CALIB_DATE.equals(t.calibDate) || t.calibWeek != DEMO_CALIB_WEEK) {
+            return false;
+        }
+        Template d = demo();
+        if (t.cycle != d.cycle || !DEFAULT_TIME.equals(t.time)) {
+            return false;
+        }
+        for (int w = 0; w < d.cycle; w++) {
+            String[] a = w < t.cells.size() ? t.cells.get(w) : null;
+            String[] b = d.cells.get(w);
+            for (int i = 0; i < DAYS; i++) {
+                String x = (a == null || i >= a.length || a[i] == null) ? "" : a[i].trim();
+                String y = (b == null || i >= b.length || b[i] == null) ? "" : b[i].trim();
+                if (!x.equals(y)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     public static boolean save(Context c, Template t) {
