@@ -2932,11 +2932,19 @@ public class HomeActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (Ui.needRecreate(this, lastThemeVersion)) {
+        // 2026-11-19 修复「换了主题容易卡住 / 不换」：
+        // 原实现无论是否真的重建，都在这里无条件把 lastThemeVersion 追平 themeVersion。
+        // 但 needRecreate() 有两道抑制闸（键盘可见 / 30 秒内已重建过），一旦被抑制，
+        // 这次主题变化就被标记成「已应用」——此后既不重建、也没有新变化可检测，
+        // 用户看到的就是「换了但没换」，而且会一直保持旧色到下次再改主题。
+        // 现在只有「首次进入」或「色板确实一致」才记录版本；
+        // 被闸门抑制时保留旧值，留给下一次 onResume 重试。
+        if (lastThemeVersion == 0 || Ui.themeVersion == lastThemeVersion) {
+            lastThemeVersion = Ui.themeVersion;
+        } else if (Ui.needRecreate(this, lastThemeVersion)) {
             recreate();
             return;
         }
-        lastThemeVersion = Ui.themeVersion;
         Analytics.pageView(this, "/apk/home");
         // 首页也接管「手环主动消息」：只要 App 在前台，留言就能被提醒（按 id 去重）
         MessageActivity.installObserver(this);
