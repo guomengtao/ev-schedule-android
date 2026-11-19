@@ -222,10 +222,12 @@ public class WeekEditGrid extends View {
         }
 
         // 课程色块
+        // 2026-11-19：必须和空位判断（courseAt）用同一张行位表，否则会出现
+        // 「加号画在第 3 节、色块却画在第 1 节」的错位——这正是「第3节加课跑到第一节」的成因。
         for (int d = 0; d < 7; d++) {
-            List<CourseCache.Course> col = byDay.get(d);
-            for (int r = 0; r < col.size(); r++) {
-                CourseCache.Course c = col.get(r);
+            for (java.util.Map.Entry<Integer, CourseCache.Course> e : slotOfDay.get(d).entrySet()) {
+                int r = e.getKey();
+                CourseCache.Course c = e.getValue();
                 float left = pad + d * (colW + gap);
                 float top = pad + headH + r * (cellH + gap);
                 boolean dragging = dragMode && pressed == c;
