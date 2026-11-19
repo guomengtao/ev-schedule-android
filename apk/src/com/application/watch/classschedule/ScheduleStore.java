@@ -422,6 +422,18 @@ public final class ScheduleStore {
                     o.put("deviceId", s.deviceId);
                     o.put("deviceName", s.deviceName);
                     o.put("syncedAt", System.currentTimeMillis());
+                    // 存入成功后手环里的内容 == 本地这份 courses，所以基线要跟着追平。
+                    // 少了这一步，unsavedCount(base vs courses) 会一直 >0，
+                    // 卡片徽标就永远停在「N 门课还没存进手环」，用户以为没存进去又点一次。
+                    try {
+                        JSONArray base = new JSONArray();
+                        for (CourseCache.Course co : s.courses) {
+                            base.put(CourseCache.toJson(co));
+                        }
+                        o.put("baseJson", base.toString());
+                        o.put("dirty", false);
+                    } catch (Throwable ignoredBase) {
+                    }
                     break;
                 }
             }
