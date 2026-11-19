@@ -54,6 +54,14 @@ public class WeekEditGrid extends View {
     private List<CourseCache.Course> courses = new ArrayList<>();
     /** 每天按开始时间排好序的课程（渲染与命中都用它） */
     private final List<List<CourseCache.Course>> byDay = new ArrayList<>();
+    /**
+     * 2026-11-19 修复：每列「行号 → 课程」的固定占位表，rebuild 时按节次填充。
+     * 原来 courseAt() 直接用 col.get(row) 取课程，等于把「课程在列表里的序号」当行号：
+     * 星期六前面几节没课时，第 3 节的课会被排到第 0 行（顶上去了），
+     * 而数据本身记录的仍是第三节（所以首页正常，只有这个网格错位）。
+     * 现在行号由 matchTemplate(time) 决定，空节次在 map 里没有键，自然留出加号位。
+     */
+    private final List<java.util.Map<Integer, CourseCache.Course>> slotOfDay = new ArrayList<>();
     private int rows = 3;
     private boolean shortNames = false;
 
@@ -122,6 +130,10 @@ public class WeekEditGrid extends View {
             }
             byDay.get(c.day).add(c);
         }
+        while (slotOfDay.size() < 7) {
+            slotOfDay.add(new java.util.HashMap<Integer, CourseCache.Course>());
+        }
+        int templateCount = CourseEditUtil.TEMPLATES.length;
         for (int d = 0; d < 7; d++) {
             List<CourseCache.Course> col = byDay.get(d);
             Collections.sort(col, new Comparator<CourseCache.Course>() {
@@ -133,8 +145,25 @@ public class WeekEditGrid extends View {
                     return sa - sb;
                 }
             });
-            if (col.size() > max) {
-                max = col.size();
+            // 2026-11-19：行号由节次决定。空节次不进 map，绘制时就是空位（加号）。
+            java.util.Map<Integer, CourseCache.Course> slots = slotOfDay.get(d);
+            slots.clear();
+            int fallback = templateCount;
+            for (int i = 0; i < col.size(); i++) {
+                CourseCache.Course c = col.get(i);
+                int r = CourseEditUtil.matchTemplate(c.time);
+                if (r < 0) {
+                    // 自定义时间（不在内置 8 档模板内）：排到模板行之后，避免课程被吞掉
+                    r = fallback++;
+                }
+                // 同一天同一节次挤了多门课：顺延到下一个空行，保证不重叠
+                while (slots.containsKey(r)) {
+                    r++;
+                }
+                slots.put(r, c);
+                if (r + 1 > max) {
+                    max = r + 1;
+                }
             }
         }
         rows = Math.max(3, max);
@@ -275,11 +304,12 @@ public class WeekEditGrid extends View {
 
     /** day 列第 r 行的课程；越界/无课返回 null */
     private CourseCache.Course courseAt(int day, int row) {
-        if (day < 0 || day > 6 || row < 0) {
+        if (day < 0 || day > 6 || row < 0 || day >= slotOfDay.size()) {
             return null;
         }
-        List<CourseCache.Course> col = byDay.get(day);
-        return row < col.size() ? col.get(row) : null;
+        // 2026-11-19：改为查「节次 → 课程」占位表。
+        // 原实现 row 直接当 byDay 列表下标，导致前面节次为空时后面的课整体顶到第一行。
+        return slotOfDay.get(day).get(row);
     }
 
     /** 点位 → {day, row}；不在网格区返回 null */
