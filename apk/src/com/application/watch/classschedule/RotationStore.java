@@ -220,8 +220,16 @@ public final class RotationStore {
                 String legacy = sp.getString(KEY, "");
                 if (!TextUtils.isEmpty(legacy)) {
                     sp.edit().putString(key, legacy).apply();
+                    // 2026-11-19：迁完必须删掉旧 key。原实现只复制不删除，
+                    // 导致之后每新建一套课表（没有 tpl_<新id>）都会被当成「没配置过」，
+                    // 又把这份旧全局模板复制一遍 —— 实测表现为「新建空课表仍冒出晚课」。
+                    sp.edit().remove(KEY).apply();
                     s = legacy;
                 }
+            } else if (!TextUtils.isEmpty(s)) {
+                // 当前课表已有自己的 tpl_<sid>，旧全局模板彻底没用了，顺手清掉，
+                // 避免它继续被后来的新建课表当成「待迁移数据」捡走。
+                sp.edit().remove(KEY).apply();
             }
             if (TextUtils.isEmpty(s)) {
                 // 2026-11-19 Tom 口径：新装 / 新建课程表一律不带晚课数据、默认关闭。
