@@ -60,6 +60,11 @@ public final class ScheduleStore {
          *  guid 承担「跨设备/服务端/晚课模板 key」的稳定身份 —— 改名、存入、换手环都不变。
          *  2026-11-20 加入，老数据由 ensureGuid() 在读取时幂等补齐。 */
         public String guid = "";
+        /** 云端已落盘的版本号（乐观锁基线）。0 = 云端尚无此表，首次上传按新建处理，rev 从 1 起。 */
+        public int cloudRev = 0;
+        /** 是否已开启云同步（用户点过「网页大屏编辑」或「备份一份」）。
+         *  未开启的课表一律不入待推队列、不发任何网络请求。 */
+        public boolean cloudEnabled = false;
         public String name = "";
         public String source = SOURCE_LOCAL; // local | sync
         /** 归属手环的设备 ID（sync 课表必有；local 课表为空）。强隔离路由键的「设备」维。
@@ -772,6 +777,8 @@ public final class ScheduleStore {
         try {
             s.ensureGuid(); // 老数据首次落盘时补上 guid（幂等）
             o.put("guid", s.guid);
+            o.put("cloudRev", s.cloudRev);
+            o.put("cloudEnabled", s.cloudEnabled);
             o.put("id", s.id);
             o.put("name", s.name);
             o.put("source", s.source);
@@ -797,6 +804,8 @@ public final class ScheduleStore {
         try {
             s.id = o.optString("id");
             s.guid = o.optString("guid", "");
+            s.cloudRev = o.optInt("cloudRev", 0);
+            s.cloudEnabled = o.optBoolean("cloudEnabled", false);
             s.ensureGuid();
             s.name = o.optString("name");
             s.source = o.optString("source", SOURCE_LOCAL);
