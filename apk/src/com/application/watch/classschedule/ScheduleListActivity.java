@@ -40,6 +40,10 @@ public class ScheduleListActivity extends Activity {
     private String filterDeviceId = "";
     private String filterDeviceName = "";
 
+    /** 设备条右侧的「链接」：给当前这台手环一个 /d/<短码>，不用逐张课表去点 */
+    private TextView deviceLinkView;
+    private String curDeviceLinkGuid = "";
+
     private static final int REQ_EDIT = 1;
     private static final int REQ_CREATE = 2;
 
@@ -178,6 +182,21 @@ public class ScheduleListActivity extends Activity {
         deviceCountView.setBackground(Ui.round(Ui.ACCENT_LIGHT, 14, 0, this));
         deviceCountView.setVisibility(View.GONE);
         deviceBar.addView(deviceCountView);
+
+        // 「链接」：这台手环一个网址，点一下复制走；不再需要单独的设备列表页
+        deviceLinkView = Ui.textMedium(this, "链接", 11f, Ui.ACCENT);
+        deviceLinkView.setPadding(Ui.dp(this, 8), Ui.dp(this, 2), Ui.dp(this, 8), Ui.dp(this, 2));
+        deviceLinkView.setBackground(Ui.round(Ui.ACCENT_LIGHT, 14, 0, this));
+        deviceLinkView.setClickable(true);
+        deviceLinkView.setVisibility(View.GONE);
+        deviceLinkView.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (curDeviceLinkGuid != null && curDeviceLinkGuid.length() > 0) {
+                    fetchDeviceLink(curDeviceLinkGuid, SyncEngine.get(ScheduleListActivity.this).currentDeviceName());
+                }
+            }
+        });
+        deviceBar.addView(deviceLinkView);
         // 手动刷新：强制向手环要一次清单并补齐（点击带旋转反馈；子控件 clickable 会消费点击，
         // 不会误触发整条的展开/收起）
         ImageView refreshBtn = new ImageView(this);
@@ -255,22 +274,6 @@ public class ScheduleListActivity extends Activity {
                 Ui.dp(this, Ui.TOUCH_MIN), Ui.dp(this, Ui.TOUCH_MIN),
                 android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.END));
 
-        // 「设备」入口：进设备列表页（一台手环一行），从那里再进单台设备的课表
-        TextView devEntry = Ui.textLh(this, "设备", Ui.SP_BODY, Ui.ACCENT, false, Ui.LH_BODY);
-        devEntry.setGravity(android.view.Gravity.CENTER);
-        android.widget.FrameLayout.LayoutParams dp = new android.widget.FrameLayout.LayoutParams(
-                Ui.dp(this, Ui.TOUCH_MIN), Ui.dp(this, Ui.TOUCH_MIN),
-                android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.END);
-        dp.rightMargin = Ui.dp(this, Ui.TOUCH_MIN);
-        devEntry.setClickable(true);
-        devEntry.setContentDescription("设备列表");
-        devEntry.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                startActivity(new android.content.Intent(
-                        ScheduleListActivity.this, DevicesActivity.class));
-            }
-        });
-        bar.addView(devEntry, dp);
         return bar;
     }
 
@@ -440,6 +443,7 @@ public class ScheduleListActivity extends Activity {
             // 设备条即该组组头：补上「· N 套」与展开箭头
             curDeviceGroupKey = curEntry.getKey();
             curGroupCount = curEntry.getValue().size();
+            curDeviceLinkGuid = firstGuidOf(curEntry.getValue());
             renderDeviceBar();
             addGroupBody(curEntry.getKey(), curEntry.getValue(), activeId);
         }
@@ -453,12 +457,12 @@ public class ScheduleListActivity extends Activity {
             String label = "legacy".equals(key)
                     ? "没认出是哪只手环（连上后会自动归位）"
                     : devLabel(key, g);
-            listBox.addView(groupHeader(label, g.size(), key));
+            listBox.addView(groupHeader(label, g.size(), key, firstGuidOf(g)));
             addGroupBody(key, g, activeId);
         }
         // 本地课程分组（组头已是细行、自带呼吸感 → 不再需要分割线，B3.3）
         if (!local.isEmpty()) {
-            listBox.addView(groupHeader("自己的课表", local.size(), "local"));
+            listBox.addView(groupHeader("自己的课表", local.size(), "local", null));
             addGroupBody("local", local, activeId);
         }
         if (filterDeviceId.length() == 0) listBox.addView(newScheduleHint());
@@ -557,6 +561,9 @@ public class ScheduleListActivity extends Activity {
                 deviceCountView.setVisibility(View.GONE);
             }
         }
+        if (deviceLinkView != null) {
+            deviceLinkView.setVisibility(curDeviceLinkGuid.length() > 0 ? View.VISIBLE : View.GONE);
+        }
     }
 
     /** 标题开头加一个绿色实心圆点（●），仅圆点着色，表示在线（颜色走主题 token，勿写死） */
@@ -577,7 +584,7 @@ public class ScheduleListActivity extends Activity {
     /** 分组标题（点击展开/收起）。D2：由「厚卡」降为「细行」—— 去掉卡片底色与描边、
      *  字号降到 SP_CAPTION 且用次要色，把它压到卡片视觉之下，
      *  让「课表名」成为页内唯一的视觉锚点。 */
-    private View groupHeader(String title, int n, final String key) {
+    private View groupHeader(String title, int n, final String key, final String linkGuid) {
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -596,6 +603,20 @@ public class ScheduleListActivity extends Activity {
         });
         TextView t = Ui.textMediumLh(this, title, Ui.SP_CAPTION, Ui.MUTED, Ui.LH_CAPTION);
         head.addView(t, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        if (linkGuid != null && linkGuid.length() > 0) {
+            TextView lk = Ui.text(this, "链接", 11f, Ui.ACCENT, false);
+            lk.setPadding(Ui.dp(this, 8), Ui.dp(this, 2), Ui.dp(this, 8), Ui.dp(this, 2));
+            lk.setBackground(Ui.round(Ui.ACCENT_LIGHT, 14, 0, this));
+            lk.setClickable(true);
+            lk.setContentDescription("获取这台设备的网页链接");
+            lk.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { fetchDeviceLink(linkGuid, ""); }
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.rightMargin = Ui.dp(this, 6);
+            head.addView(lk, lp);
+        }
         TextView cnt = Ui.text(this, n + " 份", 11f, Ui.MUTED, false);
         cnt.setPadding(0, 0, Ui.dp(this, 6), 0);
         head.addView(cnt);
@@ -782,6 +803,49 @@ public class ScheduleListActivity extends Activity {
         pw.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY,
                 loc[0] + anchor.getWidth() - panel.getMeasuredWidth(),
                 loc[1] + anchor.getHeight() + Ui.dp(this, 4));
+    }
+
+    /** 取这台设备的列表页网址（/d/<短码>）：一次覆盖该设备名下所有已上云的课表。 */
+    private void fetchDeviceLink(String guid, final String devName) {
+        android.widget.Toast.makeText(this, "正在获取链接…", android.widget.Toast.LENGTH_SHORT).show();
+        CloudApi.devlink(this, guid, new CloudApi.Cb() {
+            @Override public void on(int code, String body) {
+                String url = "";
+                try { url = new org.json.JSONObject(body).optString("url", ""); } catch (Throwable ignored) { }
+                if (code != 200 || url.length() == 0) {
+                    final int c2 = code;
+                    runOnUiThread(new Runnable() { @Override public void run() {
+                        android.widget.Toast.makeText(ScheduleListActivity.this,
+                                "获取失败（" + c2 + "），请检查网络后重试",
+                                android.widget.Toast.LENGTH_LONG).show();
+                    } });
+                    return;
+                }
+                final String u = url;
+                runOnUiThread(new Runnable() { @Override public void run() {
+                    try {
+                        android.content.ClipboardManager cm =
+                                (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("设备课表", u));
+                    } catch (Throwable ignored) { }
+                    new android.app.AlertDialog.Builder(ScheduleListActivity.this)
+                            .setTitle("设备链接已复制")
+                            .setMessage(u + "\n\n这个地址打开就是这台手环名下所有课表；"
+                                    + "点任意一份可查看，要改课程请对那张表单独开通网页编辑。")
+                            .setPositiveButton("知道了", null)
+                            .show();
+                } });
+            }
+        });
+    }
+
+    /** 组里第一张有 guid 的课表（取设备级链接时当锚点用）。 */
+    private static String firstGuidOf(List<ScheduleStore.Schedule> g) {
+        if (g == null) return "";
+        for (ScheduleStore.Schedule s : g) {
+            if (s.guid != null && s.guid.length() > 0) return s.guid;
+        }
+        return "";
     }
 
     /** 三点菜单里的网页入口：allowEdit=false 只取链接（不动权限），true 额外开 7 天写权限。 */
