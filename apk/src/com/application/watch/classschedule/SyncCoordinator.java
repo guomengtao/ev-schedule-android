@@ -28,9 +28,33 @@ public final class SyncCoordinator {
 
     public static final class MergeResult {
         public final List<CourseCache.Course> merged = new ArrayList<>();
+        /** 墓碑：deleted=true 的旧课程，合并末尾追加回 merged，保证「删了也还在」 */
+        public final List<CourseCache.Course> tombstones = new ArrayList<>();
         public int conflicts = 0;
         public boolean localChanged = false;
         public boolean remoteChanged = false;
+        /** 手环侧「对不上」的课程数（base 有、手环没有）；大面积出现即判为 id 错配 */
+        public int remoteDeleted = 0;
+        /** true = 本次合并被安全闸中止，merged 不可用，本地/手环都不许写 */
+        public boolean aborted = false;
+        public String abortReason = "";
+    }
+
+    /** 墓碑化：复制一份打 deleted=true，留在数组里（不物理移除，随时可恢复） */
+    private static void tombstone(MergeResult r, CourseCache.Course b) {
+        if (b == null) {
+            return;
+        }
+        CourseCache.Course t = new CourseCache.Course();
+        t.id = b.id;
+        t.name = b.name;
+        t.time = b.time;
+        t.teacher = b.teacher;
+        t.location = b.location;
+        t.day = b.day;
+        t.updatedAt = System.currentTimeMillis();
+        t.deleted = true;
+        r.tombstones.add(t);
     }
 
     private static boolean running = false;
@@ -110,6 +134,11 @@ public final class SyncCoordinator {
         final List<CourseCache.Course> base = parseBase(s.baseJson);
         final List<CourseCache.Course> local = alive(s.courses);
         final MergeResult r = merge(base, local, remote);
+        // 安全闸：大面积 id 错配时整体中止，本地与手环都不写（2026-11-20 事故后加）
+        if (r.aborted) {
+            finish(cb, false, r.abortReason);
+            return;
+        }
 
         if (!r.localChanged) {
             // 只有手环改动（或都没改）：采纳 remote 的合并结果，更新 base
@@ -236,15 +265,35 @@ public final class SyncCoordinator {
             if (lDel && rDel) {
                 continue; // 都删
             }
-            if (lDel) {
-                r.localChanged = true;  // 本地删除（删除优先）
-                continue;
-            }
+            // ⚠️ 2026-11-20 数据丢失事故后的两条硬约束：
+            // ① 删除一律「墓碑化」——把该课以 deleted=true 留在数组里，绝不物理移除。
+            //    这样即使判断错了（最典型：手环回传的课程 id 与本地 gen 的对不上，
+            //    全部命中 rDel），数据仍在本地可恢复，不会整表少 40 多门。
+            // ② 手环侧「删太多」时直接中止合并 —— 大面积消失基本都是 id 错配，
+            //    不是用户真删。宁可这次不合并，也不能把课删掉。
             if (rDel) {
-                r.remoteChanged = true; // 手环删除（删除优先）
+                r.remoteChanged = true;
+                if (!lDel) {
+                    // 本地有、base 有、手环没有 → 不删本地，只打墓碑
+                    r.remoteDeleted++;
+                    tombstone(r, b);
+                    continue;
+                }
+            }
+            if (lDel) {
+                r.localChanged = true;  // 本地删除 → 同样留墓碑，不物理移除
+                tombstone(r, b);
                 continue;
             }
             r.merged.add(mergeCourse(b, l, rem, r));
+        }
+        // 大面积「手环侧缺失」= 多半是 id 错配，不是用户真删：整体放弃这次合并
+        if (!bm.isEmpty() && r.remoteDeleted > 0
+                && r.remoteDeleted * 2 >= bm.size() && r.remoteDeleted >= 3) {
+            r.aborted = true;
+            r.abortReason = "手环上有 " + r.remoteDeleted + " 门课对不上（本地共 "
+                    + bm.size() + " 门），判断为 id 错配而非删除，已中止合并，本地课表未改动";
+            return r;
         }
         // 2026-11-19 修复「点同步偶尔多冒出一门课」：
         // 上面按 id 做三方合并，前提是同一门课在 base/local/remote 里 id 相同。
@@ -267,6 +316,7 @@ public final class SyncCoordinator {
         }
         r.merged.clear();
         r.merged.addAll(uniq.values());
+        r.merged.addAll(r.tombstones);
         CourseCache.sortForWeek(r.merged);
         return r;
     }
@@ -433,6 +483,10 @@ public final class SyncCoordinator {
         try {
             JSONArray arr = new JSONArray();
             for (CourseCache.Course c : courses) {
+                // 墓碑不发给手环：它只在本机留档，不能把删掉的课又写回去
+                if (c == null || c.deleted) {
+                    continue;
+                }
                 c.ensureId();
                 JSONObject o = new JSONObject();
                 o.put("id", c.id);
