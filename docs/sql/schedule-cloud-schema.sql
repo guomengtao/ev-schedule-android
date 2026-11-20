@@ -42,7 +42,7 @@ create table if not exists public.schedule_versions (
 -- ---------- 编辑/只读凭据（P2 只读链接；P3 起 session 取代 edit 用途） ----------
 create table if not exists public.schedule_tokens (
   token      text primary key,                     -- 32 字节随机 base64url
-  guid       text not null references public.schedules(guid) on delete cascade,
+  guid       text not null,   -- 2026-11-20 去掉 on delete cascade：实测「删课表行→级联删 token→客户端永远 401 无法自愈」，token 必须比 schedules 行活得久，撤销靠 revoked 字段
   scope      text not null default 'read',         -- read | edit
   expires_at timestamptz,
   revoked    boolean not null default false,
