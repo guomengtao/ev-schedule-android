@@ -97,6 +97,21 @@ public final class CloudSyncWorker {
      * 首次开通：把某张表整份推上云（publish），成功后回写 token 与 cloudRev，
      * 并把 cloudEnabled 置真 —— 之后所有本地改动才会自动入队。
      */
+    /**
+     * 云端 watch_key = 这只手环的稳定锚点。
+     * 优先 "mac:XX:XX:..."（Stats 缓存，零探测），退化 "uuid:<deviceId>"。
+     * 两者都带前缀，服务端和人都能一眼看出这条数据挂在哪类锚上。
+     */
+    static String anchorOf(android.content.Context c, ScheduleStore.Schedule s) {
+        String mac = "";
+        try { mac = Stats.watchMac(c); } catch (Throwable ignored) { }
+        if (mac != null && mac.length() > 0) {
+            return "mac:" + mac.toUpperCase(java.util.Locale.US);
+        }
+        String dev = s.deviceId == null ? "" : s.deviceId.trim();
+        return dev.length() == 0 ? "" : "uuid:" + dev;
+    }
+
     public static void enableAndPublish(final Context c, final ScheduleStore.Schedule s,
                                         final SyncCb cb) {
         if (c == null || s == null) {
@@ -118,8 +133,11 @@ public final class CloudSyncWorker {
             return;
         }
 
+        // 2026-11-20 用户裁定：锚点优先用蓝牙 MAC（跨重装/重置/换机不变），
+        // 只有拿不到 MAC 的 mac_random 机型才退化到 deviceId。
+        // 退化值必须带前缀区分，否则「重装后 UUID 变了」会变成一座新孤岛，无法与 MAC 对齐。
         CloudApi.publish(app, s.guid,
-                s.deviceId == null ? "" : s.deviceId,
+                anchorOf(app, s),
                 s.deviceName == null ? "" : s.deviceName,
                 s.name, payload,
                 new CloudApi.PubCb() {

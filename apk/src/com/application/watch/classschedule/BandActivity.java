@@ -43,6 +43,7 @@ public class BandActivity extends Activity {
     private LinearLayout guideCard;
     /** 未连接手环时整体隐藏的区块容器（腕聊 / 工具 / 昵称 均为「连上才有意义」） */
     private LinearLayout cfgBox;
+    private View cloudCard;   // P1：网页大屏编辑行（不依赖蓝牙连接，只看有没有已存入手环的课表）
 
     /** 昵称设置行的右侧当前值 */
     private TextView nickValueView;
@@ -92,8 +93,9 @@ public class BandActivity extends Activity {
         cfgBox.addView(Ui.space(this, Ui.GAP_MD));
         cfgBox.addView(buildNickRow());              // D6：昵称卡 → 设置行（点开底部弹层）
         cfgBox.addView(Ui.space(this, Ui.GAP_SM));
-        cfgBox.addView(buildCloudRow());             // P1：网页大屏编辑（次级入口，不争视觉）
+        cloudCard = buildCloudRow();                 // P1：网页大屏编辑（次级入口，不争视觉）
         root.addView(cfgBox);
+        root.addView(cloudCard);                     // P1：网页编辑不依赖 BLE，连不上手环也要能进
 
         // ===== 瞬时提示条（语义色，2.6s 自动收起）=====
         root.addView(Ui.space(this, Ui.GAP_SM));
@@ -540,6 +542,15 @@ public class BandActivity extends Activity {
                     .show();
             return;
         }
+        // 锚点优先用蓝牙 MAC（跨重装不变）；此时若还没探到 MAC，说明手环没连着，
+        // 会退化成 deviceId 兜底——但下一次连上手环再点一次，会自动把 watch_key 换成 MAC。
+        try {
+            if (Stats.watchMac(this).length() == 0) {
+                android.widget.Toast.makeText(this,
+                        "手环未连接：本次按设备号开通，连上手环再点一次会自动换成蓝牙ID",
+                        android.widget.Toast.LENGTH_LONG).show();
+            }
+        } catch (Throwable ignored) { }
         if (cloudValueView != null) cloudValueView.setText("正在上传…");
         CloudSyncWorker.enableAndPublish(this, s, new CloudSyncWorker.SyncCb() {
             @Override public void on(boolean ok, String msg, final String url, int rev) {
@@ -1045,6 +1056,11 @@ public class BandActivity extends Activity {
             return;
         }
         cfgBox.setVisibility(connected ? View.VISIBLE : View.GONE);
+        // P1：网页编辑只需要「已经存进过手环的课表」，此刻连没连上蓝牙无关；
+        // 一张都没有（新用户 / 只在本地建过表）就不显示，避免点了弹出「先存入手环」的空入口。
+        if (cloudCard != null) {
+            cloudCard.setVisibility(findCloudSchedule() == null ? View.GONE : View.VISIBLE);
+        }
     }
 
     /** 瞬时提示：语义色，2.6s 后自动收起（稳态不占位）。 */
