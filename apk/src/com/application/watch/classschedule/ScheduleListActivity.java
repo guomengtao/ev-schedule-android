@@ -56,11 +56,14 @@ public class ScheduleListActivity extends Activity {
             boolean now = SyncEngine.get(ScheduleListActivity.this).hasNode();
             if (now && !bandWasConnected) {
                 bandWasConnected = true;
-                if (pendingBandPush) {
-                    pendingBandPush = false;
+                // 判据不是「云端 rev 变新」，而是「本地与手环真有差异」——
+                // rev 早已 ack 的情况下，靠 rev 永远等不到推送时机，差异会一直挂着。
+                boolean need = pendingBandPush || hasUnsyncedActive();
+                pendingBandPush = false;
+                render();
+                if (need) {
                     pushToBand();
                 }
-                render();
             } else if (!now && bandWasConnected) {
                 bandWasConnected = false;
                 render();
@@ -176,6 +179,16 @@ public class ScheduleListActivity extends Activity {
         try {
             SyncEngine.get(this).removeStatusCallback(bandStatusCb);
         } catch (Throwable ignored) {
+        }
+    }
+
+    /** 当前使用的课表是否还有没落手环的改动（判据与卡片上那行「N 门课还没存进手环」一致） */
+    private boolean hasUnsyncedActive() {
+        try {
+            ScheduleStore.Schedule a = ScheduleStore.active(this);
+            return a != null && SyncCoordinator.unsavedCount(a) > 0;
+        } catch (Throwable t) {
+            return false;
         }
     }
 
@@ -878,6 +891,16 @@ public class ScheduleListActivity extends Activity {
             cardMenuItem(panel, pw, "存进手环", Ui.TEXT, new Runnable() {
                 @Override public void run() { syncToWatch(s); }
             });
+        } else {
+            // 已同步的表以前没有推送入口：本地被网页改过（或手环丢了改动）时，
+            // 用户只能看着「N 门课还没存进手环」干等。给一个直接出口。
+            int pend = SyncCoordinator.unsavedCount(s);
+            if (pend > 0) {
+                panel.addView(menuDivider());
+                cardMenuItem(panel, pw, "推到手环（" + pend + " 门待存）", Ui.ACCENT, new Runnable() {
+                    @Override public void run() { syncToWatch(s); }
+                });
+            }
         }
         panel.addView(menuDivider());
         cardMenuItem(panel, pw, "从手机里删掉", Ui.ERR, new Runnable() {
