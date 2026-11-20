@@ -868,6 +868,10 @@ public class ScheduleListActivity extends Activity {
             }
         }
         panel.addView(menuDivider());
+        cardMenuItem(panel, pw, "从手环读回（覆盖本课表）", Ui.WARN, new Runnable() {
+            @Override public void run() { restoreFromBand(s); }
+        });
+        panel.addView(menuDivider());
         cardMenuItem(panel, pw, "从手机里删掉", Ui.ERR, new Runnable() {
             @Override public void run() { deleteSchedule(s); }
         });
@@ -1318,6 +1322,55 @@ public class ScheduleListActivity extends Activity {
                 status((ok ? "● " : "✕ ") + msg, ok ? Ui.OK : Ui.WARN);
                 render();
             }
+        });
+    }
+
+    /**
+     * 从手环读回并覆盖本课表（纯读取，不做三方合并）。
+     * 手环是最后一份可信数据时用这个：只往本地写，不会因 id 错配删课。
+     */
+    private void restoreFromBand(final ScheduleStore.Schedule s) {
+        final SyncEngine e = SyncEngine.get(this);
+        if (!e.hasNode()) {
+            status("手环还没连上，先连一下再读", Ui.WARN);
+            return;
+        }
+        status("正在从手环读取…", Ui.ACCENT);
+        e.export(new SyncEngine.Reply() {
+            @Override public void onReply(String json) {
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(json);
+                    org.json.JSONObject d = o.optJSONObject("data");
+                    org.json.JSONArray sch = (d == null) ? null : d.optJSONArray("schedule");
+                    if (sch == null || sch.length() == 0) {
+                        status("手环回包里没有课表数据", Ui.WARN);
+                        return;
+                    }
+                    final java.util.List<CourseCache.Course> band = CourseCache.flatten(sch);
+                    final int mine = s.courses == null ? 0 : s.courses.size();
+                    runOnUiThread(new Runnable() { @Override public void run() {
+                        new android.app.AlertDialog.Builder(ScheduleListActivity.this)
+                                .setTitle("用「" + s.name + "」覆盖？")
+                                .setMessage("手环上有 " + band.size() + " 门课，本机这一份是 "
+                                        + mine + " 门。\n\n确认后会用「手环上的」覆盖本课表，"
+                                        + "并同步到云端。此操作不做合并，不会删掉手环上的课。")
+                                .setNegativeButton("取消", null)
+                                .setPositiveButton("覆盖", new android.content.DialogInterface.OnClickListener() {
+                                    @Override public void onClick(android.content.DialogInterface d0, int w) {
+                                        for (CourseCache.Course c : band) c.ensureId();
+                                        ScheduleStore.updateCourses(ScheduleListActivity.this, s.id, band);
+                                        status("已从手环读回 " + band.size() + " 门课", Ui.OK);
+                                        render();
+                                    }
+                                })
+                                .show();
+                    } });
+                } catch (Throwable t) {
+                    status("解析手环回包失败", Ui.ERR);
+                }
+            }
+            @Override public void onTimeout(String hint) { status(hint, Ui.WARN); }
+            @Override public void onError(String msg) { status("读取失败：" + msg, Ui.ERR); }
         });
     }
 
