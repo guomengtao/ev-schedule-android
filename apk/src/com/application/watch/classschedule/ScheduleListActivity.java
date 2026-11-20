@@ -158,6 +158,20 @@ public class ScheduleListActivity extends Activity {
                             "云端有更新，" + n + " 套课表已刷新", android.widget.Toast.LENGTH_SHORT).show();
                     render();
                 } });
+                // 拉到的改动还要真的落到手环上：连着手环就直接推一次（走既有三方合并，
+                // base 仍是旧快照 → 判定「本地改了、手环没改」→ 以本地为准覆盖上去）
+                if (SyncEngine.get(ScheduleListActivity.this).hasNode()) {
+                    SyncCoordinator.syncNow(ScheduleListActivity.this, new SyncCoordinator.Callback() {
+                        @Override public void onDone(final boolean ok, final String msg) {
+                            runOnUiThread(new Runnable() { @Override public void run() {
+                                android.widget.Toast.makeText(ScheduleListActivity.this,
+                                        ok ? "已同步到手环" : ("手环同步失败：" + msg),
+                                        android.widget.Toast.LENGTH_SHORT).show();
+                                render();
+                            } });
+                        }
+                    });
+                }
             }
         });
     }
