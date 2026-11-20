@@ -796,7 +796,21 @@ public class ScheduleListActivity extends Activity {
 
     /** 副信息：「来源 · N 门课」 */
     private String subShort(ScheduleStore.Schedule s) {
-        return (s.isSync() ? "来自手环" : "仅本机") + " · " + s.courses.size() + " 门课";
+        return (s.isSync() ? "来自手环" : "仅本机") + " · " + liveCount(s) + " 门课";
+    }
+
+    /**
+     * 有效课数：墓碑（deleted=true）是「删了但留在数组里、随时可恢复」的占位，
+     * 不该算进门数。网页上删掉一门课，手机上看到的就是少一门——
+     * 否则用户以为删除没生效，回头又去删一次。
+     */
+    private static int liveCount(ScheduleStore.Schedule s) {
+        if (s == null || s.courses == null) return 0;
+        int n = 0;
+        for (CourseCache.Course c : s.courses) {
+            if (c != null && !c.deleted) n++;
+        }
+        return n;
     }
 
     /** 最近一次同步的相对时间（无值返回空串，不放占位符） */
@@ -1383,6 +1397,9 @@ public class ScheduleListActivity extends Activity {
         try {
             JSONArray courses = new JSONArray();
             for (CourseCache.Course c : s.courses) {
+                // 墓碑课（网页侧已经删掉的）绝不能再推回手环：
+                // 推一次等于把网页上的删除操作撤销掉，手环上那门课又活了。
+                if (c.deleted) continue;
                 c.ensureId();
                 JSONObject o = new JSONObject();
                 // 带上稳定 id：与 SyncCoordinator.buildImport 保持同一口径。

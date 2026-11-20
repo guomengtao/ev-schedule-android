@@ -102,9 +102,17 @@ public final class ScheduleStore {
         /** 课表列表页的副行：「仅本机 · 6门课」「来自手环 · 小米手环10 Pro··3f2a · 8门课 · 最后同步 xxx」
          *  sync 课表副行带设备名 + deviceId 后 4 位掩码，用户一眼分清属于哪台手环。 */
         public String sub() {
+            // 门数只数「有效课」：墓碑（deleted=true）是删了但仍留在数组里可恢复的占位，
+            // 算进门数会让网页上删掉的课看起来还在（用户以为删除没生效）。
+            int live = 0;
+            if (courses != null) {
+                for (CourseCache.Course c : courses) {
+                    if (c != null && !c.deleted) live++;
+                }
+            }
             StringBuilder sb = new StringBuilder();
             sb.append(isSync() ? "来自手环" : "仅本机")
-              .append(" · ").append(courses.size()).append(" 门课");
+              .append(" · ").append(live).append(" 门课");
             if (isSync() && deviceName != null && deviceName.length() > 0) {
                 sb.append(" · ").append(deviceName);
                 if (deviceId != null && deviceId.length() >= 4) {
