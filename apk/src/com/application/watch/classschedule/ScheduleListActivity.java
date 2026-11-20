@@ -33,6 +33,13 @@ import java.util.Set;
  */
 public class ScheduleListActivity extends Activity {
 
+    /** 从设备列表页进来时带的设备过滤条件（空 = 看全部，保持原行为） */
+    public static final String EXTRA_DEVICE_ID = "extra_device_id";
+    public static final String EXTRA_DEVICE_NAME = "extra_device_name";
+
+    private String filterDeviceId = "";
+    private String filterDeviceName = "";
+
     private static final int REQ_EDIT = 1;
     private static final int REQ_CREATE = 2;
 
@@ -78,6 +85,10 @@ public class ScheduleListActivity extends Activity {
             Toast.makeText(this, "本地课表有点问题，旧数据已经备份好了；连上手环可以重新取回来",
                     Toast.LENGTH_LONG).show();
         }
+        filterDeviceId = getIntent().getStringExtra(EXTRA_DEVICE_ID);
+        if (filterDeviceId == null) filterDeviceId = "";
+        filterDeviceName = getIntent().getStringExtra(EXTRA_DEVICE_NAME);
+        if (filterDeviceName == null) filterDeviceName = "";
         buildUi();
         // 状态回调：手环真实套数读到后刷新分组标题；并把「手环上有、本机没有」的课表
         // 自动读取到本机（入库即标记 source=sync，仍属「手环课表」组，无需手动操作）
@@ -218,7 +229,9 @@ public class ScheduleListActivity extends Activity {
     private View buildTopBar() {
         android.widget.FrameLayout bar = new android.widget.FrameLayout(this);
 
-        TextView t = Ui.textMediumLh(this, "我的课表", Ui.SP_TITLE, Ui.TEXT, Ui.LH_TITLE);
+        TextView t = Ui.textMediumLh(this,
+                filterDeviceName.length() > 0 ? filterDeviceName : "我的课表",
+                Ui.SP_TITLE, Ui.TEXT, Ui.LH_TITLE);
         bar.addView(t, new android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
@@ -241,6 +254,23 @@ public class ScheduleListActivity extends Activity {
         bar.addView(hit, new android.widget.FrameLayout.LayoutParams(
                 Ui.dp(this, Ui.TOUCH_MIN), Ui.dp(this, Ui.TOUCH_MIN),
                 android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.END));
+
+        // 「设备」入口：进设备列表页（一台手环一行），从那里再进单台设备的课表
+        TextView devEntry = Ui.textLh(this, "设备", Ui.SP_BODY, Ui.ACCENT, false, Ui.LH_BODY);
+        devEntry.setGravity(android.view.Gravity.CENTER);
+        android.widget.FrameLayout.LayoutParams dp = new android.widget.FrameLayout.LayoutParams(
+                Ui.dp(this, Ui.TOUCH_MIN), Ui.dp(this, Ui.TOUCH_MIN),
+                android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.END);
+        dp.rightMargin = Ui.dp(this, Ui.TOUCH_MIN);
+        devEntry.setClickable(true);
+        devEntry.setContentDescription("设备列表");
+        devEntry.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new android.content.Intent(
+                        ScheduleListActivity.this, DevicesActivity.class));
+            }
+        });
+        bar.addView(devEntry, dp);
         return bar;
     }
 
@@ -343,9 +373,20 @@ public class ScheduleListActivity extends Activity {
         syncBadgeView = null;      // 卡片重建 → 旧徽标引用失效，列表构建完成后统一回填
         curDeviceGroupKey = null;
         curGroupCount = -1;
+        if (filterDeviceId.length() > 0 && deviceBar != null) {
+            deviceBar.setVisibility(View.GONE);   // 从设备页进来：顶部设备条没有意义，藏掉
+        }
         renderDeviceBar();
         final String activeId = ScheduleStore.activeId(this);
         List<ScheduleStore.Schedule> all = ScheduleStore.list(this);
+        if (filterDeviceId.length() > 0) {
+            // 只看这台设备的课表；本地新建的课表没有设备归属，天然被排除
+            List<ScheduleStore.Schedule> keep = new ArrayList<ScheduleStore.Schedule>();
+            for (ScheduleStore.Schedule s : all) {
+                if (s.isSync() && filterDeviceId.equals(s.deviceId)) keep.add(s);
+            }
+            all = keep;
+        }
         lastRenderedCount = all.size();
         if (all.isEmpty()) {
             listBox.addView(emptyState());
@@ -420,7 +461,7 @@ public class ScheduleListActivity extends Activity {
             listBox.addView(groupHeader("自己的课表", local.size(), "local"));
             addGroupBody("local", local, activeId);
         }
-        listBox.addView(newScheduleHint());
+        if (filterDeviceId.length() == 0) listBox.addView(newScheduleHint());
         refreshSyncView();
     }
 

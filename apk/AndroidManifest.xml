@@ -97,6 +97,9 @@
         <activity android:name="com.application.watch.classschedule.ScheduleListActivity"
             android:exported="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
+        <activity android:name="com.application.watch.classschedule.DevicesActivity"
+            android:exported="false"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.application.watch.classschedule.JsonEditorActivity"
             android:exported="false"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
