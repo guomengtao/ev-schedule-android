@@ -877,7 +877,8 @@ public class ScheduleListActivity extends Activity {
             if (pend > 0) {
                 panel.addView(menuDivider());
                 cardMenuItem(panel, pw, "推到手环（" + pend + " 门待存）", Ui.ACCENT, new Runnable() {
-                    @Override public void run() { syncToWatch(s); }
+                    // 推的是手环上已有的同一张表，属主明确，不需要覆盖确认
+                    @Override public void run() { syncToWatch(s, true); }
                 });
             }
         }
@@ -1388,11 +1389,40 @@ public class ScheduleListActivity extends Activity {
         });
     }
 
-    private void syncToWatch(final ScheduleStore.Schedule s) {
+    private void syncToWatch(final ScheduleStore.Schedule s) { syncToWatch(s, false); }
+
+    /**
+     * @param confirmedOverwrite 已确认「允许覆盖手环上的同名课表」。
+     *   存进手环时手环侧是按名字/槽位覆盖的（回包 created=false），原来那份会被顶掉
+     *   且没有撤销入口，所以同名时先问一句。推到手环走的是同一张表（属主明确），传 true 跳过。
+     */
+    private void syncToWatch(final ScheduleStore.Schedule s, final boolean confirmedOverwrite) {
         SyncEngine e = SyncEngine.get(this);
         if (!e.hasNode()) {
             status("手环还没连上，先回首页连一下", Ui.WARN);
             return;
+        }
+        if (!confirmedOverwrite) {
+            String[] bandNames = e.bandScheduleNames;
+            boolean clash = false;
+            if (bandNames != null) {
+                for (int i = 0; i < bandNames.length; i++) {
+                    if (bandNames[i] != null && bandNames[i].equals(s.name)) { clash = true; break; }
+                }
+            }
+            if (clash) {
+                new android.app.AlertDialog.Builder(this)
+                        .setTitle("手环上已有同名课表")
+                        .setMessage("手环上有一份叫「" + s.name + "」的课表。继续会用它覆盖原来那份，覆盖后不能撤回。")
+                        .setNegativeButton("不覆盖", null)
+                        .setPositiveButton("覆盖", new android.content.DialogInterface.OnClickListener() {
+                            @Override public void onClick(android.content.DialogInterface d, int which) {
+                                syncToWatch(s, true);
+                            }
+                        })
+                        .show();
+                return;
+            }
         }
         try {
             JSONArray courses = new JSONArray();
