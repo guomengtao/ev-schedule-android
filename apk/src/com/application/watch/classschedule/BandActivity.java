@@ -46,6 +46,7 @@ public class BandActivity extends Activity {
 
     /** 昵称设置行的右侧当前值 */
     private TextView nickValueView;
+    private TextView cloudValueView;
 
     private TextView resultView;
     private Runnable heroTick;
@@ -90,6 +91,8 @@ public class BandActivity extends Activity {
         cfgBox.addView(buildToolsGrid());            // D5：首页设置 / 工具箱 → 2 列工具卡
         cfgBox.addView(Ui.space(this, Ui.GAP_MD));
         cfgBox.addView(buildNickRow());              // D6：昵称卡 → 设置行（点开底部弹层）
+        cfgBox.addView(Ui.space(this, Ui.GAP_SM));
+        cfgBox.addView(buildCloudRow());             // P1：网页大屏编辑（次级入口，不争视觉）
         root.addView(cfgBox);
 
         // ===== 瞬时提示条（语义色，2.6s 自动收起）=====
@@ -478,6 +481,91 @@ public class BandActivity extends Activity {
         grid.addView(toolCell(R.drawable.ic_timer, "工具箱", "找手机 / 静音",
                 ToolboxActivity.class), lp2);
         return grid;
+    }
+
+    // ======================= 网页大屏编辑（P1 次级入口）=======================
+
+    /** 很辅助的功能：做成设置行样式、不与主操作争视觉；副行写明「需联网」。
+     *  只对「已存进手环」的课表开放——本地新建的表没有设备归属，服务端无法定位。 */
+    private View buildCloudRow() {
+        LinearLayout card = Ui.card(this);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setMinimumHeight(Ui.dp(this, 24));
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        texts.addView(Ui.textLh(this, "网页大屏编辑", Ui.SP_BODY, Ui.TEXT, false, Ui.LH_BODY));
+        cloudValueView = Ui.textLh(this, "需联网 · 仅本设备课表", 11.5f, Ui.MUTED, false, Ui.LH_BODY);
+        texts.addView(cloudValueView);
+        row.addView(texts, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        ImageView chev = new ImageView(this);
+        chev.setImageResource(R.drawable.ic_chevron_right);
+        chev.setColorFilter(Ui.MUTED);
+        row.addView(chev, new LinearLayout.LayoutParams(
+                Ui.dp(this, 16), Ui.dp(this, 16)));
+
+        card.addView(row);
+        card.setClickable(true);
+        card.setContentDescription("网页大屏编辑");
+        card.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { openCloudEditor(); }
+        });
+        return card;
+    }
+
+    /** 找「本设备 + 已存入手环」的那张表；找不到返回 null（不猜、不拿本地新建的顶替）。 */
+    private ScheduleStore.Schedule findCloudSchedule() {
+        String dev = null;
+        try { dev = SyncEngine.get(this).currentDeviceId(); } catch (Throwable ignored) { }
+        for (ScheduleStore.Schedule s : ScheduleStore.list(this)) {
+            if (!s.isSync()) continue;
+            if (dev != null && dev.length() > 0
+                    && s.deviceId != null && !dev.equals(s.deviceId)) continue;
+            return s;
+        }
+        return null;
+    }
+
+    private void openCloudEditor() {
+        final ScheduleStore.Schedule s = findCloudSchedule();
+        if (s == null) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("还没有可编辑的课表")
+                    .setMessage("网页编辑只支持「已存进手环」的课表。\n请先把手机上的课表存进手环，再来开通。")
+                    .setPositiveButton("知道了", null)
+                    .show();
+            return;
+        }
+        if (cloudValueView != null) cloudValueView.setText("正在上传…");
+        CloudSyncWorker.enableAndPublish(this, s, new CloudSyncWorker.SyncCb() {
+            @Override public void on(boolean ok, String msg, final String url, int rev) {
+                if (cloudValueView != null) {
+                    cloudValueView.setText(ok ? ("已开通 · 云端 rev " + rev) : "上传失败，请检查网络");
+                }
+                if (!ok) return;
+                new android.app.AlertDialog.Builder(BandActivity.this)
+                        .setTitle("网页编辑已开通")
+                        .setMessage("在电脑浏览器打开下面的链接，即可大屏编辑《" + s.name + "》：\n\n" + url
+                                + "\n\n注意：网页上的改动会同步到这台手机；手环仍需你在手机上点一次同步才会变。")
+                        .setPositiveButton("复制链接", new android.content.DialogInterface.OnClickListener() {
+                            @Override public void onClick(android.content.DialogInterface d, int w) {
+                                try {
+                                    android.content.ClipboardManager cm =
+                                            (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                                    cm.setPrimaryClip(android.content.ClipData.newPlainText("网页编辑", url));
+                                    android.widget.Toast.makeText(BandActivity.this, "链接已复制",
+                                            android.widget.Toast.LENGTH_SHORT).show();
+                                } catch (Throwable ignored) { }
+                            }
+                        })
+                        .setNegativeButton("关闭", null)
+                        .show();
+            }
+        });
     }
 
     // ======================= 昵称设置行（D6）=======================
