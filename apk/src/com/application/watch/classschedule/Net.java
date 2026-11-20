@@ -37,14 +37,24 @@ public final class Net {
     }
 
     public static void postJson(final String url, final String json, final Cb cb) {
-        exec("POST", url, json, cb);
+        exec("POST", url, json, null, cb);
     }
 
     public static void get(final String url, final Cb cb) {
-        exec("GET", url, null, cb);
+        exec("GET", url, null, null, cb);
     }
 
-    private static void exec(final String method, final String url, final String json, final Cb cb) {
+    /** 带 Bearer 凭据的 POST（云同步接口用；其余老接口仍走无鉴权版本） */
+    public static void postJsonAuthed(final String url, final String json, final String bearer, final Cb cb) {
+        exec("POST", url, json, bearer, cb);
+    }
+
+    /** 带 Bearer 凭据的 GET；bearer 为空时等价于普通 get */
+    public static void getAuthed(final String url, final String bearer, final Cb cb) {
+        exec("GET", url, null, bearer, cb);
+    }
+
+    private static void exec(final String method, final String url, final String json, final String bearer, final Cb cb) {
         new Thread(new Runnable() {
             @Override public void run() {
                 int code = -1;
@@ -55,6 +65,9 @@ public final class Net {
                     c.setRequestMethod(method);
                     c.setConnectTimeout(6000);
                     c.setReadTimeout(9000);
+                    if (bearer != null && bearer.length() > 0) {
+                        c.setRequestProperty("Authorization", "Bearer " + bearer);
+                    }
                     if (json != null) {
                         c.setDoOutput(true);
                         c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
