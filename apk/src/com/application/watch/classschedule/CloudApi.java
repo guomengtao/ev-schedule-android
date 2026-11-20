@@ -186,6 +186,18 @@ public final class CloudApi {
         Net.postJsonAuthed(API + "/link", o.toString(), token(c, guid), wrap(cb));
     }
 
+    // ---------------- 6d. devlink：一台设备一个列表页链接 ----------------
+
+    /** 传该设备任一张课表的 guid，服务端按 watch_key 聚合出 /d/<短码>。 */
+    public static void devlink(Context c, String guid, Cb cb) {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("guid", guid);
+        } catch (Throwable ignored) {
+        }
+        Net.postJsonAuthed(API + "/devlink", o.toString(), token(c, guid), wrap(cb));
+    }
+
     // ---------------- 7. backup：手动备份一份 ----------------
 
     /** @param reason 约定 manual | auto | pre-push | pre-restore */

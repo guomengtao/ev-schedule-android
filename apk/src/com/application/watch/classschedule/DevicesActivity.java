@@ -29,6 +29,7 @@ public class DevicesActivity extends Activity {
     private static final class Dev {
         String deviceId = "";
         String name = "";
+        String anyGuid = "";   // 该设备任一张课表的 guid（取设备级链接时用）
         int count = 0;
         long lastAt = 0;
         boolean online = false;
@@ -126,6 +127,7 @@ public class DevicesActivity extends Activity {
                 map.put(key, d);
             }
             d.count++;
+            if (d.anyGuid.length() == 0 && s.guid != null && s.guid.length() > 0) d.anyGuid = s.guid;
             if (s.syncedAt > d.lastAt) d.lastAt = s.syncedAt;
             if (d.name.length() == 0 && s.deviceName != null) d.name = s.deviceName;
         }
@@ -209,6 +211,18 @@ public class DevicesActivity extends Activity {
         row.addView(texts, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
+        // 「链接」：一次拿到这台手环的列表页地址（含它名下全部课表），不用逐张点
+        TextView linkBtn = Ui.textLh(this, "链接", 12f, Ui.ACCENT, false, Ui.LH_BODY);
+        linkBtn.setGravity(Gravity.CENTER);
+        linkBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 6), Ui.dp(this, 10), Ui.dp(this, 6));
+        linkBtn.setClickable(true);
+        linkBtn.setContentDescription("获取这台设备的网页链接");
+        linkBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { fetchDevLink(d); }
+        });
+        row.addView(linkBtn, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         ImageView chev = new ImageView(this);
         chev.setImageResource(R.drawable.ic_chevron_right);
         chev.setColorFilter(Ui.MUTED);
@@ -227,6 +241,44 @@ public class DevicesActivity extends Activity {
             }
         });
         return card;
+    }
+
+    /** 取这台设备的列表页网址（/d/<短码>），复制到剪贴板并展示。 */
+    private void fetchDevLink(final Dev d) {
+        if (d.anyGuid.length() == 0) {
+            android.widget.Toast.makeText(this, "这台设备还没有已上传的课表", android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        android.widget.Toast.makeText(this, "正在获取链接…", android.widget.Toast.LENGTH_SHORT).show();
+        CloudApi.devlink(this, d.anyGuid, new CloudApi.Cb() {
+            @Override public void on(int code, String body) {
+                String url = "";
+                try { url = new org.json.JSONObject(body).optString("url", ""); } catch (Throwable ignored) { }
+                if (code != 200 || url.length() == 0) {
+                    final int c2 = code;
+                    runOnUiThread(new Runnable() { @Override public void run() {
+                        android.widget.Toast.makeText(DevicesActivity.this,
+                                "获取失败（" + c2 + "），请检查网络后重试",
+                                android.widget.Toast.LENGTH_LONG).show();
+                    } });
+                    return;
+                }
+                final String u = url;
+                runOnUiThread(new Runnable() { @Override public void run() {
+                    try {
+                        android.content.ClipboardManager cm =
+                                (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("设备课表", u));
+                    } catch (Throwable ignored) { }
+                    new android.app.AlertDialog.Builder(DevicesActivity.this)
+                            .setTitle("设备链接已复制")
+                            .setMessage(u + "\n\n这个地址打开就是《" + d.name + "》名下所有课表，"
+                                    + "点任意一份可查看；要改课程，回到课表页对那张表单独开通网页编辑。")
+                            .setPositiveButton("知道了", null)
+                            .show();
+                } });
+            }
+        });
     }
 
     private View emptyState() {
