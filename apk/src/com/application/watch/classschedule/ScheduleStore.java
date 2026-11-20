@@ -637,6 +637,27 @@ public final class ScheduleStore {
                 arr.put(jo);
             }
             saveRoot(c, root);
+            // 2026-11-20：本地落盘成功后入云待推队列（不改任何用户可见行为）。
+            // 放在 upsert 里而不是逐个调用点，让「改名 / 改课 / 手环同步回来」等所有写入自动覆盖，
+            // 避免以后新增写路径忘了挂钩子。cloudEnabled=false 时零请求、零入队。
+            noteLocalChange(c, s);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 课表有本地改动 → 入待推队列（仅对已开启云同步的表；失败静默，不影响本地与手环） */
+    private static void noteLocalChange(Context c, Schedule s) {
+        try {
+            if (s == null || !s.cloudEnabled || s.guid == null || s.guid.length() == 0) {
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            JSONArray cs = new JSONArray();
+            for (CourseCache.Course co : s.courses) {
+                cs.put(CourseCache.toJson(co));
+            }
+            payload.put("courses", cs);
+            CloudSyncStore.enqueueUpsert(c, s.guid, s.cloudRev, payload.toString());
         } catch (Throwable ignored) {
         }
     }
