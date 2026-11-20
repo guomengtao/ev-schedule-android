@@ -46,8 +46,6 @@ public class ScheduleListActivity extends Activity {
     private List<ScheduleStore.Schedule> curDeviceGroup = null;
     /** 上次向云端查更新的时间（60 秒节流；与手环 pull 的 lastPullAt 分开记） */
     private long lastCloudPullAt = 0L;
-    /** 有云端更新等着落手环（当时没连上），连上后补推一次 */
-    private boolean pendingBandPush = false;
     /** 上一轮是否已连上手环：用于识别「刚连上」这个边沿 */
     private boolean bandWasConnected = false;
     /** 连接状态回调：手环连上的瞬间补推待落地的云端更新（WeakReference 持有，页面销毁自动清） */
@@ -56,14 +54,11 @@ public class ScheduleListActivity extends Activity {
             boolean now = SyncEngine.get(ScheduleListActivity.this).hasNode();
             if (now && !bandWasConnected) {
                 bandWasConnected = true;
-                // 判据不是「云端 rev 变新」，而是「本地与手环真有差异」——
-                // rev 早已 ack 的情况下，靠 rev 永远等不到推送时机，差异会一直挂着。
-                boolean need = pendingBandPush || hasUnsyncedActive();
-                pendingBandPush = false;
+                // ⛔ 这里曾经「连上就自动 syncNow()」——syncNow 是三方合并，
+                // 手环回传的课程 id 与本地不一致时会把「手环上没有的」判成被删除，
+                // 造成 57 门 → 10 门的真实数据丢失（2026-11-20 事故）。
+                // 合并语义只能由用户显式触发，自动流程一律不得调用。
                 render();
-                if (need) {
-                    pushToBand();
-                }
             } else if (!now && bandWasConnected) {
                 bandWasConnected = false;
                 render();
@@ -182,30 +177,6 @@ public class ScheduleListActivity extends Activity {
         }
     }
 
-    /** 当前使用的课表是否还有没落手环的改动（判据与卡片上那行「N 门课还没存进手环」一致） */
-    private boolean hasUnsyncedActive() {
-        try {
-            ScheduleStore.Schedule a = ScheduleStore.active(this);
-            return a != null && SyncCoordinator.unsavedCount(a) > 0;
-        } catch (Throwable t) {
-            return false;
-        }
-    }
-
-    /** 推一次手环：三方合并会把「本地已改、手环未改」的差异以本地为准写上去。 */
-    private void pushToBand() {
-        SyncCoordinator.syncNow(this, new SyncCoordinator.Callback() {
-            @Override public void onDone(final boolean ok, final String msg) {
-                runOnUiThread(new Runnable() { @Override public void run() {
-                    android.widget.Toast.makeText(ScheduleListActivity.this,
-                            ok ? "已同步到手环" : ("手环同步失败：" + msg),
-                            android.widget.Toast.LENGTH_SHORT).show();
-                    render();
-                } });
-            }
-        });
-    }
-
     /**
      * 云端有新版本就拉下来（网页改完 → 手机能看到）。
      * 60 秒内不重复查，避免来回切页刷请求；拉到更新才提示，静默失败。
@@ -221,15 +192,9 @@ public class ScheduleListActivity extends Activity {
                             "云端有更新，" + n + " 套课表已刷新", android.widget.Toast.LENGTH_SHORT).show();
                     render();
                 } });
-                // 拉到的改动还要真的落到手环上：连着手环就直接推一次（走既有三方合并，
-                // base 仍是旧快照 → 判定「本地改了、手环没改」→ 以本地为准覆盖上去）
-                if (SyncEngine.get(ScheduleListActivity.this).hasNode()) {
-                    pushToBand();
-                } else {
-                    // 没连手环：记一笔，等连上后由状态回调补推（不再让更新停在手机里）
-                    pendingBandPush = true;
-                    SyncEngine.get(ScheduleListActivity.this).autoReconnect();
-                }
+                // ⛔ 不再自动推手环：syncNow 是三方合并，自动调用发生过数据丢失事故
+                // （见 bandStatusCb 注释）。云端 → 手机这一段到此为止，
+                // 手机 → 手环由用户手动触发（三点菜单「推到手环」，走 import 覆盖）。
             }
         });
     }
