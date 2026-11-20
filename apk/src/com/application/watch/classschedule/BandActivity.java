@@ -562,6 +562,11 @@ public class BandActivity extends Activity {
                         .setTitle("网页编辑已开通")
                         .setMessage("在电脑浏览器打开下面的链接，即可大屏编辑《" + s.name + "》：\n\n" + url
                                 + "\n\n注意：网页上的改动会同步到这台手机；手环仍需你在手机上点一次同步才会变。")
+                        .setNeutralButton("允许编辑", new android.content.DialogInterface.OnClickListener() {
+                            @Override public void onClick(android.content.DialogInterface d, int w) {
+                                allowWebEdit(s, url);
+                            }
+                        })
                         .setPositiveButton("复制链接", new android.content.DialogInterface.OnClickListener() {
                             @Override public void onClick(android.content.DialogInterface d, int w) {
                                 try {
@@ -575,6 +580,40 @@ public class BandActivity extends Activity {
                         })
                         .setNegativeButton("关闭", null)
                         .show();
+            }
+        });
+    }
+
+    /**
+     * 开一段 7 天的网页可写窗口。默认只读——用户点这一下，才把写权限放出去。
+     * 到期自动收回，不需要任何账号或验证码。
+     */
+    private void allowWebEdit(final ScheduleStore.Schedule s, final String url) {
+        if (s == null || s.guid == null || s.guid.length() == 0) return;
+        android.widget.Toast.makeText(this, "正在开启…", android.widget.Toast.LENGTH_SHORT).show();
+        CloudApi.edit(this, s.guid, true, 7, new CloudApi.Cb() {
+            @Override public void on(int code, String body) {
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (code != 200) {
+                            android.widget.Toast.makeText(BandActivity.this, "开启失败，请检查网络后再试",
+                                    android.widget.Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        if (cloudValueView != null) cloudValueView.setText("可网页编辑 · 7 天");
+                        try {
+                            android.content.ClipboardManager cm =
+                                    (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("网页编辑", url));
+                        } catch (Throwable ignored) { }
+                        new android.app.AlertDialog.Builder(BandActivity.this)
+                                .setTitle("网页编辑已开启 7 天")
+                                .setMessage("链接已复制。在电脑浏览器打开即可改课程：\n\n" + url
+                                        + "\n\n7 天后自动转回只读；想立刻收回，再点一次「网页大屏编辑」即可。")
+                                .setPositiveButton("知道了", null)
+                                .show();
+                    }
+                });
             }
         });
     }

@@ -158,6 +158,23 @@ public final class CloudApi {
         Net.postJsonAuthed(API + "/share", o.toString(), token(c, guid), wrap(cb));
     }
 
+    // ---------------- 6b. edit：网页可写窗口（默认关） ----------------
+
+    /**
+     * 给这张表开一段「网页可写」的窗口（默认 7 天），到期自动转只读。
+     * 刻意不做账号、不做验证码——持有手机并点下按钮，就是权限的唯一来源。
+     */
+    public static void edit(Context c, String guid, boolean enable, int days, Cb cb) {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("guid", guid);
+            o.put("enable", enable);
+            o.put("days", days);
+        } catch (Throwable ignored) {
+        }
+        Net.postJsonAuthed(API + "/edit", o.toString(), token(c, guid), wrap(cb));
+    }
+
     // ---------------- 7. backup：手动备份一份 ----------------
 
     /** @param reason 约定 manual | auto | pre-push | pre-restore */
