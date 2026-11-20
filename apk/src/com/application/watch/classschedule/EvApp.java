@@ -64,7 +64,13 @@ public class EvApp extends Application implements Application.ActivityLifecycleC
 
     // 其余生命周期回调本模块用不到
     @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) { }
-    @Override public void onActivityResumed(Activity activity) { }
+    @Override public void onActivityResumed(Activity activity) {
+        // 2026-11-20：回前台就试着冲一次云端待推队列（内部有 pendingCount 短路，空队列零网络）
+        try {
+            CloudSyncWorker.kick(activity == null ? this : activity.getApplicationContext());
+        } catch (Throwable ignored) {
+        }
+    }
     @Override public void onActivityPaused(Activity activity) { }
     @Override public void onActivitySaveInstanceState(Activity activity, Bundle outState) { }
     @Override public void onActivityDestroyed(Activity activity) { }

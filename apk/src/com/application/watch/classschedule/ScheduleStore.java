@@ -646,6 +646,42 @@ public final class ScheduleStore {
     }
 
     /** 课表有本地改动 → 入待推队列（仅对已开启云同步的表；失败静默，不影响本地与手环） */
+    /**
+     * 云端 rev 追平 / 开启状态落盘（CloudSyncWorker 与发布流程专用）。
+     * 只碰 cloudRev / cloudEnabled 两个字段，不动课程与时间戳。
+     */
+    public static synchronized void setCloudState(Context c, String guid, int rev, boolean enabled) {
+        if (guid == null || guid.length() == 0) {
+            return;
+        }
+        try {
+            JSONObject root = root(c);
+            JSONArray arr = root.optJSONArray("schedules");
+            if (arr == null) {
+                return;
+            }
+            boolean changed = false;
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.optJSONObject(i);
+                if (o == null || !guid.equals(o.optString("guid", ""))) {
+                    continue;
+                }
+                if (rev > 0 && o.optInt("cloudRev", 0) != rev) {
+                    o.put("cloudRev", rev);
+                    changed = true;
+                }
+                if (enabled && !o.optBoolean("cloudEnabled", false)) {
+                    o.put("cloudEnabled", true);
+                    changed = true;
+                }
+            }
+            if (changed) {
+                saveRoot(c, root);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     private static void noteLocalChange(Context c, Schedule s) {
         try {
             if (s == null || !s.cloudEnabled || s.guid == null || s.guid.length() == 0) {
