@@ -1452,6 +1452,31 @@ public class ScheduleListActivity extends Activity {
             body.put("scheduleName", s.name);
             // 带上本机课表 id：手环端可据此记录来源，后续若要「按 id 覆盖」也有依据
             body.put("scheduleId", s.id);
+            // 晚课必须跟着课表一起下发。
+            // 手环端 syncWriteRotation 对「报文没带 rotation」的语义是「保留本地原样」，
+            // 于是手机端明明关着晚课，手环上那份内置 demo 晚课（enabled=true）却永远留着：
+            // 表现为「手机上只有 3 节课，存进手环每天多出一节 17:10 的晚课」。
+            // 这里显式下发当前配置；关闭状态传 enabled=false，手环据此清空。
+            RotationStore.Template tpl = RotationStore.load(this, s.id);
+            if (tpl != null) {
+                tpl.ensureCycle();
+                JSONArray rows = new JSONArray();
+                for (String[] row : tpl.cells) {
+                    JSONArray r = new JSONArray();
+                    for (int d = 0; d < 7; d++) {
+                        r.put(row != null && d < row.length && row[d] != null ? row[d] : "");
+                    }
+                    rows.put(r);
+                }
+                JSONObject rot = new JSONObject();
+                rot.put("enabled", tpl.enabled);
+                rot.put("cycle", tpl.cycle);
+                rot.put("time", tpl.time);
+                rot.put("calibDate", tpl.calibDate == null ? "" : tpl.calibDate);
+                rot.put("calibWeek", tpl.calibWeek);
+                rot.put("cells", rows);
+                body.put("rotation", rot);
+            }
             JSONObject msg = new JSONObject();
             msg.put("action", "import");
             msg.put("payload", body);
