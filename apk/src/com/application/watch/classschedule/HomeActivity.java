@@ -1835,16 +1835,24 @@ public class HomeActivity extends Activity {
         nameRow.addView(editBtn, elp);
         weekBox.addView(nameRow);
         weekBox.addView(Ui.space(this, Ui.GAP_MD));
-        weekBox.addView(weekGridWithTime(s.courses));
+        // 墓碑课（deleted=true，删了但仍留在数组里可恢复）不画进周网格、也不算课数：
+        // 网页上删掉一门课，这里就该少一门，否则「删了还在」会让人反复删。
+        java.util.List<CourseCache.Course> liveCourses = new java.util.ArrayList<CourseCache.Course>();
+        if (s.courses != null) {
+            for (CourseCache.Course c : s.courses) {
+                if (c != null && !c.deleted) liveCourses.add(c);
+            }
+        }
+        weekBox.addView(weekGridWithTime(liveCourses));
         // note 信息去重：sync 课表"最后同步"与"更新于"是同一件事，只说一遍
         // 2026-11-05 P2：门数口径写明「全周 N 节课」—— 这是整份课表（7 天）的课程条数，
         // 不是今天门数、也不是去重后的课名数，避免被误读成「网格少了一门课」。
         String note;
         if (s.isSync()) {
-            note = "从手环来的 · 全周 " + s.courses.size() + " 节课 · 最后同步 "
+            note = "从手环来的 · 全周 " + liveCourses.size() + " 节课 · 最后同步 "
                     + CourseCache.ago(s.syncedAt);
         } else {
-            note = "只在这台手机 · 全周 " + s.courses.size() + " 节课 · 更新于 "
+            note = "只在这台手机 · 全周 " + liveCourses.size() + " 节课 · 更新于 "
                     + CourseCache.ago(s.createdAt);
         }
         TextView n = Ui.textLh(this, note, Ui.SP_CAPTION, Ui.MUTED, false, Ui.LH_CAPTION);
