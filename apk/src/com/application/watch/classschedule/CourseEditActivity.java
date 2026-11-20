@@ -693,21 +693,19 @@ public class CourseEditActivity extends Activity implements WeekEditGrid.Callbac
         if (!name.equals(originName)) {
             ScheduleStore.rename(this, scheduleId, name);
         }
-        String msg = sourceSync
-                ? "已更新「" + name + "」，正在同步到手环…"
-                : "已保存「" + name + "」（" + draft.size() + " 门课）";
+        String msg = "已保存「" + name + "」（" + draft.size() + " 门课）";
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
         Intent out = new Intent();
         out.putExtra("summary", msg);
         setResult(RESULT_OK, out);
         finish();
-        // ★ 编辑后立即同步（字段级三方合并；断连则暂存置 dirty，连上后补发）
-        final android.content.Context app = getApplicationContext();
-        SyncCoordinator.syncNow(app, new SyncCoordinator.Callback() {
-            @Override public void onDone(boolean ok, String m) {
-                Toast.makeText(app, m, Toast.LENGTH_SHORT).show();
-            }
-        });
+        // ⛔ 这里曾经自动调 SyncCoordinator.syncNow()（字段级三方合并），已移除。
+        // 2026-11-20 实证：用 JSON 往「交通大学」写 3 门课，保存后变成 8 门，
+        // 多出的「劳动/化学/英/化学/地」全部来自当前手环激活课表——syncNow 把
+        // 「手环有、这张表没有」的课当成新增并了进来。同一个函数当天早些时候还
+        // 造成过「九年级一班 57 门变 10 门」。
+        // 正确口径：保存只写本地；要落到手环由用户在课表卡菜单点「推到手环」
+        // （单向 import 覆盖），要上云走 CloudSyncWorker 的单向路径，都不做三方合并。
     }
 
     @Override
