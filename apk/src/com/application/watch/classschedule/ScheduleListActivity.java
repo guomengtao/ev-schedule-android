@@ -46,6 +46,27 @@ public class ScheduleListActivity extends Activity {
     private List<ScheduleStore.Schedule> curDeviceGroup = null;
     /** 上次向云端查更新的时间（60 秒节流；与手环 pull 的 lastPullAt 分开记） */
     private long lastCloudPullAt = 0L;
+    /** 有云端更新等着落手环（当时没连上），连上后补推一次 */
+    private boolean pendingBandPush = false;
+    /** 上一轮是否已连上手环：用于识别「刚连上」这个边沿 */
+    private boolean bandWasConnected = false;
+    /** 连接状态回调：手环连上的瞬间补推待落地的云端更新（WeakReference 持有，页面销毁自动清） */
+    private final Runnable bandStatusCb = new Runnable() {
+        @Override public void run() {
+            boolean now = SyncEngine.get(ScheduleListActivity.this).hasNode();
+            if (now && !bandWasConnected) {
+                bandWasConnected = true;
+                if (pendingBandPush) {
+                    pendingBandPush = false;
+                    pushToBand();
+                }
+                render();
+            } else if (!now && bandWasConnected) {
+                bandWasConnected = false;
+                render();
+            }
+        }
+    };
 
     private static final int REQ_EDIT = 1;
     private static final int REQ_CREATE = 2;
@@ -139,14 +160,43 @@ public class ScheduleListActivity extends Activity {
         if (SyncEngine.get(this).hasNode()) {
             SyncEngine.get(this).refreshBandScheduleCount();
         }
+        // 冷启动 / 掉线后不等心跳的 60 秒，进页面就主动连一轮；
+        // 连上的瞬间由 bandStatusCb 补推「云端已改但还没落手环」的更新
+        SyncEngine.get(this).addStatusCallback(bandStatusCb);
+        bandWasConnected = SyncEngine.get(this).hasNode();
+        if (!bandWasConnected) {
+            SyncEngine.get(this).autoReconnect();
+        }
         pullCloudChanges();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        try {
+            SyncEngine.get(this).removeStatusCallback(bandStatusCb);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 推一次手环：三方合并会把「本地已改、手环未改」的差异以本地为准写上去。 */
+    private void pushToBand() {
+        SyncCoordinator.syncNow(this, new SyncCoordinator.Callback() {
+            @Override public void onDone(final boolean ok, final String msg) {
+                runOnUiThread(new Runnable() { @Override public void run() {
+                    android.widget.Toast.makeText(ScheduleListActivity.this,
+                            ok ? "已同步到手环" : ("手环同步失败：" + msg),
+                            android.widget.Toast.LENGTH_SHORT).show();
+                    render();
+                } });
+            }
+        });
     }
 
     /**
      * 云端有新版本就拉下来（网页改完 → 手机能看到）。
      * 60 秒内不重复查，避免来回切页刷请求；拉到更新才提示，静默失败。
-     */
-    private void pullCloudChanges() {
+     */    private void pullCloudChanges() {
         long now = System.currentTimeMillis();
         if (now - lastCloudPullAt < 60_000L) return;
         lastCloudPullAt = now;
@@ -161,16 +211,11 @@ public class ScheduleListActivity extends Activity {
                 // 拉到的改动还要真的落到手环上：连着手环就直接推一次（走既有三方合并，
                 // base 仍是旧快照 → 判定「本地改了、手环没改」→ 以本地为准覆盖上去）
                 if (SyncEngine.get(ScheduleListActivity.this).hasNode()) {
-                    SyncCoordinator.syncNow(ScheduleListActivity.this, new SyncCoordinator.Callback() {
-                        @Override public void onDone(final boolean ok, final String msg) {
-                            runOnUiThread(new Runnable() { @Override public void run() {
-                                android.widget.Toast.makeText(ScheduleListActivity.this,
-                                        ok ? "已同步到手环" : ("手环同步失败：" + msg),
-                                        android.widget.Toast.LENGTH_SHORT).show();
-                                render();
-                            } });
-                        }
-                    });
+                    pushToBand();
+                } else {
+                    // 没连手环：记一笔，等连上后由状态回调补推（不再让更新停在手机里）
+                    pendingBandPush = true;
+                    SyncEngine.get(ScheduleListActivity.this).autoReconnect();
                 }
             }
         });
