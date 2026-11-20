@@ -31,6 +31,93 @@ public final class CloudSyncWorker {
         void on(boolean ok, String msg, String url, int rev);
     }
 
+    /** 拉取云端更新的结果回调（主线程）。n = 本次真正拉到并应用的课表数，0 表示没变化。 */
+    public interface PullCb {
+        void on(int n);
+    }
+
+    /**
+     * 云端有新版本 → 拉下来覆盖本地（ack_rev 回路）。
+     *
+     * <p>只查「已开启云同步」的表（cloudEnabled && cloudRev>0），逐张 state 对比 rev：
+     * 云端 rev 比本地基线大，才 pull 全量并写入。写入走
+     * {@link ScheduleStore#applyCloudCourses}，**不入待推队列**，否则拉完立刻回推、rev 自增抖动。
+     *
+     * <p>拉到之后立刻 ack(rev)，让服务端知道手机已收到这个版本。
+     * 手环上的落地仍走原有同步链路（推手环），这里只负责把「云端真源」搬回手机。
+     */
+    public static void pullAll(final Context c, final PullCb cb) {
+        if (c == null) return;
+        final Context app = c.getApplicationContext();
+        final java.util.List<ScheduleStore.Schedule> targets = new java.util.ArrayList<ScheduleStore.Schedule>();
+        try {
+            for (ScheduleStore.Schedule s : ScheduleStore.list(app)) {
+                if (s.cloudEnabled && s.cloudRev > 0
+                        && s.guid != null && s.guid.length() > 0) {
+                    targets.add(s);
+                }
+            }
+        } catch (Throwable t) {
+            if (cb != null) cb.on(0);
+            return;
+        }
+        checkNext(app, targets, 0, 0, cb);
+    }
+
+    private static void checkNext(final Context app, final java.util.List<ScheduleStore.Schedule> t,
+                                  final int i, final int applied, final PullCb cb) {
+        if (i >= t.size()) {
+            if (cb != null) {
+                final int n = applied;
+                MAIN.post(new Runnable() {
+                    @Override public void run() { cb.on(n); }
+                });
+            }
+            return;
+        }
+        final ScheduleStore.Schedule s = t.get(i);
+        CloudApi.state(app, s.guid, new CloudApi.Cb() {
+            @Override public void on(int code, String body) {
+                int rev = 0;
+                try { rev = new org.json.JSONObject(body == null ? "{}" : body).optInt("rev", 0); }
+                catch (Throwable ignored) { }
+                if (code != 200 || rev <= s.cloudRev) {
+                    checkNext(app, t, i + 1, applied, cb);
+                    return;
+                }
+                CloudApi.pull(app, s.guid, new CloudApi.Cb() {
+                    @Override public void on(int c2, String b2) {
+                        boolean ok = applyPayload(app, s.guid, b2);
+                        checkNext(app, t, i + 1, applied + (ok ? 1 : 0), cb);
+                    }
+                });
+            }
+        });
+    }
+
+    /** 把 pull 回来的 payload 写进本地；成功则 ack 该 rev。 */
+    private static boolean applyPayload(Context app, String guid, String body) {
+        try {
+            org.json.JSONObject r = new org.json.JSONObject(body == null ? "{}" : body);
+            if (!r.optBoolean("exists", true)) return false;
+            if (r.optBoolean("deleted", false)) return false;   // 墓碑语义交给上层，不在这里删
+            int rev = r.optInt("rev", 0);
+            org.json.JSONObject p = r.optJSONObject("payload");
+            org.json.JSONArray cs = p == null ? null : p.optJSONArray("courses");
+            if (cs == null) return false;
+            java.util.List<CourseCache.Course> list = new java.util.ArrayList<CourseCache.Course>();
+            for (int i = 0; i < cs.length(); i++) {
+                org.json.JSONObject o = cs.optJSONObject(i);
+                if (o != null) list.add(CourseCache.fromJson(o));
+            }
+            boolean ok = ScheduleStore.applyCloudCourses(app, guid, list, rev);
+            if (ok && rev > 0) CloudApi.ack(app, guid, rev, null);
+            return ok;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     /** 有活就开泵；正在跑就什么都不做（不排队、不重复推）。 */
     public static void kick(final Context c) {
         if (c == null) return;

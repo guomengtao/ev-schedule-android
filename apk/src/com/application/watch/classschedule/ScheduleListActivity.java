@@ -44,6 +44,8 @@ public class ScheduleListActivity extends Activity {
     private TextView deviceLinkView;
     /** 当前在线设备的整组课表：取链接时要把这一组里没上云的先全部传上去 */
     private List<ScheduleStore.Schedule> curDeviceGroup = null;
+    /** 上次向云端查更新的时间（60 秒节流；与手环 pull 的 lastPullAt 分开记） */
+    private long lastCloudPullAt = 0L;
 
     private static final int REQ_EDIT = 1;
     private static final int REQ_CREATE = 2;
@@ -137,6 +139,27 @@ public class ScheduleListActivity extends Activity {
         if (SyncEngine.get(this).hasNode()) {
             SyncEngine.get(this).refreshBandScheduleCount();
         }
+        pullCloudChanges();
+    }
+
+    /**
+     * 云端有新版本就拉下来（网页改完 → 手机能看到）。
+     * 60 秒内不重复查，避免来回切页刷请求；拉到更新才提示，静默失败。
+     */
+    private void pullCloudChanges() {
+        long now = System.currentTimeMillis();
+        if (now - lastCloudPullAt < 60_000L) return;
+        lastCloudPullAt = now;
+        CloudSyncWorker.pullAll(this, new CloudSyncWorker.PullCb() {
+            @Override public void on(final int n) {
+                if (n <= 0) return;
+                runOnUiThread(new Runnable() { @Override public void run() {
+                    android.widget.Toast.makeText(ScheduleListActivity.this,
+                            "云端有更新，" + n + " 套课表已刷新", android.widget.Toast.LENGTH_SHORT).show();
+                    render();
+                } });
+            }
+        });
     }
 
     private void buildUi() {

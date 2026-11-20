@@ -647,6 +647,44 @@ public final class ScheduleStore {
 
     /** 课表有本地改动 → 入待推队列（仅对已开启云同步的表；失败静默，不影响本地与手环） */
     /**
+     * 网页端改完后 pull 下来的课程：直接覆盖本地、追平 rev。
+     * <p>**刻意不走 upsert**——upsert 会 noteLocalChange 入待推队列，拉下来立刻又推回去，
+     * rev 会一路涨，多设备之间来回抖动。这里只改本地与 cloudRev，不入队、不置 dirty。
+     *
+     * @return 是否命中并写入
+     */
+    public static synchronized boolean applyCloudCourses(Context c, String guid,
+                                                         List<CourseCache.Course> courses, int rev) {
+        if (c == null || guid == null || guid.length() == 0 || courses == null) return false;
+        try {
+            JSONObject root = root(c);
+            JSONArray arr = root.optJSONArray("schedules");
+            if (arr == null) return false;
+            String actId = activeId(c);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.optJSONObject(i);
+                if (o == null || !guid.equals(o.optString("guid", ""))) continue;
+                JSONArray cs = new JSONArray();
+                for (CourseCache.Course co : courses) {
+                    cs.put(CourseCache.toJson(co));
+                }
+                o.put("courses", cs);
+                if (rev > 0) o.put("cloudRev", rev);
+                o.put("dirty", false);
+                o.put("syncedAt", System.currentTimeMillis());
+                String id = o.optString("id", "");
+                String nm = o.optString("name", "");
+                saveRoot(c, root);
+                if (id.length() > 0 && id.equals(actId)) {
+                    CourseCache.saveFlat(c, courses, nm);
+                }
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+    /**
      * 云端 rev 追平 / 开启状态落盘（CloudSyncWorker 与发布流程专用）。
      * 只碰 cloudRev / cloudEnabled 两个字段，不动课程与时间戳。
      */
