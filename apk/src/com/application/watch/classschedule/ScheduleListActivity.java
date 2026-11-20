@@ -715,6 +715,15 @@ public class ScheduleListActivity extends Activity {
         cardMenuItem(panel, pw, "编辑课表", Ui.TEXT, new Runnable() {
             @Override public void run() { editSchedule(s); }
         });
+        if (s.isSync() && s.guid != null && s.guid.length() > 0) {
+            panel.addView(menuDivider());
+            cardMenuItem(panel, pw, "网页查看 · 复制链接", Ui.TEXT, new Runnable() {
+                @Override public void run() { fetchWebLink(s, false); }
+            });
+            cardMenuItem(panel, pw, "允许网页编辑 7 天", Ui.TEXT, new Runnable() {
+                @Override public void run() { fetchWebLink(s, true); }
+            });
+        }
         if (!s.isSync()) {
             panel.addView(menuDivider());
             cardMenuItem(panel, pw, "存进手环", Ui.TEXT, new Runnable() {
@@ -732,6 +741,44 @@ public class ScheduleListActivity extends Activity {
         pw.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY,
                 loc[0] + anchor.getWidth() - panel.getMeasuredWidth(),
                 loc[1] + anchor.getHeight() + Ui.dp(this, 4));
+    }
+
+    /** 三点菜单里的网页入口：allowEdit=false 只取链接（不动权限），true 额外开 7 天写权限。 */
+    private void fetchWebLink(final ScheduleStore.Schedule s, final boolean allowEdit) {
+        android.widget.Toast.makeText(this, allowEdit ? "正在开启编辑…" : "正在获取链接…",
+                android.widget.Toast.LENGTH_SHORT).show();
+        CloudApi.Cb cb = new CloudApi.Cb() {
+            @Override public void on(int code, String body) {
+                String url = "";
+                try { url = new org.json.JSONObject(body).optString("url", ""); } catch (Throwable ignored) { }
+                if (code != 200 || url.length() == 0) {
+                    final int c2 = code;
+                    runOnUiThread(new Runnable() { @Override public void run() {
+                        android.widget.Toast.makeText(ScheduleListActivity.this,
+                                "获取失败（" + c2 + "），请检查网络后重试",
+                                android.widget.Toast.LENGTH_LONG).show();
+                    } });
+                    return;
+                }
+                final String u = url;
+                runOnUiThread(new Runnable() { @Override public void run() {
+                    try {
+                        android.content.ClipboardManager cm =
+                                (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("课表网页", u));
+                    } catch (Throwable ignored) { }
+                    new android.app.AlertDialog.Builder(ScheduleListActivity.this)
+                            .setTitle(allowEdit ? "网页编辑已开启 7 天" : "网页链接已复制")
+                            .setMessage(u + "\n\n" + (allowEdit
+                                    ? "在电脑浏览器打开即可增删改课程；7 天后自动转回只读。"
+                                    : "链接已复制，在电脑浏览器打开可大屏查看；要改课程请再点「允许网页编辑 7 天」。"))
+                            .setPositiveButton("知道了", null)
+                            .show();
+                } });
+            }
+        };
+        if (allowEdit) CloudApi.edit(this, s.guid, true, 7, cb);
+        else CloudApi.link(this, s.guid, cb);
     }
 
     private void cardMenuItem(LinearLayout panel, final android.widget.PopupWindow pw,

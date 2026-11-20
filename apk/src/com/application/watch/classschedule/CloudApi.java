@@ -175,6 +175,17 @@ public final class CloudApi {
         Net.postJsonAuthed(API + "/edit", o.toString(), token(c, guid), wrap(cb));
     }
 
+    // ---------------- 6c. link：只要一个可分享网址（不动权限） ----------------
+
+    public static void link(Context c, String guid, Cb cb) {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("guid", guid);
+        } catch (Throwable ignored) {
+        }
+        Net.postJsonAuthed(API + "/link", o.toString(), token(c, guid), wrap(cb));
+    }
+
     // ---------------- 7. backup：手动备份一份 ----------------
 
     /** @param reason 约定 manual | auto | pre-push | pre-restore */
