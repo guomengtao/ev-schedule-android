@@ -42,7 +42,8 @@ public class ScheduleListActivity extends Activity {
 
     /** 设备条右侧的「链接」：给当前这台手环一个 /d/<短码>，不用逐张课表去点 */
     private TextView deviceLinkView;
-    private String curDeviceLinkGuid = "";
+    /** 当前在线设备的整组课表：取链接时要把这一组里没上云的先全部传上去 */
+    private List<ScheduleStore.Schedule> curDeviceGroup = null;
 
     private static final int REQ_EDIT = 1;
     private static final int REQ_CREATE = 2;
@@ -191,8 +192,8 @@ public class ScheduleListActivity extends Activity {
         deviceLinkView.setVisibility(View.GONE);
         deviceLinkView.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                if (curDeviceLinkGuid != null && curDeviceLinkGuid.length() > 0) {
-                    fetchDeviceLink(curDeviceLinkGuid, SyncEngine.get(ScheduleListActivity.this).currentDeviceName());
+                if (curDeviceGroup != null && !curDeviceGroup.isEmpty()) {
+                    fetchDeviceLink(curDeviceGroup, SyncEngine.get(ScheduleListActivity.this).currentDeviceName());
                 }
             }
         });
@@ -375,6 +376,7 @@ public class ScheduleListActivity extends Activity {
         listBox.removeAllViews();
         syncBadgeView = null;      // 卡片重建 → 旧徽标引用失效，列表构建完成后统一回填
         curDeviceGroupKey = null;
+        curDeviceGroup = null;
         curGroupCount = -1;
         if (filterDeviceId.length() > 0 && deviceBar != null) {
             deviceBar.setVisibility(View.GONE);   // 从设备页进来：顶部设备条没有意义，藏掉
@@ -443,7 +445,7 @@ public class ScheduleListActivity extends Activity {
             // 设备条即该组组头：补上「· N 套」与展开箭头
             curDeviceGroupKey = curEntry.getKey();
             curGroupCount = curEntry.getValue().size();
-            curDeviceLinkGuid = firstGuidOf(curEntry.getValue());
+            curDeviceGroup = curEntry.getValue();
             renderDeviceBar();
             addGroupBody(curEntry.getKey(), curEntry.getValue(), activeId);
         }
@@ -457,7 +459,7 @@ public class ScheduleListActivity extends Activity {
             String label = "legacy".equals(key)
                     ? "没认出是哪只手环（连上后会自动归位）"
                     : devLabel(key, g);
-            listBox.addView(groupHeader(label, g.size(), key, firstGuidOf(g)));
+            listBox.addView(groupHeader(label, g.size(), key, g));
             addGroupBody(key, g, activeId);
         }
         // 本地课程分组（组头已是细行、自带呼吸感 → 不再需要分割线，B3.3）
@@ -562,7 +564,8 @@ public class ScheduleListActivity extends Activity {
             }
         }
         if (deviceLinkView != null) {
-            deviceLinkView.setVisibility(curDeviceLinkGuid.length() > 0 ? View.VISIBLE : View.GONE);
+            deviceLinkView.setVisibility(
+                    (curDeviceGroup != null && !curDeviceGroup.isEmpty()) ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -584,7 +587,8 @@ public class ScheduleListActivity extends Activity {
     /** 分组标题（点击展开/收起）。D2：由「厚卡」降为「细行」—— 去掉卡片底色与描边、
      *  字号降到 SP_CAPTION 且用次要色，把它压到卡片视觉之下，
      *  让「课表名」成为页内唯一的视觉锚点。 */
-    private View groupHeader(String title, int n, final String key, final String linkGuid) {
+    private View groupHeader(String title, int n, final String key,
+                             final List<ScheduleStore.Schedule> group) {
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -603,14 +607,15 @@ public class ScheduleListActivity extends Activity {
         });
         TextView t = Ui.textMediumLh(this, title, Ui.SP_CAPTION, Ui.MUTED, Ui.LH_CAPTION);
         head.addView(t, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        if (linkGuid != null && linkGuid.length() > 0) {
+        if (group != null && !group.isEmpty()) {
+            final List<ScheduleStore.Schedule> grp = group;
             TextView lk = Ui.text(this, "链接", 11f, Ui.ACCENT, false);
             lk.setPadding(Ui.dp(this, 8), Ui.dp(this, 2), Ui.dp(this, 8), Ui.dp(this, 2));
             lk.setBackground(Ui.round(Ui.ACCENT_LIGHT, 14, 0, this));
             lk.setClickable(true);
             lk.setContentDescription("获取这台设备的网页链接");
             lk.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) { fetchDeviceLink(linkGuid, ""); }
+                @Override public void onClick(View v) { fetchDeviceLink(grp, ""); }
             });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -806,9 +811,66 @@ public class ScheduleListActivity extends Activity {
     }
 
     /** 取这台设备的列表页网址（/d/<短码>）：一次覆盖该设备名下所有已上云的课表。 */
-    private void fetchDeviceLink(String guid, final String devName) {
-        android.widget.Toast.makeText(this, "正在获取链接…", android.widget.Toast.LENGTH_SHORT).show();
-        CloudApi.devlink(this, guid, new CloudApi.Cb() {
+    /**
+     * 取这台设备的网页链接。
+     * <p>用户裁定：设备链接 = 这台设备的**全部**课表，所以先把它名下还没上云的课表
+     * 逐份发布上去（串行、失败跳过不中断），全部走完再取 devlink 短码，
+     * 这样 /d/&lt;短码&gt; 打开就是完整清单，而不是只有点过开通的那一两份。
+     */
+    private void fetchDeviceLink(final List<ScheduleStore.Schedule> group, final String devName) {
+        if (group == null || group.isEmpty()) return;
+        // 整组全部重新 publish，而不仅是「没上云的那几份」。
+        // 原因（2026-11-20 实证）：早期没连上手环时只能拿 uuid 当锚，连上后改走 MAC，
+        // 同一台设备的课表被劈成 mac:… 和 uuid-… 两个 watch_key，/d/ 只看得见其中一批。
+        // 服务端 publish 对已存在的 guid 只 PATCH 锚点信息、不动 payload 与 rev，
+        // 所以逐份重发一遍就能把孤岛并回当前锚，是最省事且不猜测的做法。
+        final List<ScheduleStore.Schedule> todo = new ArrayList<ScheduleStore.Schedule>();
+        for (ScheduleStore.Schedule s : group) {
+            if (s.guid != null && s.guid.length() > 0) todo.add(s);
+        }
+        final int total = todo.size();
+        android.widget.Toast.makeText(this,
+                total > 0 ? ("正在同步 " + total + " 套课表…") : "正在获取链接…",
+                android.widget.Toast.LENGTH_SHORT).show();
+        publishThenLink(todo, 0, total, group, devName);
+    }
+
+    /** 串行发布 todo[i..]，全部结束后取设备短码。失败的那份跳过，不影响其余。 */
+    private void publishThenLink(final List<ScheduleStore.Schedule> todo, final int i,
+                                 final int total,
+                                 final List<ScheduleStore.Schedule> group, final String devName) {
+        if (i >= todo.size()) {
+            requestDeviceLink(group, devName, total);
+            return;
+        }
+        CloudSyncWorker.enableAndPublish(this, todo.get(i), new CloudSyncWorker.SyncCb() {
+            @Override public void on(boolean ok, String err, String url, int rev) {
+                publishThenLink(todo, i + 1, total, group, devName);
+            }
+        });
+    }
+
+    private void requestDeviceLink(final List<ScheduleStore.Schedule> group,
+                                   final String devName, final int published) {
+        // 优先用已经上云的那份做入口（devlink 需要该 guid 已有 token），没有才退回第一个
+        String anyGuid = "";
+        for (ScheduleStore.Schedule s : group) {
+            if (s.cloudEnabled && s.cloudRev > 0 && s.guid != null && s.guid.length() > 0) {
+                anyGuid = s.guid;
+                break;
+            }
+        }
+        if (anyGuid.length() == 0) {
+            for (ScheduleStore.Schedule s : group) {
+                if (s.guid != null && s.guid.length() > 0) { anyGuid = s.guid; break; }
+            }
+        }
+        if (anyGuid.length() == 0) {
+            android.widget.Toast.makeText(this, "这套课表还没有稳定编号，先打开一次再试",
+                    android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+        CloudApi.devlink(this, anyGuid, new CloudApi.Cb() {
             @Override public void on(int code, String body) {
                 String url = "";
                 try { url = new org.json.JSONObject(body).optString("url", ""); } catch (Throwable ignored) { }
@@ -828,12 +890,16 @@ public class ScheduleListActivity extends Activity {
                                 (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
                         cm.setPrimaryClip(android.content.ClipData.newPlainText("设备课表", u));
                     } catch (Throwable ignored) { }
+                    String tip = published > 0
+                            ? "已把这台手环的 " + published + " 套课表同步到云端，链接打开就是全部。"
+                            : "链接打开就是这台手环名下所有课表。";
                     new android.app.AlertDialog.Builder(ScheduleListActivity.this)
                             .setTitle("设备链接已复制")
-                            .setMessage(u + "\n\n这个地址打开就是这台手环名下所有课表；"
-                                    + "点任意一份可查看，要改课程请对那张表单独开通网页编辑。")
+                            .setMessage(u + "\n\n" + tip
+                                    + "点任意一份可查看；要改课程，对那张表单独开通网页编辑。")
                             .setPositiveButton("知道了", null)
                             .show();
+                    render();   // 刚发布的课表会多出云端状态，刷新一次列表
                 } });
             }
         });
